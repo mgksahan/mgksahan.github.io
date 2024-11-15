@@ -1,5 +1,5 @@
 ---
-title: "Bar Speed Tracker Idea Inceptio"
+title: "Bar Speed Tracker Idea Inception"
 date: 2024-06-03 00:00:00 -0400
 categories: [Bar Speed Tracker]
 tags: [Bar Speed Tracker]
