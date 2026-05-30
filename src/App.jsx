@@ -84,6 +84,19 @@ function App() {
   const [newCommentText, setNewCommentText] = useState('');
   const [commentError, setCommentError] = useState('');
 
+  // Fitness Tracker State
+  const [fitnessExercises, setFitnessExercises] = useState([]);
+  const [selectedFitnessExercise, setSelectedFitnessExercise] = useState('');
+  const [fitnessHistory, setFitnessHistory] = useState([]);
+  const [selectedFitnessMetric, setSelectedFitnessMetric] = useState('1rem'); // '1rem' or 'volume'
+  const [fitnessLoading, setFitnessLoading] = useState(false);
+  const [searchExerciseQuery, setSearchExerciseQuery] = useState('');
+  const [isExerciseDropdownOpen, setIsExerciseDropdownOpen] = useState(false);
+  const [hoveredDataPoint, setHoveredDataPoint] = useState(null);
+  const [hoveredPointCoords, setHoveredPointCoords] = useState({ x: 0, y: 0 });
+
+  const dropdownRef = useRef(null);
+
   useEffect(() => {
     // Initial load
     loadHybridPosts();
@@ -91,11 +104,27 @@ function App() {
     // Check current Cognito user
     setCurrentUser(cognitoService.getCurrentUser());
 
+    // Load fitness exercises
+    loadFitnessExercises();
+
     // Set theme
     const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     const savedTheme = localStorage.getItem('sahan-theme') || systemTheme;
     setTheme(savedTheme);
     document.documentElement.className = savedTheme;
+  }, []);
+
+  // Handle click outside to close fitness dropdown
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsExerciseDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   // Fetch comments when activePost changes
@@ -139,6 +168,42 @@ function App() {
     } finally {
       setCommentsLoading(false);
     }
+  };
+
+  const loadFitnessExercises = async () => {
+    try {
+      const exercises = await apiService.fetchFitnessExercises();
+      setFitnessExercises(exercises);
+      if (exercises.length > 0) {
+        // Default to Bench Press or first exercise
+        const defaultExercise = exercises.find(e => e.includes('Bench Press')) || exercises[0];
+        setSelectedFitnessExercise(defaultExercise);
+        loadFitnessHistory(defaultExercise);
+      }
+    } catch (e) {
+      console.error('Error loading fitness exercises:', e);
+    }
+  };
+
+  const loadFitnessHistory = async (exerciseName) => {
+    if (!exerciseName) return;
+    setFitnessLoading(true);
+    try {
+      const history = await apiService.fetchFitnessHistory(exerciseName);
+      setFitnessHistory(history);
+    } catch (e) {
+      console.error('Error loading fitness history:', e);
+    } finally {
+      setFitnessLoading(false);
+    }
+  };
+
+  const handleExerciseChange = (exercise) => {
+    setSelectedFitnessExercise(exercise);
+    setIsExerciseDropdownOpen(false);
+    setSearchExerciseQuery('');
+    loadFitnessHistory(exercise);
+    setHoveredDataPoint(null);
   };
 
   const toggleTheme = () => {
@@ -318,6 +383,13 @@ function App() {
             onClick={() => { setActiveTab('blog'); setActivePost(null); }}
           >
             Blog
+          </button>
+
+          <button 
+            className={`nav-tab-btn ${activeTab === 'fitness' && !activePost ? 'active' : ''}`}
+            onClick={() => { setActiveTab('fitness'); setActivePost(null); }}
+          >
+            Fitness Tracker
           </button>
 
           {/* Conditional Admin Write Tab */}
@@ -584,6 +656,388 @@ function App() {
               </div>
             </div>
           </form>
+        </div>
+      ) : activeTab === 'fitness' ? (
+        <div className="fitness-layout-container animate-slide-up">
+          <header className="fitness-header-row">
+            <h1 className="Outfit">
+              <span className="gradient-text">Fitness Tracker Visualizer</span>
+            </h1>
+            <p className="fitness-subtitle">
+              Interactive historical visualizer of personal workouts parsed directly from Jefit backups.
+            </p>
+          </header>
+
+          <div className="fitness-controls-row">
+            {/* Searchable Exercise Dropdown Selector */}
+            <div className="fitness-selector-container">
+              <label className="fitness-label">Select Exercise</label>
+              <div className="searchable-select-wrapper" ref={dropdownRef}>
+                <button 
+                  className="searchable-select-trigger glass" 
+                  onClick={() => setIsExerciseDropdownOpen(!isExerciseDropdownOpen)}
+                  type="button"
+                >
+                  <Search size={14} className="select-search-icon" />
+                  <span>{selectedFitnessExercise || 'Choose an exercise...'}</span>
+                  <ChevronRight size={16} className={`select-chevron ${isExerciseDropdownOpen ? 'open' : ''}`} />
+                </button>
+
+                {isExerciseDropdownOpen && (
+                  <div className="searchable-select-dropdown glass animate-slide-up">
+                    <div className="dropdown-search-box">
+                      <Search size={12} className="inner-search-icon" />
+                      <input 
+                        type="text" 
+                        placeholder="Search exercise..." 
+                        value={searchExerciseQuery}
+                        onChange={(e) => setSearchExerciseQuery(e.target.value)}
+                        className="dropdown-search-input"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="dropdown-options-list">
+                      {fitnessExercises.filter(ex => 
+                        ex.toLowerCase().includes(searchExerciseQuery.toLowerCase())
+                      ).length > 0 ? (
+                        fitnessExercises.filter(ex => 
+                          ex.toLowerCase().includes(searchExerciseQuery.toLowerCase())
+                        ).map(ex => (
+                          <button 
+                            key={ex}
+                            className={`dropdown-option-btn ${selectedFitnessExercise === ex ? 'active' : ''}`}
+                            onClick={() => handleExerciseChange(ex)}
+                            type="button"
+                          >
+                            {ex}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="dropdown-no-results">No exercises found</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Metric Toggle Buttons */}
+            <div className="fitness-metric-container">
+              <label className="fitness-label">Analyze Metric</label>
+              <div className="metric-toggle-group glass">
+                <button 
+                  className={`metric-toggle-btn ${selectedFitnessMetric === '1rem' ? 'active' : ''}`}
+                  onClick={() => setSelectedFitnessMetric('1rem')}
+                  type="button"
+                >
+                  1-Rep Max (lbs)
+                </button>
+                <button 
+                  className={`metric-toggle-btn ${selectedFitnessMetric === 'volume' ? 'active' : ''}`}
+                  onClick={() => setSelectedFitnessMetric('volume')}
+                  type="button"
+                >
+                  Total Volume (lbs)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* SVG Visualizer Chart */}
+          {(() => {
+            const chartData = [...fitnessHistory]
+              .sort((a, b) => new Date(a.workout_date) - new Date(b.workout_date))
+              .map(item => ({
+                date: item.workout_date,
+                value: selectedFitnessMetric === '1rem' ? item.one_rep_max_lbs : item.total_volume_lbs,
+                raw_logs: item.raw_logs
+              }))
+              .filter(item => item.value !== undefined && item.value !== null);
+
+            const padding = { top: 45, right: 30, bottom: 45, left: 65 };
+            
+            let getX = (t) => 0;
+            let getY = (v) => 0;
+            let yTicks = [];
+            let xTicks = [];
+            let pathD = '';
+            let areaD = '';
+
+            if (chartData.length > 0) {
+              const timestamps = chartData.map(d => new Date(d.date).getTime());
+              const minX = Math.min(...timestamps);
+              const maxX = Math.max(...timestamps);
+              
+              if (maxX > minX) {
+                getX = (t) => padding.left + ((t - minX) / (maxX - minX)) * (800 - padding.left - padding.right);
+              } else {
+                getX = (t) => (800 - padding.left - padding.right) / 2 + padding.left;
+              }
+
+              const values = chartData.map(d => d.value);
+              const minYVal = Math.min(...values);
+              const maxYVal = Math.max(...values);
+              const yBuffer = (maxYVal - minYVal) * 0.15 || 10;
+              const minY = Math.max(0, minYVal - yBuffer);
+              const maxY = maxYVal + yBuffer;
+
+              if (maxY > minY) {
+                getY = (v) => 400 - padding.bottom - ((v - minY) / (maxY - minY)) * (400 - padding.top - padding.bottom);
+              } else {
+                getY = (v) => (400 - padding.top - padding.bottom) / 2 + padding.top;
+              }
+
+              // Y ticks
+              const yTicksCount = 5;
+              yTicks = Array.from({ length: yTicksCount }, (_, i) => {
+                return minY + (i * (maxY - minY)) / (yTicksCount - 1);
+              });
+
+              // X ticks (evenly spaced chronological date points)
+              const xTicksCount = Math.min(chartData.length, 5);
+              xTicks = Array.from({ length: xTicksCount }, (_, i) => {
+                const idx = Math.round((i * (chartData.length - 1)) / (xTicksCount - 1));
+                return chartData[idx];
+              }).filter((item, index, self) => self.findIndex(t => t.date === item.date) === index); // deduplicate
+
+              // Path strings
+              if (chartData.length > 1) {
+                const pathPoints = chartData.map(d => `${getX(new Date(d.date).getTime())},${getY(d.value)}`);
+                pathD = `M ${pathPoints.join(' L ')}`;
+                areaD = `${pathD} L ${getX(new Date(chartData[chartData.length - 1].date).getTime())},${400 - padding.bottom} L ${getX(new Date(chartData[0].date).getTime())},${400 - padding.bottom} Z`;
+              }
+            }
+
+            const formatShortDate = (dateStr) => {
+              try {
+                const parts = dateStr.split('-');
+                if (parts.length === 3) {
+                  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                  const m = parseInt(parts[1], 10) - 1;
+                  const d = parseInt(parts[2], 10);
+                  return `${months[m]} ${d}`;
+                }
+                return dateStr;
+              } catch (e) {
+                return dateStr;
+              }
+            };
+
+            const formatFullDate = (dateStr) => {
+              try {
+                const date = new Date(dateStr + 'T00:00:00');
+                return date.toLocaleDateString(undefined, { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                });
+              } catch (e) {
+                return dateStr;
+              }
+            };
+
+            const handlePointHover = (dataPoint, cx, cy) => {
+              setHoveredDataPoint(dataPoint);
+              setHoveredPointCoords({ x: cx, y: cy });
+            };
+
+            const handlePointLeave = () => {
+              setHoveredDataPoint(null);
+            };
+
+            return (
+              <div className="fitness-chart-card glass">
+                <div className="chart-header-info">
+                  <h3 className="Outfit">{selectedFitnessExercise || 'Exercise'} Progress</h3>
+                  <span className="chart-subtitle">
+                    Chronological tracking of {selectedFitnessMetric === '1rem' ? 'Estimated 1-Rep Max (lbs)' : 'Total Volume (lbs)'}
+                  </span>
+                </div>
+                
+                {fitnessLoading ? (
+                  <div className="loading-spinner text-center" style={{ minHeight: '300px' }}>
+                    <div className="spinner"></div>
+                    <p>Fetching history from AWS DynamoDB...</p>
+                  </div>
+                ) : chartData.length > 0 ? (
+                  <div className="fitness-chart-wrapper" style={{ position: 'relative' }}>
+                    <svg 
+                      viewBox="0 0 800 400" 
+                      className="fitness-svg-chart"
+                      width="100%" 
+                      height="100%"
+                    >
+                      <defs>
+                        <linearGradient id="chartAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--accent-color)" stopOpacity="0.25" />
+                          <stop offset="100%" stopColor="var(--accent-color)" stopOpacity="0.00" />
+                        </linearGradient>
+                        <linearGradient id="chartLineGradient" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="var(--accent-color)" />
+                          <stop offset="100%" stopColor="#f472b6" />
+                        </linearGradient>
+                      </defs>
+                      
+                      {/* Horizontal Grid lines */}
+                      {yTicks.map((tickVal, index) => {
+                        const y = getY(tickVal);
+                        return (
+                          <g key={index} className="chart-grid-line-group">
+                            <line 
+                              x1={padding.left} 
+                              y1={y} 
+                              x2={800 - padding.right} 
+                              y2={y} 
+                              className="chart-grid-line"
+                            />
+                            <text 
+                              x={padding.left - 12} 
+                              y={y + 4} 
+                              className="chart-axis-label y-label"
+                              textAnchor="end"
+                            >
+                              {Math.round(tickVal)}
+                            </text>
+                          </g>
+                        );
+                      })}
+                      
+                      {/* Vertical Grid lines */}
+                      {xTicks.map((tickPoint, index) => {
+                        const t = new Date(tickPoint.date).getTime();
+                        const x = getX(t);
+                        return (
+                          <g key={index} className="chart-grid-line-group">
+                            <line 
+                              x1={x} 
+                              y1={padding.top} 
+                              x2={x} 
+                              y2={400 - padding.bottom} 
+                              className="chart-grid-line vertical"
+                            />
+                            <text 
+                              x={x} 
+                              y={400 - padding.bottom + 20} 
+                              className="chart-axis-label x-label"
+                              textAnchor="middle"
+                            >
+                              {formatShortDate(tickPoint.date)}
+                            </text>
+                          </g>
+                        );
+                      })}
+                      
+                      {/* Axis Borders */}
+                      <line 
+                        x1={padding.left} 
+                        y1={padding.top} 
+                        x2={padding.left} 
+                        y2={400 - padding.bottom} 
+                        className="chart-border-line"
+                      />
+                      <line 
+                        x1={padding.left} 
+                        y1={400 - padding.bottom} 
+                        x2={800 - padding.right} 
+                        y2={400 - padding.bottom} 
+                        className="chart-border-line"
+                      />
+                      
+                      {/* Line/Area plots */}
+                      {chartData.length > 1 ? (
+                        <>
+                          <path d={areaD} className="chart-area-path" fill="url(#chartAreaGradient)" />
+                          <path d={pathD} className="chart-line-path" stroke="url(#chartLineGradient)" fill="none" strokeWidth="3" />
+                        </>
+                      ) : null}
+                      
+                      {/* Hover nodes */}
+                      {chartData.map((d, index) => {
+                        const t = new Date(d.date).getTime();
+                        const cx = getX(t);
+                        const cy = getY(d.value);
+                        const isHovered = hoveredDataPoint && hoveredDataPoint.date === d.date;
+                        
+                        return (
+                          <g key={index}>
+                            {isHovered && (
+                              <circle 
+                                cx={cx} 
+                                cy={cy} 
+                                r={12} 
+                                className="chart-point-ring" 
+                              />
+                            )}
+                            <circle 
+                              cx={cx} 
+                              cy={cy} 
+                              r={isHovered ? 6 : 4} 
+                              className={`chart-point-dot ${isHovered ? 'hovered' : ''}`}
+                            />
+                            <circle 
+                              cx={cx} 
+                              cy={cy} 
+                              r={22} 
+                              className="chart-hit-box"
+                              onMouseEnter={() => handlePointHover(d, cx, cy)}
+                              onMouseLeave={handlePointLeave}
+                            />
+                          </g>
+                        );
+                      })}
+                    </svg>
+
+                    {/* Tooltip component */}
+                    {hoveredDataPoint && (
+                      <div 
+                        className="chart-tooltip glass animate-fade-in"
+                        style={{
+                          position: 'absolute',
+                          left: `${(hoveredPointCoords.x / 800) * 100}%`,
+                          top: `${(hoveredPointCoords.y / 400) * 100}%`,
+                          transform: 'translate(-50%, -108%)',
+                          pointerEvents: 'none',
+                          zIndex: 100
+                        }}
+                      >
+                        <div className="tooltip-date">{formatFullDate(hoveredDataPoint.date)}</div>
+                        <div className="tooltip-metric">
+                          <span className="tooltip-metric-label">
+                            {selectedFitnessMetric === '1rem' ? '1-Rep Max' : 'Total Volume'}:
+                          </span>
+                          <span className="tooltip-metric-value">
+                            {hoveredDataPoint.value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })} lbs
+                          </span>
+                        </div>
+                        
+                        <div className="tooltip-logs-container">
+                          <div className="tooltip-logs-title">Workout Sets (Weight × Reps):</div>
+                          <div className="tooltip-logs-list">
+                            {hoveredDataPoint.raw_logs.split(',').map((setStr, sIdx) => {
+                              const [weight, reps] = setStr.split('x');
+                              const weightLbs = (parseFloat(weight) * 2.20462).toFixed(1);
+                              return (
+                                <span key={sIdx} className="tooltip-log-pill">
+                                  {weightLbs} lbs × {reps}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="empty-results glass" style={{ minHeight: '300px' }}>
+                    <BookOpen size={48} className="empty-icon text-tertiary" />
+                    <h3 className="Outfit">No data found</h3>
+                    <p>No workout records exist for this exercise yet.</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       ) : (
         // CLEAN MINIMALIST BLOG WRITINGS VIEW

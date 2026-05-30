@@ -68,5 +68,32 @@ export const apiService = {
       throw new Error(errData.error || 'Failed to submit comment.');
     }
     return await res.json();
+  },
+
+  // 5. FETCH UNIQUE FITNESS EXERCISES
+  fetchFitnessExercises: async () => {
+    if (!API_URL) return [];
+    try {
+      const res = await fetch(`${API_URL}/fitness`);
+      if (!res.ok) throw new Error('Failed to fetch exercises');
+      return await res.json();
+    } catch (e) {
+      console.error('[API ERROR] fetchFitnessExercises failed:', e);
+      return [];
+    }
+  },
+
+  // 6. FETCH FITNESS HISTORY FOR EXERCISE
+  fetchFitnessHistory: async (exerciseName) => {
+    if (!API_URL) return [];
+    try {
+      const res = await fetch(`${API_URL}/fitness?exercise_name=${encodeURIComponent(exerciseName)}`);
+      if (!res.ok) throw new Error('Failed to fetch fitness history');
+      return await res.json();
+    } catch (e) {
+      console.error('[API ERROR] fetchFitnessHistory failed:', e);
+      return [];
+    }
   }
 };
+
