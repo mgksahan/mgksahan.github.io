@@ -1,0 +1,72 @@
+const API_URL = import.meta.env.VITE_API_URL || '';
+
+export const apiService = {
+  isConfigured: !!API_URL,
+
+  // 1. FETCH DYNAMODB POSTS
+  fetchPosts: async () => {
+    if (!API_URL) return [];
+    try {
+      const res = await fetch(`${API_URL}/posts`);
+      if (!res.ok) throw new Error('Failed to fetch posts from API');
+      return await res.json();
+    } catch (e) {
+      console.error('[API ERROR] fetchPosts failed:', e);
+      return [];
+    }
+  },
+
+  // 2. CREATE DYNAMODB POST
+  createPost: async (postData, token) => {
+    if (!API_URL) throw new Error('API URL is not configured.');
+    const res = await fetch(`${API_URL}/posts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token
+      },
+      body: JSON.stringify(postData)
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Failed to publish post.');
+    }
+    return await res.json();
+  },
+
+  // 3. FETCH DYNAMODB COMMENTS
+  fetchComments: async (postSlug) => {
+    if (!API_URL) return [];
+    try {
+      const res = await fetch(`${API_URL}/comments?postSlug=${encodeURIComponent(postSlug)}`);
+      if (!res.ok) throw new Error('Failed to fetch comments');
+      return await res.json();
+    } catch (e) {
+      console.error('[API ERROR] fetchComments failed:', e);
+      return [];
+    }
+  },
+
+  // 4. CREATE DYNAMODB COMMENT
+  createComment: async (commentData, token) => {
+    if (!API_URL) throw new Error('API URL is not configured.');
+    
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    if (token) {
+      headers['Authorization'] = token;
+    }
+
+    const res = await fetch(`${API_URL}/comments`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(commentData)
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Failed to submit comment.');
+    }
+    return await res.json();
+  }
+};

@@ -18,12 +18,16 @@ import {
   Lock,
   MailCheck,
   Globe,
-  Settings,
-  HelpCircle,
+  Plus,
+  Edit3,
+  Eye,
+  CheckCircle,
+  AlertTriangle,
   X
 } from 'lucide-react';
 import { getPosts } from './postsLoader';
 import { cognitoService } from './cognitoService';
+import { apiService } from './apiService';
 import { marked } from 'marked';
 import './App.css';
 
@@ -47,7 +51,9 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [activePost, setActivePost] = useState(null);
   const [theme, setTheme] = useState('dark');
-  
+  const [activeTab, setActiveTab] = useState('blog'); // 'blog' or 'write'
+  const [postsLoading, setPostsLoading] = useState(false);
+
   // Auth State
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -63,26 +69,27 @@ function App() {
   const [verificationCode, setVerificationCode] = useState('');
   const [demoCodeNotice, setDemoCodeNotice] = useState('');
 
+  // Write Article State
+  const [newPostTitle, setNewPostTitle] = useState('');
+  const [newPostContent, setNewPostContent] = useState('');
+  const [newPostCategory, setNewPostCategory] = useState('General');
+  const [newPostTags, setNewPostTags] = useState('');
+  const [writeError, setWriteError] = useState('');
+  const [writeSuccess, setWriteSuccess] = useState('');
+  const [writeLoading, setWriteLoading] = useState(false);
+
   // Comments State
-  const [comments, setComments] = useState({});
+  const [activeComments, setActiveComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
+  const [commentError, setCommentError] = useState('');
 
   useEffect(() => {
-    // Fetch posts
-    setPosts(getPosts());
+    // Initial load
+    loadHybridPosts();
 
     // Check current Cognito user
     setCurrentUser(cognitoService.getCurrentUser());
-
-    // Load mock comments from localStorage
-    const savedComments = localStorage.getItem('blog_comments');
-    if (savedComments) {
-      try {
-        setComments(JSON.parse(savedComments));
-      } catch (e) {
-        setComments({});
-      }
-    }
 
     // Set theme
     const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -90,6 +97,49 @@ function App() {
     setTheme(savedTheme);
     document.documentElement.className = savedTheme;
   }, []);
+
+  // Fetch comments when activePost changes
+  useEffect(() => {
+    if (activePost) {
+      loadPostComments(activePost.slug || activePost.id);
+    }
+  }, [activePost]);
+
+  // Load local Markdown + DynamoDB posts
+  const loadHybridPosts = async () => {
+    setPostsLoading(true);
+    try {
+      // 1. Load static posts
+      const staticPosts = getPosts();
+
+      // 2. Fetch dynamic posts from AWS DynamoDB
+      const dbPosts = await apiService.fetchPosts();
+
+      // 3. Merge both and sort by date descending
+      const merged = [...dbPosts, ...staticPosts];
+      const sorted = merged.sort((a, b) => new Date(b.date) - new Date(a.date));
+      
+      setPosts(sorted);
+    } catch (e) {
+      console.error('Error loading hybrid posts:', e);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
+  // Load comments live from AWS API
+  const loadPostComments = async (postSlug) => {
+    setCommentsLoading(true);
+    setCommentError('');
+    try {
+      const liveComments = await apiService.fetchComments(postSlug);
+      setActiveComments(liveComments);
+    } catch (err) {
+      setCommentError('Failed to load live comments.');
+    } finally {
+      setCommentsLoading(false);
+    }
+  };
 
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
@@ -123,7 +173,7 @@ function App() {
     setAuthError('');
     setAuthLoading(true);
     try {
-      const result = await cognitoService.signUp(emailField, passwordField, nameField);
+      await cognitoService.signUp(emailField, passwordField, nameField);
       
       if (cognitoService.isDemoMode) {
         const users = JSON.parse(localStorage.getItem('mock_cognito_users') || '{}');
@@ -160,6 +210,9 @@ function App() {
   const handleLogout = () => {
     cognitoService.signOut();
     setCurrentUser(null);
+    if (activeTab === 'write') {
+      setActiveTab('blog');
+    }
   };
 
   const clearAuthForm = () => {
@@ -172,34 +225,68 @@ function App() {
     setDemoCodeNotice('');
   };
 
-  // Comment Operations
-  const handleAddComment = (e) => {
+  // Publish Article to AWS DynamoDB
+  const handlePublishPost = async (e) => {
     e.preventDefault();
-    if (!newCommentText.trim() || !currentUser || !activePost) return;
+    if (!newPostTitle.trim() || !newPostContent.trim() || !currentUser) return;
 
-    const postSlug = activePost.slug;
-    const newComment = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: currentUser.name,
-      email: currentUser.email,
-      text: newCommentText.trim(),
-      date: new Date().toLocaleDateString(undefined, { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    };
+    setWriteError('');
+    setWriteSuccess('');
+    setWriteLoading(true);
 
-    const updatedComments = {
-      ...comments,
-      [postSlug]: [...(comments[postSlug] || []), newComment]
-    };
+    try {
+      const postData = {
+        title: newPostTitle.trim(),
+        content: newPostContent.trim(),
+        categories: [newPostCategory.trim()],
+        tags: newPostTags.split(',').map(tag => tag.trim()).filter(Boolean)
+      };
 
-    setComments(updatedComments);
-    localStorage.setItem('blog_comments', JSON.stringify(updatedComments));
-    setNewCommentText('');
+      await apiService.createPost(postData, currentUser.token);
+      
+      setWriteSuccess('Article published successfully!');
+      setNewPostTitle('');
+      setNewPostContent('');
+      setNewPostCategory('General');
+      setNewPostTags('');
+      
+      // Reload posts and redirect to main feed
+      await loadHybridPosts();
+      setTimeout(() => {
+        setWriteSuccess('');
+        setActiveTab('blog');
+      }, 1500);
+    } catch (err) {
+      setWriteError(err.message || 'Failed to publish article.');
+    } finally {
+      setWriteLoading(false);
+    }
+  };
+
+  // Post Comment to AWS DynamoDB
+  const handleAddComment = async (e) => {
+    e.preventDefault();
+    if (!newCommentText.trim() || !activePost) return;
+
+    setCommentError('');
+    const postSlug = activePost.slug || activePost.id;
+
+    try {
+      const commentData = {
+        postSlug,
+        text: newCommentText.trim()
+      };
+
+      // Pass user token if logged in
+      const token = currentUser ? currentUser.token : null;
+      await apiService.createComment(commentData, token);
+
+      setNewCommentText('');
+      // Reload comments list
+      await loadPostComments(postSlug);
+    } catch (err) {
+      setCommentError(err.message || 'Failed to submit comment.');
+    }
   };
 
   // Categories and tags compilation
@@ -220,18 +307,28 @@ function App() {
     <div className="app-container">
       {/* Dynamic Navigation */}
       <nav className="navbar">
-        <div className="nav-logo gradient-text" onClick={() => { setActivePost(null); }}>
+        <div className="nav-logo gradient-text" onClick={() => { setActivePost(null); setActiveTab('blog'); }}>
           <Sparkles className="pulse-glow" style={{ color: 'var(--accent-color)' }} />
           Sahan Gamage
         </div>
         
         <div className="nav-actions">
           <button 
-            className="nav-tab-btn active"
-            onClick={() => { setActivePost(null); }}
+            className={`nav-tab-btn ${activeTab === 'blog' && !activePost ? 'active' : ''}`}
+            onClick={() => { setActiveTab('blog'); setActivePost(null); }}
           >
             Blog
           </button>
+
+          {/* Conditional Admin Write Tab */}
+          {currentUser && (
+            <button 
+              className={`nav-tab-btn ${activeTab === 'write' && !activePost ? 'active' : ''}`}
+              onClick={() => { setActiveTab('write'); setActivePost(null); }}
+            >
+              <Plus size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Write
+            </button>
+          )}
 
           {/* User Sign In / Profile action */}
           {currentUser ? (
@@ -280,6 +377,9 @@ function App() {
                 <span className="meta-item">
                   <Clock size={14} /> {Math.ceil(activePost.content.split(' ').length / 200)} min read
                 </span>
+                {activePost.authorName && (
+                  <span className="meta-item"><User size={14} /> By {activePost.authorName}</span>
+                )}
               </div>
             </header>
 
@@ -308,13 +408,20 @@ function App() {
             <div className="section-header">
               <MessageSquare size={18} style={{ color: 'var(--accent-color)' }} />
               <h2 className="Outfit">Community Conversations</h2>
-              <span className="comment-count">{(comments[activePost.slug] || []).length} Comments</span>
+              <span className="comment-count">{activeComments.length} Comments</span>
             </div>
+
+            {commentError && <div className="auth-alert error">{commentError}</div>}
 
             {/* List of Comments */}
             <div className="comments-list">
-              {(comments[activePost.slug] || []).length > 0 ? (
-                (comments[activePost.slug] || []).map((comment) => (
+              {commentsLoading ? (
+                <div className="loading-spinner text-center">
+                  <div className="spinner"></div>
+                  <p>Loading conversation...</p>
+                </div>
+              ) : activeComments.length > 0 ? (
+                activeComments.map((comment) => (
                   <div key={comment.id} className="comment-card glass animate-slide-up">
                     <div className="comment-meta">
                       <div className="avatar-placeholder">
@@ -376,6 +483,108 @@ function App() {
             </div>
           </section>
         </div>
+      ) : activeTab === 'write' && currentUser ? (
+        // ✍️ AWS COGNITO RICH MARKDOWN EDITOR & PUBLISHER
+        <div className="write-layout-container animate-slide-up">
+          <div className="write-header-row">
+            <h1 className="Outfit"><Edit3 className="pulse-glow" style={{ color: 'var(--accent-color)' }} /> Publish to AWS DynamoDB</h1>
+            <p className="form-subtitle">Create a community post. It will instantly appear on the global Writings Feed.</p>
+          </div>
+
+          {writeError && <div className="auth-alert error animate-fade-in">{writeError}</div>}
+          {writeSuccess && <div className="auth-alert success animate-fade-in">{writeSuccess}</div>}
+
+          <form onSubmit={handlePublishPost} className="write-form-grid">
+            {/* Editor Workspace Panel */}
+            <div className="editor-inputs-panel glass">
+              <div className="form-group">
+                <label htmlFor="post-title">Article Title</label>
+                <input 
+                  type="text" 
+                  id="post-title" 
+                  placeholder="The Future of Serverless Architectures" 
+                  value={newPostTitle}
+                  onChange={(e) => setNewPostTitle(e.target.value)}
+                  required
+                  className="glass"
+                />
+              </div>
+
+              <div className="form-row-grid">
+                <div className="form-group">
+                  <label htmlFor="post-category">Category</label>
+                  <input 
+                    type="text" 
+                    id="post-category" 
+                    placeholder="AWS Serverless" 
+                    value={newPostCategory}
+                    onChange={(e) => setNewPostCategory(e.target.value)}
+                    required
+                    className="glass"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="post-tags">Tags (comma-separated)</label>
+                  <input 
+                    type="text" 
+                    id="post-tags" 
+                    placeholder="aws, serverless, cognito" 
+                    value={newPostTags}
+                    onChange={(e) => setNewPostTags(e.target.value)}
+                    className="glass"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group text-editor-group">
+                <label htmlFor="post-content">Body Content (Markdown Supported)</label>
+                <textarea 
+                  id="post-content" 
+                  placeholder="# Hello World!&#10;&#10;Write your post body content here using markdown rules..." 
+                  value={newPostContent}
+                  onChange={(e) => setNewPostContent(e.target.value)}
+                  required
+                  className="glass text-editor-area"
+                  rows="12"
+                ></textarea>
+              </div>
+
+              <button type="submit" disabled={writeLoading} className="btn-premium gradient-bg publish-btn">
+                {writeLoading ? 'Publishing to DynamoDB...' : 'Publish Article'}
+              </button>
+            </div>
+
+            {/* Live Visual Render Preview Panel */}
+            <div className="editor-preview-panel glass">
+              <div className="preview-header">
+                <Eye size={16} /> 
+                <span className="Outfit">LIVE RENDER PREVIEW</span>
+              </div>
+              <div className="preview-scroll-container">
+                <div className="post-article preview-content">
+                  <header className="post-header">
+                    <span className="post-category-badge">{newPostCategory || 'Category'}</span>
+                    <h1 className="post-title Outfit">{newPostTitle || 'Title Placeholder'}</h1>
+                    <div className="post-meta">
+                      <span className="meta-item"><Calendar size={14} /> Today</span>
+                      <span className="meta-item"><Clock size={14} /> 1 min read</span>
+                      <span className="meta-item"><User size={14} /> {currentUser.name}</span>
+                    </div>
+                  </header>
+                  <div 
+                    className="prose markdown-body preview-body" 
+                    dangerouslySetInnerHTML={{ 
+                      __html: newPostContent.trim() 
+                        ? marked.parse(newPostContent) 
+                        : '<p class="text-tertiary">Begin typing in the editor on the left to see your beautifully formatted post render live here...</p>' 
+                    }} 
+                  />
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
       ) : (
         // CLEAN MINIMALIST BLOG WRITINGS VIEW
         <div className="blog-wrapper animate-slide-up">
@@ -391,7 +600,7 @@ function App() {
                 <h1 className="Outfit">Sahan Gamage</h1>
                 <p className="role-title">IoT Architect & Software Engineer</p>
                 <p className="bio-summary">
-                  I write about designing hardware systems, firmware hacking, serverless AWS infrastructures, and my signature accelerometer barbell speed tracker. Join the community to comment on posts!
+                  I write about designing hardware systems, firmware hacking, serverless AWS infrastructures, and my signature accelerometer barbell speed tracker. Join the community to publish posts!
                 </p>
                 <div className="profile-socials">
                   <a href="https://github.com/mgksahan" target="_blank" rel="noreferrer" className="social-badge glass">
@@ -480,10 +689,15 @@ function App() {
               </div>
 
               <div className="posts-grid-list">
-                {filteredPosts.length > 0 ? (
+                {postsLoading ? (
+                  <div className="loading-spinner text-center glass" style={{ padding: '60px 20px' }}>
+                    <div className="spinner"></div>
+                    <p style={{ marginTop: '16px' }}>Fetching feed from AWS DynamoDB...</p>
+                  </div>
+                ) : filteredPosts.length > 0 ? (
                   filteredPosts.map(post => (
                     <article 
-                      key={post.slug} 
+                      key={post.slug || post.id} 
                       className="blog-post-card glass glass-hover animate-slide-up"
                       onClick={() => setActivePost(post)}
                     >
@@ -492,6 +706,9 @@ function App() {
                         <span className="post-reading-time">
                           <Clock size={12} /> {Math.ceil(post.content.split(' ').length / 200)} min read
                         </span>
+                        {post.authorName && (
+                          <span className="post-author"><User size={12} /> {post.authorName}</span>
+                        )}
                       </div>
 
                       <h2 className="post-title Outfit">{post.title}</h2>
