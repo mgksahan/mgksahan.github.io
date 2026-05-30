@@ -25,3 +25,8 @@ package-lock.json
 # Misc
 _sass/dist
 assets/js/dist
+
+# Vite build output
+dist
+dist-ssr
+*.local
