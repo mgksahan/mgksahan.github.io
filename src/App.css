@@ -1759,3 +1759,83 @@
     align-items: flex-start;
   }
 }
+
+/* Custom timeline lists and bullet styles */
+.timeline-intro {
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.timeline-bullets {
+  list-style-type: none;
+  padding-left: 0;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.timeline-bullets li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+.timeline-bullets li::before {
+  content: "▪";
+  position: absolute;
+  left: 4px;
+  color: #6366f1; /* Accent color */
+  font-size: 0.8rem;
+  top: 0px;
+}
+
+.timeline-details-text {
+  margin-top: 6px;
+  font-size: 0.93rem;
+  color: var(--text-secondary);
+}
+
+/* Project Badge styling in resume */
+.project-badge-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.project-badge-row .badge-pill {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--code-bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  font-family: var(--font-mono);
+}
+
+/* Honors and Awards list */
+.awards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+.award-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.award-icon-bullet {
+  font-size: 1.25rem;
+  line-height: 1;
+  padding-top: 2px;
+}
+.award-item strong {
+  font-size: 0.98rem;
+  color: var(--text-primary);
+  display: block;
+}
+.award-item p {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  margin-bottom: 0;
+}

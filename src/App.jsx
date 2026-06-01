@@ -27,7 +27,10 @@ import {
   Code,
   Cpu,
   ExternalLink,
-  Layers
+  Layers,
+  Award,
+  Briefcase,
+  Wrench
 } from 'lucide-react';
 import { getPosts } from './postsLoader';
 import { cognitoService } from './cognitoService';
@@ -1317,22 +1320,23 @@ function App() {
                 />
                 <div className="hero-title-area text-left">
                   <h1 className="Outfit">Sahan Gamage</h1>
-                  <div className="hero-role">Principal Researcher & Systems Architect</div>
+                  <div className="hero-role">Embedded Systems & Electronics Engineer</div>
                 </div>
               </div>
             </div>
             
             <p className="hero-bio text-left">
-              Computer Scientist specializing in distributed systems, high-performance virtualization architectures, and integrated radar sensing.
-              Designing physical hardware systems, firmware designs, and serverless applications at the intersection of bits and atoms.
+              Embedded Systems Developer specializing in digital logic design, low-level firmware architecture, and high-performance IoT applications. 
+              Bridging bits and atoms with custom PCB designs, microprocessors, and full-stack cloud ecosystems.
             </p>
             
             <div className="hero-meta-badges">
-              <span className="hero-badge-pill">#SystemsResearch</span>
+              <span className="hero-badge-pill">#EmbeddedSystems</span>
+              <span className="hero-badge-pill">#FirmwareDeveloper</span>
+              <span className="hero-badge-pill">#PCBDesign</span>
               <span className="hero-badge-pill">#IoTArchitect</span>
-              <span className="hero-badge-pill">#CloudComputing</span>
-              <span className="hero-badge-pill">#EmbeddedHardware</span>
-              <span className="hero-badge-pill">#LeuvenBelgium</span>
+              <span className="hero-badge-pill">#VerilogHDL</span>
+              <span className="hero-badge-pill">#KitchenerWaterloo</span>
             </div>
 
             <div className="hero-cta-row">
@@ -1363,94 +1367,172 @@ function App() {
               <User className="portfolio-section-icon" size={18} />
               <h2 className="Outfit">About Me</h2>
             </div>
-            <p className="resume-about-text">
-              I am a systems researcher and computer scientist with over 15 years of experience spanning industrial research labs, academic environments, and open-source system software development. I hold a Ph.D. in Computer Science from Purdue University, where I pioneered VM network optimizations in cloud computing environments.
+            <p className="resume-about-text text-left">
+              I am a dedicated Embedded Systems Developer and Electronics Engineer with a strong passion for designing complex hardware-software systems, custom PCB layouts, digital logic design, and automated systems. Graduating at the top of my cohort (President's Honor List) with a <strong>95.34% average</strong> from Conestoga College's Embedded Systems Development program, I hold a Bachelor of Engineering (Hons.) in Electrical & Computer Systems Engineering from Monash University.
               <br/><br/>
-              Currently, my work focuses on physical computing, hardware-software co-design, radar sensing systems, and serverless architectures. I am deeply interested in bridging high-level software paradigms with physical hardware components, creating highly integrated IoT systems, and designing elegant data-driven pipelines.
+              My experience spans remote tech support operations, industrial manufacturing automation (Miovision), control systems engineering (Control Logic), and vision-based automation (Nikini). I love building projects that combine low-level firmware hacking (STM32, ESP32, FPGA DE2) with robust serverless cloud structures (AWS DynamoDB, Cognito, API Gateway) to solve physical-world problems.
             </p>
           </section>
 
           {/* Experience Section (Timeline) */}
           <section className="portfolio-section-block">
             <div className="portfolio-section-header">
-              <Layers className="portfolio-section-icon" size={18} />
+              <Briefcase className="portfolio-section-icon" size={18} />
               <h2 className="Outfit">Professional Experience</h2>
             </div>
             
             <div className="resume-timeline">
-              {/* imec */}
+              {/* Miovision - Specialist */}
               <div className="timeline-item">
                 <div className="timeline-marker"></div>
                 <div className="timeline-header">
                   <div className="timeline-title-row">
-                    <span className="timeline-title">Principal Member of Technical Staff</span>
-                    <span className="timeline-company">imec</span>
+                    <span className="timeline-title">Customer Care Specialist</span>
+                    <span className="timeline-company">Miovision</span>
                   </div>
-                  <span className="timeline-date">Leuven, Belgium | Present</span>
+                  <span className="timeline-date">Kitchener, ON (Remote) | Oct 2024 – Present</span>
                 </div>
-                <p className="timeline-description">
-                  Driving research on advanced RF systems, integrated radar sensing, joint kinematics monitoring, and high-performance hardware/circuit implementations.
-                </p>
+                <div className="timeline-description">
+                  <p className="timeline-intro">Serving as the primary technical interface for incoming hardware, software, and network support inquiries.</p>
+                  <ul className="timeline-bullets">
+                    <li>Diagnose, troubleshoot, and perform root-cause analyses on complex proprietary hardware, camera sensors, and cloud software.</li>
+                    <li>Install, upgrade, and maintain system firmware and software setups, training customers on interfaces and operational best practices.</li>
+                    <li>Coordinate directly with product engineering and management to report system bugs, track critical bugs, and coordinate product updates.</li>
+                    <li>Perform NOC monitoring, after-hours remote support, and manage RMA and warranty processing for defective equipment.</li>
+                  </ul>
+                </div>
               </div>
 
-              {/* Arm Research */}
+              {/* Conestoga IT Desk */}
               <div className="timeline-item">
                 <div className="timeline-marker"></div>
                 <div className="timeline-header">
                   <div className="timeline-title-row">
-                    <span className="timeline-title">Staff Research Engineer</span>
-                    <span className="timeline-company">Arm Research</span>
+                    <span className="timeline-title">IT Service Desk Student Technician</span>
+                    <span className="timeline-company">Conestoga College</span>
                   </div>
-                  <span className="timeline-date">Cambridge, UK</span>
+                  <span className="timeline-date">Cambridge, ON | Sep 2023 – Jan 2024 & May 2024 – Aug 2024</span>
                 </div>
-                <p className="timeline-description">
-                  Led research on ultra-efficient embedded processors, low-power digital designs, and hardware architectures. Supervised doctoral researchers at the University of Cambridge and established academic collaborations.
-                </p>
+                <div className="timeline-description">
+                  <p className="timeline-intro">Provided technical guidance and infrastructure support for students, faculty, and administrative staff across multiple campuses.</p>
+                  <ul className="timeline-bullets">
+                    <li>Diagnosed and resolved hardware, software, printing, and networking issues efficiently.</li>
+                    <li>Leveraged Microsoft Azure, Active Directory, and service-desk ticketing tools for user account provisioning and configuration.</li>
+                    <li>Developed custom technical user guides and documented troubleshooting procedures in the college's centralized knowledge base.</li>
+                  </ul>
+                </div>
               </div>
 
-              {/* VMware Research */}
+              {/* Miovision - Intern */}
               <div className="timeline-item">
                 <div className="timeline-marker"></div>
                 <div className="timeline-header">
                   <div className="timeline-title-row">
-                    <span className="timeline-title">Senior Researcher / MTS</span>
-                    <span className="timeline-company">VMware Research</span>
+                    <span className="timeline-title">Manufacturing (Industrial Process) Intern</span>
+                    <span className="timeline-company">Miovision</span>
                   </div>
-                  <span className="timeline-date">2016 – 2023</span>
+                  <span className="timeline-date">Kitchener, ON | Jan 2024 – Apr 2024</span>
                 </div>
-                <p className="timeline-description">
-                  Specialized in improving VM I/O scheduling, hypervisor virtualization scale, and distributed cluster managers. Co-developed <strong>Declarative Cluster Managers (DCM)</strong>, utilizing SQL technologies to solve highly complex resource assignment problems at scale.
-                </p>
+                <div className="timeline-description">
+                  <p className="timeline-intro">Engineered floor improvements and process optimizations to enhance electronic manufacturing operations.</p>
+                  <ul className="timeline-bullets">
+                    <li>Designed and deployed an automated, Raspberry Pi-powered inventory and station issue-tracking system integrated with Slack and Google Sheets via QR codes.</li>
+                    <li>Conducted detailed time studies and bottleneck analyses, implementing cycle-time reductions and boosting workstation efficiency.</li>
+                    <li>Created and updated process documentation and standard operating procedures (SOPs) to align with ISO 9001 requirements.</li>
+                    <li>Conducted root-cause analyses on structural assembly defects to drive manufacturing quality improvements.</li>
+                  </ul>
+                </div>
               </div>
 
-              {/* WSO2 */}
+              {/* Control Logic */}
               <div className="timeline-item">
                 <div className="timeline-marker"></div>
                 <div className="timeline-header">
                   <div className="timeline-title-row">
-                    <span className="timeline-title">Senior Software Engineer</span>
-                    <span className="timeline-company">WSO2 Inc.</span>
+                    <span className="timeline-title">Control Systems Engineer</span>
+                    <span className="timeline-company">Control Logic</span>
                   </div>
-                  <span className="timeline-date">Sri Lanka</span>
+                  <span className="timeline-date">Australia (Remote) | Nov 2021 – May 2023</span>
                 </div>
-                <p className="timeline-description">
-                  Architected high-throughput SOA integration middleware. Contributed actively to Apache Software Foundation open-source projects including <strong>Apache Sandesha2/C</strong>, a high-performance WS-ReliableMessaging implementation in C.
-                </p>
+                <div className="timeline-description">
+                  <p className="timeline-intro">Developed industrial automation systems and provided technical engineering support for client integrations.</p>
+                  <ul className="timeline-bullets">
+                    <li>Programmed Programmable Logic Controllers (PLCs) and configured Human Machine Interfaces (HMIs) for complex industrial workflows.</li>
+                    <li>Investigated and resolved field issues with variable-frequency drives (VFDs), motor controllers, safety systems, and actuators.</li>
+                    <li>Designed control schematics, electrical wiring layouts, and Piping and Instrumentation Diagrams (P&IDs).</li>
+                    <li>Utilized Hirschmann industrial switches, RedLion HMIs, Emerson/Panasonic PLCs, and ABB VFDs for seamless industrial networking.</li>
+                  </ul>
+                </div>
               </div>
 
-              {/* Millennium IT */}
+              {/* HASK Enterprises */}
               <div className="timeline-item">
                 <div className="timeline-marker"></div>
                 <div className="timeline-header">
                   <div className="timeline-title-row">
-                    <span className="timeline-title">Software Engineer</span>
-                    <span className="timeline-company">Millennium Information Technologies</span>
+                    <span className="timeline-title">Customer Service Agent</span>
+                    <span className="timeline-company">HASK Enterprises</span>
                   </div>
-                  <span className="timeline-date">Sri Lanka</span>
+                  <span className="timeline-date">Sri Lanka | Mar 2021 – Nov 2021</span>
                 </div>
-                <p className="timeline-description">
-                  Designed low-latency execution engines, order book matchers, and high-performance backend components for global financial exchange trading desks.
-                </p>
+                <div className="timeline-description">
+                  <p className="timeline-intro">Supported remote operations, payroll processing, candidate screening, and shift rostering for an Australian staffing agency during after-hours support shifts.</p>
+                </div>
+              </div>
+
+              {/* Nikini */}
+              <div className="timeline-item">
+                <div className="timeline-marker"></div>
+                <div className="timeline-header">
+                  <div className="timeline-title-row">
+                    <span className="timeline-title">Controls Division Trainee</span>
+                    <span className="timeline-company">Nikini Group of Companies</span>
+                  </div>
+                  <span className="timeline-date">Sri Lanka | Nov 2019 – Feb 2020</span>
+                </div>
+                <div className="timeline-description">
+                  <p className="timeline-intro">Applied automation theories to factory floor projects under the supervision of senior systems engineers.</p>
+                  <ul className="timeline-bullets">
+                    <li>Designed a barcode and part-verification system using Cognex vision sensors and barcode readers.</li>
+                    <li>Developed an OpenCV and OCR-based object detection and package-verification program in Python.</li>
+                    <li>Programmed remote PLC controller setups communicating wirelessly via Raspberry Pi and Zigbee modules.</li>
+                    <li>Configured industrial 3-phase motors using VFDs and created basic PLC ladder logic.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Orange Electrics */}
+              <div className="timeline-item">
+                <div className="timeline-marker"></div>
+                <div className="timeline-header">
+                  <div className="timeline-title-row">
+                    <span className="timeline-title">In-plant Trainee Engineer</span>
+                    <span className="timeline-company">Orange Electrics</span>
+                  </div>
+                  <span className="timeline-date">Meegoda, Sri Lanka | Nov 2017 – Feb 2018</span>
+                </div>
+                <div className="timeline-description">
+                  <p className="timeline-intro">Gained hands-on experience in heavy industrial electrical and mechanical systems maintenance.</p>
+                  <ul className="timeline-bullets">
+                    <li>Installed, configured, and tested Variable-Frequency Drives (VFDs) for high-horsepower three-phase motors.</li>
+                    <li>Troubleshot hydraulic and pneumatic machine systems and assisted in rebuilding injection-molding systems.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* I.T Hunters */}
+              <div className="timeline-item">
+                <div className="timeline-marker"></div>
+                <div className="timeline-header">
+                  <div className="timeline-title-row">
+                    <span className="timeline-title">Computer Repair Technician</span>
+                    <span className="timeline-company">I.T Hunters</span>
+                  </div>
+                  <span className="timeline-date">Sri Lanka | Jun 2016 – Dec 2016</span>
+                </div>
+                <div className="timeline-description">
+                  <p className="timeline-intro">Diagnosed computer hardware failures and executed component-level electrical repairs (motherboards, power supplies).</p>
+                </div>
               </div>
             </div>
           </section>
@@ -1463,18 +1545,52 @@ function App() {
             </div>
             
             <div className="resume-timeline">
+              {/* Conestoga */}
               <div className="timeline-item">
                 <div className="timeline-marker"></div>
                 <div className="timeline-header">
                   <div className="timeline-title-row">
-                    <span className="timeline-title">Ph.D. in Computer Science</span>
-                    <span className="timeline-company">Purdue University</span>
+                    <span className="timeline-title">Graduate Certificate in Embedded Systems Development</span>
+                    <span className="timeline-company">Conestoga College</span>
                   </div>
-                  <span className="timeline-date">West Lafayette, IN, USA | 2013</span>
+                  <span className="timeline-date">Cambridge, ON, Canada | May 2023 – Aug 2024</span>
                 </div>
-                <p className="timeline-description">
-                  Research focused on Cloud Computing, Hypervisors, and TCP performance in consolidated virtualization data centers. Developed <strong>vSnoop</strong> and <strong>vFlood</strong> systems, which successfully mitigated consolidated VM delays and optimized TCP throughput.
-                </p>
+                <div className="timeline-description">
+                  <p className="timeline-intro"><strong>Grade: 95.34% (President’s Honor List)</strong> — Recognized as the top student in the cohort with no failed courses.</p>
+                  <p className="timeline-details-text">Coursework covered advanced bare-metal and RTOS firmware design, microcontroller peripheral interfacing (STM32, ESP32, PSoC), Digital Hardware Design using Verilog/FPGAs, and PCB layout.</p>
+                </div>
+              </div>
+
+              {/* Monash */}
+              <div className="timeline-item">
+                <div className="timeline-marker"></div>
+                <div className="timeline-header">
+                  <div className="timeline-title-row">
+                    <span className="timeline-title">Bachelor of Engineering (Hons.) in Electrical & Computer Systems Engineering</span>
+                    <span className="timeline-company">Monash University Malaysia</span>
+                  </div>
+                  <span className="timeline-date">Selangor, Malaysia | Feb 2017 – Jul 2021</span>
+                </div>
+                <div className="timeline-description">
+                  <p className="timeline-intro"><strong>Grade: 81.63% (Dean’s List 2017–2018)</strong> — Received the Monash High Achiever entrance scholarship.</p>
+                  <p className="timeline-details-text">Acquired rigorous foundations in digital circuit design, signal processing, mathematics, control systems, machine learning, and computer vision.</p>
+                </div>
+              </div>
+
+              {/* Royal Institute */}
+              <div className="timeline-item">
+                <div className="timeline-marker"></div>
+                <div className="timeline-header">
+                  <div className="timeline-title-row">
+                    <span className="timeline-title">Cambridge GCE O & A-Levels</span>
+                    <span className="timeline-company">Royal Institute International School</span>
+                  </div>
+                  <span className="timeline-date">Sri Lanka | 2010 – 2016</span>
+                </div>
+                <div className="timeline-description">
+                  <p className="timeline-intro"><strong>Grades: A-Level – 2 A*, 1 A | O-Level – 7 A*</strong></p>
+                  <p className="timeline-details-text">Honored as <strong>Top in Country in AS-Level Physics (2015)</strong> and <strong>Top in Country in O-Level Additional Mathematics (2014)</strong>. Awarded 3rd Place nationwide for Best Across 7 A*s. Active Delegate in Sri Lankan Model United Nations.</p>
+                </div>
               </div>
             </div>
           </section>
@@ -1487,56 +1603,56 @@ function App() {
             </div>
             
             <div className="projects-showcase-grid">
-              {/* Card 1: Bar Speed Tracker */}
+              {/* Card 1: Custom Microprocessor */}
               <div className="project-card-premium glass glass-hover">
                 <div className="project-header-row">
-                  <span className="project-tag-pill">IoT & Embedded</span>
+                  <span className="project-tag-pill">Digital Logic & HDL</span>
                   <Code size={16} className="text-secondary" />
                 </div>
-                <h3 className="project-title-premium Outfit">Bar Speed Tracker</h3>
+                <h3 className="project-title-premium Outfit">16-bit Custom Microprocessor</h3>
                 <p className="project-desc-premium">
-                  An IoT barbell velocity tracker built on an ESP32 and M5StickC Plus2. Measures joint kinematics and lift velocities in real-time, sending logs directly to an AWS database.
+                  Designed, simulated, and verified a 16-bit microprocessor from scratch using behavioral Verilog. Built core units (ALU, Register File, Current Address Multipliers, Instruction Register) and interfaced it with custom RAM containing specialized microcode routines.
                 </p>
-                <div className="project-action-link" onClick={() => {
-                  const post = posts.find(p => p.slug.includes('Bar-Speed-Tracker-Project-Inception') || p.title.toLowerCase().includes('bar speed'));
-                  if (post) setActivePost(post);
-                  else { setActiveTab('blog'); window.scrollTo(0,0); }
-                }}>
-                  Read Inception Blog <ChevronRight size={14} />
+                <div className="project-badge-row">
+                  <span className="badge-pill">Verilog</span>
+                  <span className="badge-pill">ModelSim</span>
+                  <span className="badge-pill">FPGA</span>
                 </div>
               </div>
 
-              {/* Card 2: Fitness Visualizer */}
+              {/* Card 2: FPV RC Car */}
               <div className="project-card-premium glass glass-hover">
                 <div className="project-header-row">
-                  <span className="project-tag-pill">Cloud & Web</span>
+                  <span className="project-tag-pill">Robotics & Mobile</span>
                   <Layers size={16} className="text-secondary" />
                 </div>
-                <h3 className="project-title-premium Outfit">Fitness Tracker Visualizer</h3>
+                <h3 className="project-title-premium Outfit">FPV Ackerman RC Car</h3>
                 <p className="project-desc-premium">
-                  Interactive progression engine parsing personal workouts directly from Jefit backups. Built as a secure serverless cloud application backed by AWS DynamoDB, Cognito, and API Gateway.
+                  Developed an Ackerman-steering ground vehicle powered by an ESP32-S3 and Flutter mobile app. Programmed PWM motor/servo signals, integrated a low-latency 5.8GHz FPV camera Flask server, and built launch-control using an I2C MPU6050 gyroscope.
                 </p>
-                <div className="project-action-link" onClick={() => { setActiveTab('fitness'); window.scrollTo(0,0); }}>
-                  Launch Interactive Chart <ChevronRight size={14} />
+                <div className="project-badge-row">
+                  <span className="badge-pill">ESP32-S3</span>
+                  <span className="badge-pill">Flutter</span>
+                  <span className="badge-pill">Flask</span>
+                  <span className="badge-pill">I2C</span>
                 </div>
               </div>
 
-              {/* Card 3: Embedded GIF Converter */}
+              {/* Card 3: STM32F411 Test Board */}
               <div className="project-card-premium glass glass-hover">
                 <div className="project-header-row">
-                  <span className="project-tag-pill">Embedded Tooling</span>
+                  <span className="project-tag-pill">Hardware Design & PCB</span>
                   <Cpu size={16} className="text-secondary" />
                 </div>
-                <h3 className="project-title-premium Outfit">Splash Screen Header Tool</h3>
+                <h3 className="project-title-premium Outfit">STM32F411 Test PCB Design</h3>
                 <p className="project-desc-premium">
-                  A custom, high-speed graphics converter tool designed for embedded displays. Optimizes storage efficiency on the M5Stick display by generating pixel-update-only C++ array frames.
+                  Designed a dual-layer PCB to breakout and test STM32F411 functionalities. Integrates motor drivers (L293DD, TB6608FNG), serial converters (CH340G), and an SPI LED display. Hand-soldered SMD components and verified using custom STM32 cyclic test firmware.
                 </p>
-                <div className="project-action-link" onClick={() => {
-                  const post = posts.find(p => p.slug.includes('Splash-Screen-for-M5-Stick') || p.title.toLowerCase().includes('splash screen'));
-                  if (post) setActivePost(post);
-                  else { setActiveTab('blog'); window.scrollTo(0,0); }
-                }}>
-                  Read Diary Log <ChevronRight size={14} />
+                <div className="project-badge-row">
+                  <span className="badge-pill">Altium Designer</span>
+                  <span className="badge-pill">PCB Layout</span>
+                  <span className="badge-pill">Soldering</span>
+                  <span className="badge-pill">C++</span>
                 </div>
               </div>
             </div>
@@ -1545,41 +1661,114 @@ function App() {
           {/* Technical Competency DNA */}
           <section className="portfolio-section-block">
             <div className="portfolio-section-header">
-              <Layers className="portfolio-section-icon" size={18} />
+              <Wrench className="portfolio-section-icon" size={18} />
               <h2 className="Outfit">Systems & Hardware DNA</h2>
             </div>
             
             <div className="skills-board-premium">
               <div className="skills-category-premium glass">
-                <h3 className="Outfit">IoT & Firmware</h3>
+                <h3 className="Outfit">Embedded Systems & Firmware</h3>
                 <div className="skills-tags-row">
-                  <span className="skill-tag-item">ESP32 & M5StickC</span>
                   <span className="skill-tag-item">C / C++ Programming</span>
-                  <span className="skill-tag-item">Firmware Hacking</span>
-                  <span className="skill-tag-item">Sensor Integration</span>
-                  <span className="skill-tag-item">Accelerometer Physics</span>
+                  <span className="skill-tag-item">STM32 & ARM Cortex-M</span>
+                  <span className="skill-tag-item">ESP32 & Arduino</span>
+                  <span className="skill-tag-item">FreeRTOS / Bare-Metal</span>
+                  <span className="skill-tag-item">SPI / I2C / UART / DMA</span>
+                  <span className="skill-tag-item">Digital Audio & DACs</span>
                 </div>
               </div>
 
               <div className="skills-category-premium glass">
-                <h3 className="Outfit">Cloud & Serverless</h3>
+                <h3 className="Outfit">Hardware & PCB Design</h3>
                 <div className="skills-tags-row">
-                  <span className="skill-tag-item">AWS DynamoDB</span>
-                  <span className="skill-tag-item">AWS Cognito Auth</span>
-                  <span className="skill-tag-item">AWS API Gateway</span>
-                  <span className="skill-tag-item">React & Javascript</span>
-                  <span className="skill-tag-item">REST API Architectures</span>
+                  <span className="skill-tag-item">PCB Design (Altium Designer)</span>
+                  <span className="skill-tag-item">Digital Hardware Design</span>
+                  <span className="skill-tag-item">Verilog HDL / ModelSim</span>
+                  <span className="skill-tag-item">FPGA (Altera DE2)</span>
+                  <span className="skill-tag-item">Surface-Mount Soldering</span>
+                  <span className="skill-tag-item">Test Equipment (Oscilloscope)</span>
                 </div>
               </div>
 
               <div className="skills-category-premium glass">
-                <h3 className="Outfit">Systems & Research</h3>
+                <h3 className="Outfit">Industrial Automation & IoT</h3>
                 <div className="skills-tags-row">
-                  <span className="skill-tag-item">VM I/O Virtualization</span>
-                  <span className="skill-tag-item">TCP Optimization</span>
-                  <span className="skill-tag-item">Distributed Systems</span>
-                  <span className="skill-tag-item">Cloud Scheduling</span>
-                  <span className="skill-tag-item">Linux Systems</span>
+                  <span className="skill-tag-item">PLC Programming (Siemens, Emerson)</span>
+                  <span className="skill-tag-item">Variable-Frequency Drives (VFDs)</span>
+                  <span className="skill-tag-item">Modbus TCP/IP Protocol</span>
+                  <span className="skill-tag-item">Cognex Vision & Barcode Sensors</span>
+                  <span className="skill-tag-item">Industrial Ethernet (Hirschmann)</span>
+                  <span className="skill-tag-item">Raspberry Pi & Zigbee</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Honors & Awards Section */}
+          <section className="portfolio-section-block">
+            <div className="portfolio-section-header">
+              <Award className="portfolio-section-icon" size={18} />
+              <h2 className="Outfit">Honors, Awards & Certifications</h2>
+            </div>
+            <div className="skills-board-premium">
+              <div className="skills-category-premium glass">
+                <h3 className="Outfit">Academic Distinctions</h3>
+                <div className="awards-list">
+                  <div className="award-item">
+                    <span className="award-icon-bullet">🏆</span>
+                    <div>
+                      <strong>President’s Honor List (Oct 2024)</strong>
+                      <p>Top graduate in the Embedded Systems Development cohort at Conestoga College with a 95.34% average.</p>
+                    </div>
+                  </div>
+                  <div className="award-item">
+                    <span className="award-icon-bullet">🏆</span>
+                    <div>
+                      <strong>Cambridge AS-Level Physics Top in Country (2015)</strong>
+                      <p>Awarded for achieving the highest score nationwide in AS-Level physics.</p>
+                    </div>
+                  </div>
+                  <div className="award-item">
+                    <span className="award-icon-bullet">🏆</span>
+                    <div>
+                      <strong>Cambridge O-Level Add. Mathematics Top in Country (2014)</strong>
+                      <p>Awarded for achieving the highest score nationwide in Additional Mathematics.</p>
+                    </div>
+                  </div>
+                  <div className="award-item">
+                    <span className="award-icon-bullet">🏆</span>
+                    <div>
+                      <strong>Monash High Achiever Award (Feb 2017)</strong>
+                      <p>Entrance scholarship awarded to outstanding students based on prior academic merit.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="skills-category-premium glass">
+                <h3 className="Outfit">Professional Licenses & Certifications</h3>
+                <div className="awards-list">
+                  <div className="award-item">
+                    <span className="award-icon-bullet">📜</span>
+                    <div>
+                      <strong>Learn Robot Studio — Udemy (2023)</strong>
+                      <p>Covers industrial robot programming, RAPID, and ABB RobotStudio simulation tool (Credential UC-23088c0b-1413-43c0-8235-e14a61abcdc1).</p>
+                    </div>
+                  </div>
+                  <div className="award-item">
+                    <span className="award-icon-bullet">📜</span>
+                    <div>
+                      <strong>Mastering Modbus TCP/IP Network Communication — Udemy (2022)</strong>
+                      <p>Industrial networking, Modbus registers, and device communications (Credential UC-bd13cdbb-3754-4ef7-bef2-d6855dfed680).</p>
+                    </div>
+                  </div>
+                  <div className="award-item">
+                    <span className="award-icon-bullet">📜</span>
+                    <div>
+                      <strong>IELTS Academic — British Council (2022)</strong>
+                      <p>Overall Band Score: 8.0 (Native/Bilingual Proficiency in English).</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
