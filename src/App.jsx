@@ -55,7 +55,7 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [activePost, setActivePost] = useState(null);
   const [theme, setTheme] = useState('light');
-  const [activeTab, setActiveTab] = useState('blog'); // 'blog' or 'write'
+  const [activeTab, setActiveTab] = useState('home'); // 'home', 'blog', 'fitness', or 'write'
   const [postsLoading, setPostsLoading] = useState(false);
 
   // Auth State
@@ -495,12 +495,19 @@ function App() {
       <canvas id="antigravity-canvas" />
       {/* Dynamic Navigation */}
       <nav className="navbar">
-        <div className="nav-logo gradient-text" onClick={() => { setActivePost(null); setActiveTab('blog'); }}>
+        <div className="nav-logo gradient-text" onClick={() => { setActivePost(null); setActiveTab('home'); }}>
           <Sparkles className="pulse-glow" style={{ color: 'var(--accent-color)' }} />
           Sahan Gamage
         </div>
         
         <div className="nav-actions">
+          <button 
+            className={`nav-tab-btn ${activeTab === 'home' && !activePost ? 'active' : ''}`}
+            onClick={() => { setActiveTab('home'); setActivePost(null); }}
+          >
+            Home
+          </button>
+
           <button 
             className={`nav-tab-btn ${activeTab === 'blog' && !activePost ? 'active' : ''}`}
             onClick={() => { setActiveTab('blog'); setActivePost(null); }}
@@ -1162,157 +1169,12 @@ function App() {
             );
           })()}
         </div>
-      ) : (
+      ) : activeTab === 'blog' ? (
         // CLEAN MINIMALIST BLOG WRITINGS VIEW
         <div className="blog-wrapper animate-slide-up">
-          {/* Elegant Antigravity Portfolio Hero */}
-          <section className="portfolio-hero-container glass pulse-glow">
-            <div className="hero-profile-meta">
-              <img 
-                src="https://avatars.githubusercontent.com/u/50710155?v=4" 
-                alt="Sahan Gamage" 
-                className="hero-avatar"
-              />
-              <div className="hero-title-area text-left">
-                <h1 className="Outfit">Sahan Gamage</h1>
-                <div className="hero-role">Systems Researcher & IoT Architect</div>
-              </div>
-            </div>
-            
-            <p className="hero-bio text-left">
-              Designing physical hardware systems, firmware hacking, and building highly scalable serverless architectures. 
-              My research focuses on virtual machine optimization, I/O offloading in cloud data centers, and physical tracking mechanics at the intersection of bits and atoms.
-            </p>
-            
-            <div className="hero-meta-badges">
-              <span className="hero-badge-pill">#ZeroGravityUI</span>
-              <span className="hero-badge-pill">#IoTArchitect</span>
-              <span className="hero-badge-pill">#SystemsResearch</span>
-              <span className="hero-badge-pill">#ServerlessAWS</span>
-            </div>
-
-            <div className="profile-socials">
-              <a href="https://github.com/mgksahan" target="_blank" rel="noreferrer" className="social-badge glass">
-                <Github size={14} /> <span>GitHub</span>
-              </a>
-              <a href="https://twitter.com/mgksahan" target="_blank" rel="noreferrer" className="social-badge glass">
-                <Twitter size={14} /> <span>Twitter</span>
-              </a>
-              <a href="mailto:mgk.sahan@gmail.com" className="social-badge glass">
-                <Mail size={14} /> <span>Email</span>
-              </a>
-            </div>
-          </section>
-
-          {/* Premium Projects Showcase */}
-          <section className="portfolio-section-block">
-            <div className="portfolio-section-header">
-              <Cpu className="portfolio-section-icon" size={18} />
-              <h2 className="Outfit">Featured Engineering Projects</h2>
-            </div>
-            
-            <div className="projects-showcase-grid">
-              {/* Card 1: Bar Speed Tracker */}
-              <div className="project-card-premium glass glass-hover">
-                <div className="project-header-row">
-                  <span className="project-tag-pill">IoT & Embedded</span>
-                  <Code size={16} className="text-secondary" />
-                </div>
-                <h3 className="project-title-premium Outfit">Bar Speed Tracker</h3>
-                <p className="project-desc-premium">
-                  A smartphone integrated IOT barbell velocity tracker built on an ESP32 and M5StickC Plus2. Measures joint kinematics and lift velocities in real-time, sending logs directly to an AWS database.
-                </p>
-                <div className="project-action-link" onClick={() => {
-                  const post = posts.find(p => p.slug.includes('Bar-Speed-Tracker-Project-Inception') || p.title.toLowerCase().includes('bar speed'));
-                  if (post) setActivePost(post);
-                  else { setActiveTab('blog'); window.scrollTo(0,0); }
-                }}>
-                  Read Inception Blog <ChevronRight size={14} />
-                </div>
-              </div>
-
-              {/* Card 2: Fitness Visualizer */}
-              <div className="project-card-premium glass glass-hover">
-                <div className="project-header-row">
-                  <span className="project-tag-pill">Cloud & Web</span>
-                  <Layers size={16} className="text-secondary" />
-                </div>
-                <h3 className="project-title-premium Outfit">Fitness Tracker Visualizer</h3>
-                <p className="project-desc-premium">
-                  Interactive progression engine parsing personal workouts directly from Jefit backups. Built as a secure serverless cloud application backed by AWS DynamoDB, Cognito, and API Gateway.
-                </p>
-                <div className="project-action-link" onClick={() => { setActiveTab('fitness'); window.scrollTo(0,0); }}>
-                  Launch Interactive Chart <ChevronRight size={14} />
-                </div>
-              </div>
-
-              {/* Card 3: Embedded GIF Converter */}
-              <div className="project-card-premium glass glass-hover">
-                <div className="project-header-row">
-                  <span className="project-tag-pill">Embedded Tooling</span>
-                  <Cpu size={16} className="text-secondary" />
-                </div>
-                <h3 className="project-title-premium Outfit">Splash Screen Header Tool</h3>
-                <p className="project-desc-premium">
-                  A custom, high-speed graphics converter tool designed for embedded displays. Optimizes storage efficiency on the M5Stick display by generating pixel-update-only C++ array frames.
-                </p>
-                <div className="project-action-link" onClick={() => {
-                  const post = posts.find(p => p.slug.includes('Splash-Screen-for-M5-Stick') || p.title.toLowerCase().includes('splash screen'));
-                  if (post) setActivePost(post);
-                  else { setActiveTab('blog'); window.scrollTo(0,0); }
-                }}>
-                  Read Diary Log <ChevronRight size={14} />
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Core Technical DNA */}
-          <section className="portfolio-section-block">
-            <div className="portfolio-section-header">
-              <Layers className="portfolio-section-icon" size={18} />
-              <h2 className="Outfit">Systems & Hardware DNA</h2>
-            </div>
-            
-            <div className="skills-board-premium">
-              <div className="skills-category-premium glass">
-                <h3 className="Outfit">IoT & Firmware</h3>
-                <div className="skills-tags-row">
-                  <span className="skill-tag-item">ESP32 & M5StickC</span>
-                  <span className="skill-tag-item">C / C++ Programming</span>
-                  <span className="skill-tag-item">Firmware Hacking</span>
-                  <span className="skill-tag-item">Sensor Integration</span>
-                  <span className="skill-tag-item">Accelerometer Physics</span>
-                </div>
-              </div>
-
-              <div className="skills-category-premium glass">
-                <h3 className="Outfit">Cloud & Serverless</h3>
-                <div className="skills-tags-row">
-                  <span className="skill-tag-item">AWS DynamoDB</span>
-                  <span className="skill-tag-item">AWS Cognito Auth</span>
-                  <span className="skill-tag-item">AWS API Gateway</span>
-                  <span className="skill-tag-item">React & Javascript</span>
-                  <span className="skill-tag-item">REST API Architectures</span>
-                </div>
-              </div>
-
-              <div className="skills-category-premium glass">
-                <h3 className="Outfit">Systems & Research</h3>
-                <div className="skills-tags-row">
-                  <span className="skill-tag-item">VM I/O Virtualization</span>
-                  <span className="skill-tag-item">TCP Optimization</span>
-                  <span className="skill-tag-item">Distributed Systems</span>
-                  <span className="skill-tag-item">Cloud Scheduling</span>
-                  <span className="skill-tag-item">Linux Systems</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Writings Transition Divider */}
-          <div className="portfolio-section-block" style={{ marginTop: '12px' }}>
-            <div className="portfolio-section-header" style={{ marginBottom: '4px' }}>
+          {/* Clean Blog Header */}
+          <div className="portfolio-section-block">
+            <div className="portfolio-section-header" style={{ marginBottom: '12px' }}>
               <BookOpen className="portfolio-section-icon" size={18} />
               <h2 className="Outfit">Writings & Technical Brainstorms</h2>
             </div>
@@ -1440,6 +1302,288 @@ function App() {
               </div>
             </main>
           </div>
+        </div>
+      ) : (
+        // RESUME-EY PORTFOLIO LANDING PAGE
+        <div className="resume-section-container animate-slide-up">
+          {/* Elegant Antigravity Portfolio Hero */}
+          <section className="portfolio-hero-container glass pulse-glow">
+            <div className="hero-profile-meta-row">
+              <div className="hero-profile-meta">
+                <img 
+                  src="https://avatars.githubusercontent.com/u/50710155?v=4" 
+                  alt="Sahan Gamage" 
+                  className="hero-avatar"
+                />
+                <div className="hero-title-area text-left">
+                  <h1 className="Outfit">Sahan Gamage</h1>
+                  <div className="hero-role">Principal Researcher & Systems Architect</div>
+                </div>
+              </div>
+            </div>
+            
+            <p className="hero-bio text-left">
+              Computer Scientist specializing in distributed systems, high-performance virtualization architectures, and integrated radar sensing.
+              Designing physical hardware systems, firmware designs, and serverless applications at the intersection of bits and atoms.
+            </p>
+            
+            <div className="hero-meta-badges">
+              <span className="hero-badge-pill">#SystemsResearch</span>
+              <span className="hero-badge-pill">#IoTArchitect</span>
+              <span className="hero-badge-pill">#CloudComputing</span>
+              <span className="hero-badge-pill">#EmbeddedHardware</span>
+              <span className="hero-badge-pill">#LeuvenBelgium</span>
+            </div>
+
+            <div className="hero-cta-row">
+              <button onClick={() => { setActiveTab('blog'); window.scrollTo(0,0); }} className="btn-premium btn-cta-primary">
+                Explore Blog <BookOpen size={14} style={{ marginLeft: '4px' }} />
+              </button>
+              <button onClick={() => { setActiveTab('fitness'); window.scrollTo(0,0); }} className="btn-premium btn-cta-secondary">
+                Fitness Tracker Visualizer <ChevronRight size={14} />
+              </button>
+            </div>
+
+            <div className="profile-socials">
+              <a href="https://github.com/mgksahan" target="_blank" rel="noreferrer" className="social-badge glass">
+                <Github size={14} /> <span>GitHub</span>
+              </a>
+              <a href="https://twitter.com/mgksahan" target="_blank" rel="noreferrer" className="social-badge glass">
+                <Twitter size={14} /> <span>Twitter</span>
+              </a>
+              <a href="mailto:mgk.sahan@gmail.com" className="social-badge glass">
+                <Mail size={14} /> <span>Email</span>
+              </a>
+            </div>
+          </section>
+
+          {/* About Section */}
+          <section className="portfolio-section-block">
+            <div className="portfolio-section-header">
+              <User className="portfolio-section-icon" size={18} />
+              <h2 className="Outfit">About Me</h2>
+            </div>
+            <p className="resume-about-text">
+              I am a systems researcher and computer scientist with over 15 years of experience spanning industrial research labs, academic environments, and open-source system software development. I hold a Ph.D. in Computer Science from Purdue University, where I pioneered VM network optimizations in cloud computing environments.
+              <br/><br/>
+              Currently, my work focuses on physical computing, hardware-software co-design, radar sensing systems, and serverless architectures. I am deeply interested in bridging high-level software paradigms with physical hardware components, creating highly integrated IoT systems, and designing elegant data-driven pipelines.
+            </p>
+          </section>
+
+          {/* Experience Section (Timeline) */}
+          <section className="portfolio-section-block">
+            <div className="portfolio-section-header">
+              <Layers className="portfolio-section-icon" size={18} />
+              <h2 className="Outfit">Professional Experience</h2>
+            </div>
+            
+            <div className="resume-timeline">
+              {/* imec */}
+              <div className="timeline-item">
+                <div className="timeline-marker"></div>
+                <div className="timeline-header">
+                  <div className="timeline-title-row">
+                    <span className="timeline-title">Principal Member of Technical Staff</span>
+                    <span className="timeline-company">imec</span>
+                  </div>
+                  <span className="timeline-date">Leuven, Belgium | Present</span>
+                </div>
+                <p className="timeline-description">
+                  Driving research on advanced RF systems, integrated radar sensing, joint kinematics monitoring, and high-performance hardware/circuit implementations.
+                </p>
+              </div>
+
+              {/* Arm Research */}
+              <div className="timeline-item">
+                <div className="timeline-marker"></div>
+                <div className="timeline-header">
+                  <div className="timeline-title-row">
+                    <span className="timeline-title">Staff Research Engineer</span>
+                    <span className="timeline-company">Arm Research</span>
+                  </div>
+                  <span className="timeline-date">Cambridge, UK</span>
+                </div>
+                <p className="timeline-description">
+                  Led research on ultra-efficient embedded processors, low-power digital designs, and hardware architectures. Supervised doctoral researchers at the University of Cambridge and established academic collaborations.
+                </p>
+              </div>
+
+              {/* VMware Research */}
+              <div className="timeline-item">
+                <div className="timeline-marker"></div>
+                <div className="timeline-header">
+                  <div className="timeline-title-row">
+                    <span className="timeline-title">Senior Researcher / MTS</span>
+                    <span className="timeline-company">VMware Research</span>
+                  </div>
+                  <span className="timeline-date">2016 – 2023</span>
+                </div>
+                <p className="timeline-description">
+                  Specialized in improving VM I/O scheduling, hypervisor virtualization scale, and distributed cluster managers. Co-developed <strong>Declarative Cluster Managers (DCM)</strong>, utilizing SQL technologies to solve highly complex resource assignment problems at scale.
+                </p>
+              </div>
+
+              {/* WSO2 */}
+              <div className="timeline-item">
+                <div className="timeline-marker"></div>
+                <div className="timeline-header">
+                  <div className="timeline-title-row">
+                    <span className="timeline-title">Senior Software Engineer</span>
+                    <span className="timeline-company">WSO2 Inc.</span>
+                  </div>
+                  <span className="timeline-date">Sri Lanka</span>
+                </div>
+                <p className="timeline-description">
+                  Architected high-throughput SOA integration middleware. Contributed actively to Apache Software Foundation open-source projects including <strong>Apache Sandesha2/C</strong>, a high-performance WS-ReliableMessaging implementation in C.
+                </p>
+              </div>
+
+              {/* Millennium IT */}
+              <div className="timeline-item">
+                <div className="timeline-marker"></div>
+                <div className="timeline-header">
+                  <div className="timeline-title-row">
+                    <span className="timeline-title">Software Engineer</span>
+                    <span className="timeline-company">Millennium Information Technologies</span>
+                  </div>
+                  <span className="timeline-date">Sri Lanka</span>
+                </div>
+                <p className="timeline-description">
+                  Designed low-latency execution engines, order book matchers, and high-performance backend components for global financial exchange trading desks.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Education Section */}
+          <section className="portfolio-section-block">
+            <div className="portfolio-section-header">
+              <BookOpen className="portfolio-section-icon" size={18} />
+              <h2 className="Outfit">Education</h2>
+            </div>
+            
+            <div className="resume-timeline">
+              <div className="timeline-item">
+                <div className="timeline-marker"></div>
+                <div className="timeline-header">
+                  <div className="timeline-title-row">
+                    <span className="timeline-title">Ph.D. in Computer Science</span>
+                    <span className="timeline-company">Purdue University</span>
+                  </div>
+                  <span className="timeline-date">West Lafayette, IN, USA | 2013</span>
+                </div>
+                <p className="timeline-description">
+                  Research focused on Cloud Computing, Hypervisors, and TCP performance in consolidated virtualization data centers. Developed <strong>vSnoop</strong> and <strong>vFlood</strong> systems, which successfully mitigated consolidated VM delays and optimized TCP throughput.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Projects Section */}
+          <section className="portfolio-section-block">
+            <div className="portfolio-section-header">
+              <Cpu className="portfolio-section-icon" size={18} />
+              <h2 className="Outfit">Featured Engineering Projects</h2>
+            </div>
+            
+            <div className="projects-showcase-grid">
+              {/* Card 1: Bar Speed Tracker */}
+              <div className="project-card-premium glass glass-hover">
+                <div className="project-header-row">
+                  <span className="project-tag-pill">IoT & Embedded</span>
+                  <Code size={16} className="text-secondary" />
+                </div>
+                <h3 className="project-title-premium Outfit">Bar Speed Tracker</h3>
+                <p className="project-desc-premium">
+                  An IoT barbell velocity tracker built on an ESP32 and M5StickC Plus2. Measures joint kinematics and lift velocities in real-time, sending logs directly to an AWS database.
+                </p>
+                <div className="project-action-link" onClick={() => {
+                  const post = posts.find(p => p.slug.includes('Bar-Speed-Tracker-Project-Inception') || p.title.toLowerCase().includes('bar speed'));
+                  if (post) setActivePost(post);
+                  else { setActiveTab('blog'); window.scrollTo(0,0); }
+                }}>
+                  Read Inception Blog <ChevronRight size={14} />
+                </div>
+              </div>
+
+              {/* Card 2: Fitness Visualizer */}
+              <div className="project-card-premium glass glass-hover">
+                <div className="project-header-row">
+                  <span className="project-tag-pill">Cloud & Web</span>
+                  <Layers size={16} className="text-secondary" />
+                </div>
+                <h3 className="project-title-premium Outfit">Fitness Tracker Visualizer</h3>
+                <p className="project-desc-premium">
+                  Interactive progression engine parsing personal workouts directly from Jefit backups. Built as a secure serverless cloud application backed by AWS DynamoDB, Cognito, and API Gateway.
+                </p>
+                <div className="project-action-link" onClick={() => { setActiveTab('fitness'); window.scrollTo(0,0); }}>
+                  Launch Interactive Chart <ChevronRight size={14} />
+                </div>
+              </div>
+
+              {/* Card 3: Embedded GIF Converter */}
+              <div className="project-card-premium glass glass-hover">
+                <div className="project-header-row">
+                  <span className="project-tag-pill">Embedded Tooling</span>
+                  <Cpu size={16} className="text-secondary" />
+                </div>
+                <h3 className="project-title-premium Outfit">Splash Screen Header Tool</h3>
+                <p className="project-desc-premium">
+                  A custom, high-speed graphics converter tool designed for embedded displays. Optimizes storage efficiency on the M5Stick display by generating pixel-update-only C++ array frames.
+                </p>
+                <div className="project-action-link" onClick={() => {
+                  const post = posts.find(p => p.slug.includes('Splash-Screen-for-M5-Stick') || p.title.toLowerCase().includes('splash screen'));
+                  if (post) setActivePost(post);
+                  else { setActiveTab('blog'); window.scrollTo(0,0); }
+                }}>
+                  Read Diary Log <ChevronRight size={14} />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Technical Competency DNA */}
+          <section className="portfolio-section-block">
+            <div className="portfolio-section-header">
+              <Layers className="portfolio-section-icon" size={18} />
+              <h2 className="Outfit">Systems & Hardware DNA</h2>
+            </div>
+            
+            <div className="skills-board-premium">
+              <div className="skills-category-premium glass">
+                <h3 className="Outfit">IoT & Firmware</h3>
+                <div className="skills-tags-row">
+                  <span className="skill-tag-item">ESP32 & M5StickC</span>
+                  <span className="skill-tag-item">C / C++ Programming</span>
+                  <span className="skill-tag-item">Firmware Hacking</span>
+                  <span className="skill-tag-item">Sensor Integration</span>
+                  <span className="skill-tag-item">Accelerometer Physics</span>
+                </div>
+              </div>
+
+              <div className="skills-category-premium glass">
+                <h3 className="Outfit">Cloud & Serverless</h3>
+                <div className="skills-tags-row">
+                  <span className="skill-tag-item">AWS DynamoDB</span>
+                  <span className="skill-tag-item">AWS Cognito Auth</span>
+                  <span className="skill-tag-item">AWS API Gateway</span>
+                  <span className="skill-tag-item">React & Javascript</span>
+                  <span className="skill-tag-item">REST API Architectures</span>
+                </div>
+              </div>
+
+              <div className="skills-category-premium glass">
+                <h3 className="Outfit">Systems & Research</h3>
+                <div className="skills-tags-row">
+                  <span className="skill-tag-item">VM I/O Virtualization</span>
+                  <span className="skill-tag-item">TCP Optimization</span>
+                  <span className="skill-tag-item">Distributed Systems</span>
+                  <span className="skill-tag-item">Cloud Scheduling</span>
+                  <span className="skill-tag-item">Linux Systems</span>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       )}
 
@@ -1608,8 +1752,7 @@ function App() {
 
       {/* Footer */}
       <footer className="app-footer glass">
-        <p className="copyright">&copy; {new Date().getFullYear()} Sahan Gamage. Powered by Vite, React, and AWS Cognito.</p>
-        <p className="disclaimer">Serverless Comments connected to AWS API Gateway & DynamoDB.</p>
+        <p className="copyright">Copyright Sahan</p>
       </footer>
     </div>
   );

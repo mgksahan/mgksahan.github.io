@@ -1610,3 +1610,152 @@
 .tooltip-log-pill strong {
   color: var(--text-primary);
 }
+
+/* --- RESUME LAYOUT STYLES --- */
+.resume-section-container {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* About Description */
+.resume-about-text {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  text-align: left;
+}
+
+/* Timeline Components */
+.resume-timeline {
+  position: relative;
+  border-left: 2px solid var(--border-color);
+  padding-left: 32px;
+  margin-left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.timeline-item {
+  position: relative;
+  text-align: left;
+}
+
+.timeline-marker {
+  position: absolute;
+  left: -41px;
+  top: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-color);
+  border: 2px solid var(--text-primary);
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+
+.timeline-item:hover .timeline-marker {
+  background: var(--text-primary);
+  transform: scale(1.15);
+}
+
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+
+@media (max-width: 640px) {
+  .timeline-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
+.timeline-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.timeline-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.timeline-company {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #6366f1;
+}
+
+.timeline-date {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.timeline-description {
+  font-size: 0.98rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Call to Action Row */
+.hero-cta-row {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-cta-primary {
+  background: var(--text-primary) !important;
+  color: var(--bg-color) !important;
+  border: 1px solid var(--text-primary) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+.btn-cta-primary:hover {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  border-color: var(--text-primary) !important;
+  transform: translateY(-2px);
+}
+
+.btn-cta-secondary {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.btn-cta-secondary:hover {
+  background: var(--code-bg) !important;
+  border-color: var(--text-primary) !important;
+  transform: translateY(-2px);
+}
+
+/* Hero Badge Customizations */
+.hero-profile-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .hero-profile-meta-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
