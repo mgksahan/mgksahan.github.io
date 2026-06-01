@@ -23,7 +23,11 @@ import {
   Eye,
   CheckCircle,
   AlertTriangle,
-  X
+  X,
+  Code,
+  Cpu,
+  ExternalLink,
+  Layers
 } from 'lucide-react';
 import { getPosts } from './postsLoader';
 import { cognitoService } from './cognitoService';
@@ -50,7 +54,7 @@ function App() {
   const [selectedTag, setSelectedTag] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [activePost, setActivePost] = useState(null);
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState('light');
   const [activeTab, setActiveTab] = useState('blog'); // 'blog' or 'write'
   const [postsLoading, setPostsLoading] = useState(false);
 
@@ -108,11 +112,129 @@ function App() {
     loadFitnessExercises();
 
     // Set theme
-    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    const savedTheme = localStorage.getItem('sahan-theme') || systemTheme;
+    const savedTheme = localStorage.getItem('sahan-theme') || 'light';
     setTheme(savedTheme);
     document.documentElement.className = savedTheme;
   }, []);
+
+  // HTML5 Canvas Antigravity Interactive Particle Mesh Engine
+  useEffect(() => {
+    const canvas = document.getElementById('antigravity-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    let animationFrameId;
+    let particles = [];
+    let mouse = { x: null, y: null, radius: 160 };
+    
+    const handleResize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    
+    const handleMouseMove = (e) => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    };
+    
+    const handleMouseLeave = () => {
+      mouse.x = null;
+      mouse.y = null;
+    };
+    
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseleave', handleMouseLeave);
+    
+    // Instantiate background particles
+    const particleCount = Math.min(Math.floor((canvas.width * canvas.height) / 14000), 110);
+    particles = [];
+    for (let i = 0; i < particleCount; i++) {
+      const size = Math.random() * 2 + 1.2;
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.35,
+        vy: (Math.random() - 0.5) * 0.35,
+        size: size,
+        originalSize: size
+      });
+    }
+    
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const isDark = document.documentElement.classList.contains('dark') || document.documentElement.className === 'dark';
+      const pColor = isDark ? 'rgba(244, 244, 245, 0.16)' : 'rgba(9, 9, 11, 0.08)';
+      const lColorPrefix = isDark ? '244, 244, 245' : '9, 9, 11';
+      
+      // Update and draw particles
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        
+        // Bounce off bounds
+        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+        
+        // Mouse gravity interaction (soft repellent physical force)
+        if (mouse.x !== null && mouse.y !== null) {
+          const dx = p.x - mouse.x;
+          const dy = p.y - mouse.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          
+          if (dist < mouse.radius) {
+            const force = (mouse.radius - dist) / mouse.radius;
+            // Push gently away
+            p.x += (dx / dist) * force * 1.6;
+            p.y += (dy / dist) * force * 1.6;
+            p.size = p.originalSize + force * 2.5;
+          } else {
+            if (p.size > p.originalSize) p.size -= 0.08;
+          }
+        } else {
+          if (p.size > p.originalSize) p.size -= 0.08;
+        }
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = pColor;
+        ctx.fill();
+      });
+      
+      // Draw elastic webbing links between close particles
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          
+          if (dist < 115) {
+            const opacity = (1 - (dist / 115)) * 0.12;
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(${lColorPrefix}, ${opacity})`;
+            ctx.lineWidth = 0.7;
+            ctx.stroke();
+          }
+        }
+      }
+      
+      animationFrameId = requestAnimationFrame(animate);
+    };
+    
+    animate();
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseleave', handleMouseLeave);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [theme]);
 
   // Handle click outside to close fitness dropdown
   useEffect(() => {
@@ -370,6 +492,7 @@ function App() {
 
   return (
     <div className="app-container">
+      <canvas id="antigravity-canvas" />
       {/* Dynamic Navigation */}
       <nav className="navbar">
         <div className="nav-logo gradient-text" onClick={() => { setActivePost(null); setActiveTab('blog'); }}>
@@ -1042,34 +1165,158 @@ function App() {
       ) : (
         // CLEAN MINIMALIST BLOG WRITINGS VIEW
         <div className="blog-wrapper animate-slide-up">
-          {/* Sahan's Personal Profile Info Header */}
-          <header className="blog-profile-header glass pulse-glow">
-            <div className="profile-grid">
+          {/* Elegant Antigravity Portfolio Hero */}
+          <section className="portfolio-hero-container glass pulse-glow">
+            <div className="hero-profile-meta">
               <img 
                 src="https://avatars.githubusercontent.com/u/50710155?v=4" 
-                alt="Sahan Gamage Profile" 
-                className="profile-avatar"
+                alt="Sahan Gamage" 
+                className="hero-avatar"
               />
-              <div className="profile-details text-left">
+              <div className="hero-title-area text-left">
                 <h1 className="Outfit">Sahan Gamage</h1>
-                <p className="role-title">IoT Architect & Software Engineer</p>
-                <p className="bio-summary">
-                  I write about designing hardware systems, firmware hacking, serverless AWS infrastructures, and my signature accelerometer barbell speed tracker. Join the community to publish posts!
+                <div className="hero-role">Systems Researcher & IoT Architect</div>
+              </div>
+            </div>
+            
+            <p className="hero-bio text-left">
+              Designing physical hardware systems, firmware hacking, and building highly scalable serverless architectures. 
+              My research focuses on virtual machine optimization, I/O offloading in cloud data centers, and physical tracking mechanics at the intersection of bits and atoms.
+            </p>
+            
+            <div className="hero-meta-badges">
+              <span className="hero-badge-pill">#ZeroGravityUI</span>
+              <span className="hero-badge-pill">#IoTArchitect</span>
+              <span className="hero-badge-pill">#SystemsResearch</span>
+              <span className="hero-badge-pill">#ServerlessAWS</span>
+            </div>
+
+            <div className="profile-socials">
+              <a href="https://github.com/mgksahan" target="_blank" rel="noreferrer" className="social-badge glass">
+                <Github size={14} /> <span>GitHub</span>
+              </a>
+              <a href="https://twitter.com/mgksahan" target="_blank" rel="noreferrer" className="social-badge glass">
+                <Twitter size={14} /> <span>Twitter</span>
+              </a>
+              <a href="mailto:mgk.sahan@gmail.com" className="social-badge glass">
+                <Mail size={14} /> <span>Email</span>
+              </a>
+            </div>
+          </section>
+
+          {/* Premium Projects Showcase */}
+          <section className="portfolio-section-block">
+            <div className="portfolio-section-header">
+              <Cpu className="portfolio-section-icon" size={18} />
+              <h2 className="Outfit">Featured Engineering Projects</h2>
+            </div>
+            
+            <div className="projects-showcase-grid">
+              {/* Card 1: Bar Speed Tracker */}
+              <div className="project-card-premium glass glass-hover">
+                <div className="project-header-row">
+                  <span className="project-tag-pill">IoT & Embedded</span>
+                  <Code size={16} className="text-secondary" />
+                </div>
+                <h3 className="project-title-premium Outfit">Bar Speed Tracker</h3>
+                <p className="project-desc-premium">
+                  A smartphone integrated IOT barbell velocity tracker built on an ESP32 and M5StickC Plus2. Measures joint kinematics and lift velocities in real-time, sending logs directly to an AWS database.
                 </p>
-                <div className="profile-socials">
-                  <a href="https://github.com/mgksahan" target="_blank" rel="noreferrer" className="social-badge glass">
-                    <Github size={14} /> <span>GitHub</span>
-                  </a>
-                  <a href="https://twitter.com/mgksahan" target="_blank" rel="noreferrer" className="social-badge glass">
-                    <Twitter size={14} /> <span>Twitter</span>
-                  </a>
-                  <a href="mailto:mgk.sahan@gmail.com" className="social-badge glass">
-                    <Mail size={14} /> <span>Email</span>
-                  </a>
+                <div className="project-action-link" onClick={() => {
+                  const post = posts.find(p => p.slug.includes('Bar-Speed-Tracker-Project-Inception') || p.title.toLowerCase().includes('bar speed'));
+                  if (post) setActivePost(post);
+                  else { setActiveTab('blog'); window.scrollTo(0,0); }
+                }}>
+                  Read Inception Blog <ChevronRight size={14} />
+                </div>
+              </div>
+
+              {/* Card 2: Fitness Visualizer */}
+              <div className="project-card-premium glass glass-hover">
+                <div className="project-header-row">
+                  <span className="project-tag-pill">Cloud & Web</span>
+                  <Layers size={16} className="text-secondary" />
+                </div>
+                <h3 className="project-title-premium Outfit">Fitness Tracker Visualizer</h3>
+                <p className="project-desc-premium">
+                  Interactive progression engine parsing personal workouts directly from Jefit backups. Built as a secure serverless cloud application backed by AWS DynamoDB, Cognito, and API Gateway.
+                </p>
+                <div className="project-action-link" onClick={() => { setActiveTab('fitness'); window.scrollTo(0,0); }}>
+                  Launch Interactive Chart <ChevronRight size={14} />
+                </div>
+              </div>
+
+              {/* Card 3: Embedded GIF Converter */}
+              <div className="project-card-premium glass glass-hover">
+                <div className="project-header-row">
+                  <span className="project-tag-pill">Embedded Tooling</span>
+                  <Cpu size={16} className="text-secondary" />
+                </div>
+                <h3 className="project-title-premium Outfit">Splash Screen Header Tool</h3>
+                <p className="project-desc-premium">
+                  A custom, high-speed graphics converter tool designed for embedded displays. Optimizes storage efficiency on the M5Stick display by generating pixel-update-only C++ array frames.
+                </p>
+                <div className="project-action-link" onClick={() => {
+                  const post = posts.find(p => p.slug.includes('Splash-Screen-for-M5-Stick') || p.title.toLowerCase().includes('splash screen'));
+                  if (post) setActivePost(post);
+                  else { setActiveTab('blog'); window.scrollTo(0,0); }
+                }}>
+                  Read Diary Log <ChevronRight size={14} />
                 </div>
               </div>
             </div>
-          </header>
+          </section>
+
+          {/* Core Technical DNA */}
+          <section className="portfolio-section-block">
+            <div className="portfolio-section-header">
+              <Layers className="portfolio-section-icon" size={18} />
+              <h2 className="Outfit">Systems & Hardware DNA</h2>
+            </div>
+            
+            <div className="skills-board-premium">
+              <div className="skills-category-premium glass">
+                <h3 className="Outfit">IoT & Firmware</h3>
+                <div className="skills-tags-row">
+                  <span className="skill-tag-item">ESP32 & M5StickC</span>
+                  <span className="skill-tag-item">C / C++ Programming</span>
+                  <span className="skill-tag-item">Firmware Hacking</span>
+                  <span className="skill-tag-item">Sensor Integration</span>
+                  <span className="skill-tag-item">Accelerometer Physics</span>
+                </div>
+              </div>
+
+              <div className="skills-category-premium glass">
+                <h3 className="Outfit">Cloud & Serverless</h3>
+                <div className="skills-tags-row">
+                  <span className="skill-tag-item">AWS DynamoDB</span>
+                  <span className="skill-tag-item">AWS Cognito Auth</span>
+                  <span className="skill-tag-item">AWS API Gateway</span>
+                  <span className="skill-tag-item">React & Javascript</span>
+                  <span className="skill-tag-item">REST API Architectures</span>
+                </div>
+              </div>
+
+              <div className="skills-category-premium glass">
+                <h3 className="Outfit">Systems & Research</h3>
+                <div className="skills-tags-row">
+                  <span className="skill-tag-item">VM I/O Virtualization</span>
+                  <span className="skill-tag-item">TCP Optimization</span>
+                  <span className="skill-tag-item">Distributed Systems</span>
+                  <span className="skill-tag-item">Cloud Scheduling</span>
+                  <span className="skill-tag-item">Linux Systems</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Writings Transition Divider */}
+          <div className="portfolio-section-block" style={{ marginTop: '12px' }}>
+            <div className="portfolio-section-header" style={{ marginBottom: '4px' }}>
+              <BookOpen className="portfolio-section-icon" size={18} />
+              <h2 className="Outfit">Writings & Technical Brainstorms</h2>
+            </div>
+          </div>
 
           <div className="blog-layout-container">
             {/* Minimal Search & Filter Bar */}
