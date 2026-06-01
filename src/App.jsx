@@ -1752,7 +1752,7 @@ function App() {
 
       {/* Footer */}
       <footer className="app-footer glass">
-        <p className="copyright">Copyright Sahan</p>
+        <p className="copyright">© Sahan</p>
       </footer>
     </div>
   );
