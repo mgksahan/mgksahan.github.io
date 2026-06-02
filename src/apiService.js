@@ -86,14 +86,18 @@ export const apiService = {
   // 6. FETCH FITNESS HISTORY FOR EXERCISE
   fetchFitnessHistory: async (exerciseName) => {
     if (!API_URL) return [];
-    try {
-      const res = await fetch(`${API_URL}/fitness?exercise_name=${encodeURIComponent(exerciseName)}`);
-      if (!res.ok) throw new Error('Failed to fetch fitness history');
-      return await res.json();
-    } catch (e) {
-      console.error('[API ERROR] fetchFitnessHistory failed:', e);
-      return [];
+    const res = await fetch(`${API_URL}/fitness?exercise_name=${encodeURIComponent(exerciseName)}`);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || errData.message || `Server returned error status ${res.status}`);
     }
+    const data = await res.json();
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      if (data.error || data.message) {
+        throw new Error(data.error || data.message);
+      }
+    }
+    return data;
   }
 };
 

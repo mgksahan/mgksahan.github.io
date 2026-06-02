@@ -97,6 +97,7 @@ function App() {
   const [fitnessHistory, setFitnessHistory] = useState([]);
   const [selectedFitnessMetric, setSelectedFitnessMetric] = useState('1rem'); // '1rem' or 'volume'
   const [fitnessLoading, setFitnessLoading] = useState(false);
+  const [fitnessError, setFitnessError] = useState('');
   const [searchExerciseQuery, setSearchExerciseQuery] = useState('');
   const [isExerciseDropdownOpen, setIsExerciseDropdownOpen] = useState(false);
   const [hoveredDataPoint, setHoveredDataPoint] = useState(null);
@@ -313,11 +314,19 @@ function App() {
   const loadFitnessHistory = async (exerciseName) => {
     if (!exerciseName) return;
     setFitnessLoading(true);
+    setFitnessError('');
     try {
       const history = await apiService.fetchFitnessHistory(exerciseName);
-      setFitnessHistory(history);
+      if (Array.isArray(history)) {
+        setFitnessHistory(history);
+      } else {
+        setFitnessHistory([]);
+        setFitnessError('Received invalid data format from server.');
+      }
     } catch (e) {
       console.error('Error loading fitness history:', e);
+      setFitnessError(e.message || 'Failed to load fitness history');
+      setFitnessHistory([]);
     } finally {
       setFitnessLoading(false);
     }
@@ -327,6 +336,7 @@ function App() {
     setSelectedFitnessExercise(exercise);
     setIsExerciseDropdownOpen(false);
     setSearchExerciseQuery('');
+    setFitnessError('');
     loadFitnessHistory(exercise);
     setHoveredDataPoint(null);
   };
@@ -878,12 +888,14 @@ function App() {
 
           {/* SVG Visualizer Chart */}
           {(() => {
-            const chartData = [...fitnessHistory]
+            const historyArray = Array.isArray(fitnessHistory) ? fitnessHistory : [];
+            const chartData = [...historyArray]
+              .filter(item => item && typeof item === 'object' && item.workout_date)
               .sort((a, b) => new Date(a.workout_date) - new Date(b.workout_date))
               .map(item => ({
                 date: item.workout_date,
                 value: selectedFitnessMetric === '1rem' ? item.one_rep_max_lbs : item.total_volume_lbs,
-                raw_logs: item.raw_logs
+                raw_logs: item.raw_logs || ''
               }))
               .filter(item => item.value !== undefined && item.value !== null);
 
@@ -992,6 +1004,12 @@ function App() {
                   <div className="loading-spinner text-center" style={{ minHeight: '300px' }}>
                     <div className="spinner"></div>
                     <p>Fetching history from AWS DynamoDB...</p>
+                  </div>
+                ) : fitnessError ? (
+                  <div className="empty-results glass" style={{ minHeight: '300px' }}>
+                    <AlertTriangle size={48} className="empty-icon" style={{ color: '#ef4444' }} />
+                    <h3 className="Outfit">Not Done</h3>
+                    <p>{fitnessError || "You haven't completed this exercise yet."}</p>
                   </div>
                 ) : chartData.length > 0 ? (
                   <div className="fitness-chart-wrapper" style={{ position: 'relative' }}>
@@ -1120,7 +1138,7 @@ function App() {
                         );
                       })}
                     </svg>
-
+ 
                     {/* Tooltip component */}
                     {hoveredDataPoint && (
                       <div 
@@ -1147,15 +1165,21 @@ function App() {
                         <div className="tooltip-logs-container">
                           <div className="tooltip-logs-title">Workout Sets (Weight × Reps):</div>
                           <div className="tooltip-logs-list">
-                            {hoveredDataPoint.raw_logs.split(',').map((setStr, sIdx) => {
-                              const [weight, reps] = setStr.split('x');
-                              const weightLbs = (parseFloat(weight) * 2.20462).toFixed(1);
-                              return (
-                                <span key={sIdx} className="tooltip-log-pill">
-                                  {weightLbs} lbs × {reps}
-                                </span>
-                              );
-                            })}
+                            {hoveredDataPoint.raw_logs && typeof hoveredDataPoint.raw_logs === 'string' ? (
+                              hoveredDataPoint.raw_logs.split(',').map((setStr, sIdx) => {
+                                const parts = setStr.split('x');
+                                if (parts.length < 2) return null;
+                                const [weight, reps] = parts;
+                                const weightLbs = (parseFloat(weight) * 2.20462).toFixed(1);
+                                return (
+                                  <span key={sIdx} className="tooltip-log-pill">
+                                    {weightLbs} lbs × {reps}
+                                  </span>
+                                );
+                              })
+                            ) : (
+                              <span className="tooltip-log-pill">No sets logged</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1164,7 +1188,7 @@ function App() {
                 ) : (
                   <div className="empty-results glass" style={{ minHeight: '300px' }}>
                     <BookOpen size={48} className="empty-icon text-tertiary" />
-                    <h3 className="Outfit">No data found</h3>
+                    <h3 className="Outfit">Not Completed</h3>
                     <p>No workout records exist for this exercise yet.</p>
                   </div>
                 )}
