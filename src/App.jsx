@@ -1345,6 +1345,9 @@ function App() {
                 <div className="hero-title-area text-left">
                   <h1 className="Outfit">Sahan Gamage</h1>
                   <div className="hero-role">Embedded Systems & Electronics Engineer</div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--accent-color)', marginTop: '6px', fontWeight: '500' }}>
+                    ✨ Kevindi is cool
+                  </div>
                 </div>
               </div>
             </div>
@@ -1965,7 +1968,7 @@ function App() {
 
       {/* Footer */}
       <footer className="app-footer glass">
-        <p className="copyright">© Kevindi</p>
+        <p className="copyright">© Kevindi | Kevindi is cool 😎</p>
       </footer>
     </div>
   );
