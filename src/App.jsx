@@ -1941,7 +1941,7 @@ function App() {
 
       {/* Footer */}
       <footer className="app-footer glass">
-        <p className="copyright">© Sahan</p>
+        <p className="copyright">© Kevindi</p>
       </footer>
     </div>
   );
