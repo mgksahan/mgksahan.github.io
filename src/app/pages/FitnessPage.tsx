@@ -266,11 +266,18 @@ export function FitnessPage() {
     });
 
     // X ticks (evenly spaced chronological date points)
-    const xTicksCount = Math.min(chartData.length, 5);
-    xTicks = Array.from({ length: xTicksCount }, (_, i) => {
-      const idx = Math.round((i * (chartData.length - 1)) / (xTicksCount - 1));
-      return chartData[idx];
-    }).filter((item, index, self) => self.findIndex(t => t.date === item.date) === index); // deduplicate
+    if (chartData.length === 1) {
+      xTicks = [chartData[0]];
+    } else if (chartData.length > 1) {
+      const xTicksCount = Math.min(chartData.length, 5);
+      xTicks = Array.from({ length: xTicksCount }, (_, i) => {
+        const idx = Math.round((i * (chartData.length - 1)) / (xTicksCount - 1));
+        return chartData[idx];
+      }).filter(Boolean)
+        .filter((item, index, self) => self.findIndex(t => t && item && t.date === item.date) === index); // deduplicate
+    } else {
+      xTicks = [];
+    }
 
     // Path strings (conditional smoothing: straight lines for short timeframes/few points, Bezier curve for longer)
     // We map path coordinates from trendData (smoothed), while circles represent chartData (raw)
