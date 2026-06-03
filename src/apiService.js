@@ -98,6 +98,18 @@ export const apiService = {
       }
     }
     return data;
+  },
+
+  // 7. FETCH FITNESS FOR SPECIFIC DATE (ALL EXERCISES)
+  fetchFitnessDay: async (date) => {
+    if (!API_URL) return [];
+    try {
+      const res = await fetch(`${API_URL}/fitness?date=${encodeURIComponent(date)}`);
+      if (!res.ok) throw new Error('Failed to fetch fitness day logs');
+      return await res.json();
+    } catch (e) {
+      console.error('[API ERROR] fetchFitnessDay failed:', e);
+      return [];
+    }
   }
 };
-
