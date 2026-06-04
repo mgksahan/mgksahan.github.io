@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { apiService } from '../../apiService';
 import { Search, ChevronRight, BookOpen, Dumbbell, TrendingUp, Info, X } from 'lucide-react';
 
@@ -35,7 +35,8 @@ export function FitnessPage() {
   const [fitnessExercises, setFitnessExercises] = useState<string[]>([]);
   const [selectedFitnessExercise, setSelectedFitnessExercise] = useState('');
   const [fitnessHistory, setFitnessHistory] = useState<any[]>([]);
-  const [selectedFitnessMetric, setSelectedFitnessMetric] = useState<'1rem' | 'volume'>('1rem'); // '1rem' or 'volume'
+  const [selectedFitnessMetric, setSelectedFitnessMetric] = useState<'1rem' | 'volume' | 'multiplier'>('1rem'); // '1rem' or 'volume' or 'multiplier'
+  const [bodyWeightHistory, setBodyWeightHistory] = useState<any[]>([]);
   const [weightUnit, setWeightUnit] = useState<'lbs' | 'kg'>('lbs');
   const [timePeriod, setTimePeriod] = useState<'1M' | '3M' | '6M' | '1Y' | 'All' | 'custom'>('All');
   const [customStartDate, setCustomStartDate] = useState('');
@@ -105,6 +106,17 @@ export function FitnessPage() {
     try {
       const exercises = await apiService.fetchFitnessExercises();
       setFitnessExercises(exercises);
+      
+      // Preload body weight history for multiplier calculation
+      try {
+        const bwData = await apiService.fetchFitnessHistory('Body Weight');
+        if (Array.isArray(bwData)) {
+          setBodyWeightHistory(bwData);
+        }
+      } catch (err) {
+        console.error('Error preloading body weight history:', err);
+      }
+
       if (exercises && exercises.length > 0) {
         // Default to a common exercise if present, else first
         const defaultExercise = exercises.find((ex: string) => 
@@ -139,6 +151,24 @@ export function FitnessPage() {
     }
   };
 
+  // Group and filter exercises by category
+  const categorizedExercises = useMemo(() => {
+    const query = searchExerciseQuery.toLowerCase().trim();
+    
+    // Categorize
+    const bodyStats = fitnessExercises.filter(ex => ex === 'Body Weight');
+    const weightExercises = fitnessExercises.filter(ex => ex !== 'Body Weight');
+    
+    // Filter
+    const filteredBodyStats = bodyStats.filter(ex => ex.toLowerCase().includes(query));
+    const filteredWeightExercises = weightExercises.filter(ex => ex.toLowerCase().includes(query));
+    
+    return {
+      bodyStats: filteredBodyStats,
+      weight: filteredWeightExercises
+    };
+  }, [fitnessExercises, searchExerciseQuery]);
+
   const handleExerciseChange = (exercise: string) => {
     setSelectedFitnessExercise(exercise);
     setSelectedPoint(null);
@@ -148,22 +178,78 @@ export function FitnessPage() {
     loadFitnessHistory(exercise);
   };
 
+  // Interpolator to get body weight in Lbs for a given date using linear interpolation
+  const getInterpolatedBodyWeightLbs = useCallback((targetDateStr: string) => {
+    if (!bodyWeightHistory || bodyWeightHistory.length === 0) return null;
+    
+    // Sort body weight history chronologically
+    const sortedBw = [...bodyWeightHistory]
+      .sort((a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime());
+      
+    const targetTime = new Date(targetDateStr + 'T00:00:00').getTime();
+    
+    // Boundary check 1: Target is before or at the first weigh-in
+    const firstTime = new Date(sortedBw[0].workout_date + 'T00:00:00').getTime();
+    if (targetTime <= firstTime) {
+      return sortedBw[0].one_rep_max_lbs;
+    }
+    
+    // Boundary check 2: Target is after or at the last weigh-in
+    const lastTime = new Date(sortedBw[sortedBw.length - 1].workout_date + 'T00:00:00').getTime();
+    if (targetTime >= lastTime) {
+      return sortedBw[sortedBw.length - 1].one_rep_max_lbs;
+    }
+    
+    // Linear interpolation
+    for (let i = 0; i < sortedBw.length - 1; i++) {
+      const timeA = new Date(sortedBw[i].workout_date + 'T00:00:00').getTime();
+      const timeB = new Date(sortedBw[i+1].workout_date + 'T00:00:00').getTime();
+      
+      if (targetTime >= timeA && targetTime <= timeB) {
+        const weightA = sortedBw[i].one_rep_max_lbs;
+        const weightB = sortedBw[i+1].one_rep_max_lbs;
+        
+        // Linear interpolation formula
+        const fraction = (targetTime - timeA) / (timeB - timeA);
+        return weightA + fraction * (weightB - weightA);
+      }
+    }
+    
+    return sortedBw[0].one_rep_max_lbs;
+  }, [bodyWeightHistory]);
+
   // SVG Chart Computations
   const allChartData = useMemo(() => {
     return [...fitnessHistory]
       .sort((a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime())
       .map(item => {
-        const rawVal = selectedFitnessMetric === '1rem' ? item.one_rep_max_lbs : item.total_volume_lbs;
-        // Convert to kg if weightUnit is 'kg'
-        const convertedVal = weightUnit === 'kg' ? rawVal / 2.20462 : rawVal;
+        let rawVal = 0;
+        if (selectedFitnessExercise === 'Body Weight') {
+          rawVal = item.one_rep_max_lbs;
+        } else if (selectedFitnessMetric === '1rem') {
+          rawVal = item.one_rep_max_lbs;
+        } else if (selectedFitnessMetric === 'multiplier') {
+          // Estimate body weight on this day using linear interpolation
+          const bodyWeightLbs = getInterpolatedBodyWeightLbs(item.workout_date);
+          rawVal = bodyWeightLbs && bodyWeightLbs > 0 ? (item.one_rep_max_lbs / bodyWeightLbs) : 0;
+        } else {
+          rawVal = item.total_volume_lbs;
+        }
+        
+        // Convert to kg if weightUnit is 'kg', but NOT for multiplier (multiplier is unitless)
+        const convertedVal = (selectedFitnessMetric === 'multiplier' && selectedFitnessExercise !== 'Body Weight') 
+          ? rawVal 
+          : (weightUnit === 'kg' ? rawVal / 2.20462 : rawVal);
+
         return {
           date: item.workout_date,
           value: convertedVal,
+          one_rep_max_lbs: item.one_rep_max_lbs,
           raw_logs: item.raw_logs
         };
       })
       .filter(item => item.value !== undefined && item.value !== null);
-  }, [fitnessHistory, selectedFitnessMetric, weightUnit]);
+  }, [fitnessHistory, selectedFitnessExercise, selectedFitnessMetric, weightUnit, getInterpolatedBodyWeightLbs]);
 
   const chartData = useMemo(() => {
     if (allChartData.length === 0) return [];
@@ -352,7 +438,7 @@ export function FitnessPage() {
           >
             <span className="flex items-center gap-1.5 truncate font-medium">
               <Search size={12} className="opacity-40" />
-              {selectedFitnessExercise || 'Select exercise...'}
+              {selectedFitnessExercise || (fitnessExercises.length === 0 ? 'Loading options...' : 'Select option...')}
             </span>
             <ChevronRight size={14} className={`opacity-60 transform transition-transform duration-200 ${isExerciseDropdownOpen ? 'rotate-90' : ''}`} />
           </button>
@@ -363,31 +449,56 @@ export function FitnessPage() {
                 <Search size={12} className="opacity-40" />
                 <input 
                   type="text" 
-                  placeholder="Search exercise..." 
+                  placeholder="Search options..." 
                   value={searchExerciseQuery}
                   onChange={(e) => setSearchExerciseQuery(e.target.value)}
                   className="w-full bg-transparent border-0 outline-none text-xs p-0 focus:ring-0"
                   autoFocus
                 />
               </div>
-              <div className="overflow-y-auto divide-y">
-                {fitnessExercises.filter(ex => 
-                  ex.toLowerCase().includes(searchExerciseQuery.toLowerCase())
-                ).length > 0 ? (
-                  fitnessExercises.filter(ex => 
-                    ex.toLowerCase().includes(searchExerciseQuery.toLowerCase())
-                  ).map(ex => (
-                    <button 
-                      key={ex}
-                      className={`w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer hover:bg-muted/50 ${selectedFitnessExercise === ex ? 'bg-primary/5 font-semibold text-primary' : ''}`}
-                      onClick={() => handleExerciseChange(ex)}
-                      type="button"
-                    >
-                      {ex}
-                    </button>
-                  ))
-                ) : (
+              <div className="overflow-y-auto max-h-64 divide-y">
+                {categorizedExercises.bodyStats.length === 0 && categorizedExercises.weight.length === 0 ? (
                   <div className="px-3 py-3 text-center text-xs opacity-50">No exercises found</div>
+                ) : (
+                  <>
+                    {/* Body Stats Group */}
+                    {categorizedExercises.bodyStats.length > 0 && (
+                      <div className="flex flex-col">
+                        <div className="px-3 py-1.5 bg-muted/50 text-[10px] font-bold text-muted-foreground tracking-wider uppercase border-b border-t first:border-t-0">
+                          Body Stats
+                        </div>
+                        {categorizedExercises.bodyStats.map(ex => (
+                          <button 
+                            key={ex}
+                            className={`w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer hover:bg-muted/50 ${selectedFitnessExercise === ex ? 'bg-primary/5 font-semibold text-primary' : ''}`}
+                            onClick={() => handleExerciseChange(ex)}
+                            type="button"
+                          >
+                            {ex}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Weight Group */}
+                    {categorizedExercises.weight.length > 0 && (
+                      <div className="flex flex-col">
+                        <div className="px-3 py-1.5 bg-muted/50 text-[10px] font-bold text-muted-foreground tracking-wider uppercase border-b border-t first:border-t-0">
+                          Weight
+                        </div>
+                        {categorizedExercises.weight.map(ex => (
+                          <button 
+                            key={ex}
+                            className={`w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer hover:bg-muted/50 ${selectedFitnessExercise === ex ? 'bg-primary/5 font-semibold text-primary' : ''}`}
+                            onClick={() => handleExerciseChange(ex)}
+                            type="button"
+                          >
+                            {ex}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -395,22 +506,31 @@ export function FitnessPage() {
         </div>
 
         {/* Metric Toggle Buttons */}
-        <div className="inline-flex border rounded-lg bg-background p-0.5 gap-0.5 h-8">
-          <button 
-            className={`rounded px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${selectedFitnessMetric === '1rem' ? 'bg-primary text-primary-foreground shadow-sm' : 'opacity-65 hover:opacity-100'}`}
-            onClick={() => setSelectedFitnessMetric('1rem')}
-            type="button"
-          >
-            1RM
-          </button>
-          <button 
-            className={`rounded px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${selectedFitnessMetric === 'volume' ? 'bg-primary text-primary-foreground shadow-sm' : 'opacity-65 hover:opacity-100'}`}
-            onClick={() => setSelectedFitnessMetric('volume')}
-            type="button"
-          >
-            Volume
-          </button>
-        </div>
+        {selectedFitnessExercise !== 'Body Weight' && (
+          <div className="inline-flex border rounded-lg bg-background p-0.5 gap-0.5 h-8">
+            <button 
+              className={`rounded px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${selectedFitnessMetric === '1rem' ? 'bg-primary text-primary-foreground shadow-sm' : 'opacity-65 hover:opacity-100'}`}
+              onClick={() => setSelectedFitnessMetric('1rem')}
+              type="button"
+            >
+              1RM
+            </button>
+            <button 
+              className={`rounded px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${selectedFitnessMetric === 'volume' ? 'bg-primary text-primary-foreground shadow-sm' : 'opacity-65 hover:opacity-100'}`}
+              onClick={() => setSelectedFitnessMetric('volume')}
+              type="button"
+            >
+              Volume
+            </button>
+            <button 
+              className={`rounded px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${selectedFitnessMetric === 'multiplier' ? 'bg-primary text-primary-foreground shadow-sm' : 'opacity-65 hover:opacity-100'}`}
+              onClick={() => setSelectedFitnessMetric('multiplier')}
+              type="button"
+            >
+              BW Mult
+            </button>
+          </div>
+        )}
 
         {/* Unit Selector */}
         <div className="inline-flex border rounded-lg bg-background p-0.5 gap-0.5 h-8">
@@ -476,7 +596,12 @@ export function FitnessPage() {
           <div>
             <h3 className="text-xl font-bold tracking-tight">{selectedFitnessExercise || 'Exercise'} Progress</h3>
             <p className="text-sm opacity-60">
-              Chronological tracking of {selectedFitnessMetric === '1rem' ? `Estimated 1-Rep Max (${weightUnit})` : `Total Volume (${weightUnit})`}
+              {selectedFitnessExercise === 'Body Weight'
+                ? `Chronological tracking of Body Weight (${weightUnit})`
+                : selectedFitnessMetric === 'multiplier'
+                  ? `Chronological tracking of Bodyweight Multiplier (1RM / Body Weight)`
+                  : `Chronological tracking of ${selectedFitnessMetric === '1rem' ? 'Estimated 1-Rep Max' : 'Total Volume'} (${weightUnit})`
+              }
             </p>
           </div>
           {chartData.length > 0 && (
@@ -536,7 +661,10 @@ export function FitnessPage() {
                       className="fill-muted-foreground text-xs font-mono"
                       textAnchor="end"
                     >
-                      {Math.round(tickVal)}
+                      {selectedFitnessExercise !== 'Body Weight' && selectedFitnessMetric === 'multiplier'
+                        ? tickVal.toFixed(2) + 'x'
+                        : Math.round(tickVal)
+                      }
                     </text>
                   </g>
                 );
@@ -665,19 +793,50 @@ export function FitnessPage() {
                 }}
               >
                 <div className="font-semibold border-b pb-1 mb-1.5">{formatFullDate(hoveredDataPoint.date)}</div>
-                <div className="flex justify-between items-center mb-1.5 text-sm">
-                  <span className="opacity-60">
-                    {selectedFitnessMetric === '1rem' ? 'Est. 1-Rep Max' : 'Total Volume'}:
-                  </span>
-                  <span className="font-bold text-primary">
-                    {hoveredDataPoint.value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })} {weightUnit}
-                  </span>
-                </div>
+                {selectedFitnessMetric === 'multiplier' && selectedFitnessExercise !== 'Body Weight' ? (
+                  <div className="space-y-1 mb-2 border-b pb-1.5">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="opacity-60">Est. 1-Rep Max:</span>
+                      <span className="font-semibold">
+                        {(weightUnit === 'kg' ? hoveredDataPoint.one_rep_max_lbs / 2.20462 : hoveredDataPoint.one_rep_max_lbs).toFixed(1)} {weightUnit}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="opacity-60">Est. Body Weight:</span>
+                      <span className="font-semibold">
+                        {(() => {
+                          const bwLbs = getInterpolatedBodyWeightLbs(hoveredDataPoint.date);
+                          if (!bwLbs) return 'N/A';
+                          return (weightUnit === 'kg' ? bwLbs / 2.20462 : bwLbs).toFixed(1) + ' ' + weightUnit;
+                        })()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm font-bold text-primary pt-0.5">
+                      <span>BW Multiplier:</span>
+                      <span>{hoveredDataPoint.value.toFixed(2)}x</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center mb-1.5 text-sm">
+                    <span className="opacity-60">
+                      {selectedFitnessExercise === 'Body Weight' ? 'Body Weight' : (selectedFitnessMetric === '1rem' ? 'Est. 1-Rep Max' : 'Total Volume')}:
+                    </span>
+                    <span className="font-bold text-primary">
+                      {hoveredDataPoint.value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })} {weightUnit}
+                    </span>
+                  </div>
+                )}
                 
                 <div className="space-y-1">
-                  <div className="opacity-55 font-semibold text-[10px] uppercase tracking-wider">Sets (Weight × Reps):</div>
+                  <div className="opacity-55 font-semibold text-[10px] uppercase tracking-wider">
+                    {selectedFitnessExercise === 'Body Weight' ? 'Body Weight:' : 'Sets (Weight × Reps):'}
+                  </div>
                   <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
-                    {hoveredDataPoint.raw_logs && hoveredDataPoint.raw_logs.trim() !== "" ? (
+                    {selectedFitnessExercise === 'Body Weight' ? (
+                      <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">
+                        {hoveredDataPoint.value.toFixed(1)} {weightUnit}
+                      </span>
+                    ) : hoveredDataPoint.raw_logs && hoveredDataPoint.raw_logs.trim() !== "" ? (
                       hoveredDataPoint.raw_logs.split(',').map((setStr: string, sIdx: number) => {
                         const parts = setStr.split('x');
                         if (parts.length !== 2) return null;
@@ -753,16 +912,27 @@ export function FitnessPage() {
                         <Dumbbell className="w-4 h-4 opacity-75 text-primary" />
                         {ename}
                       </h4>
-                      <div className="flex items-center gap-4 text-[10px] uppercase font-bold opacity-60 font-mono">
-                        <span>1RM: {onerm.toFixed(1)} {weightUnit}</span>
-                        <span className="opacity-30">|</span>
-                        <span>Vol: {vol.toLocaleString(undefined, { maximumFractionDigits: 1 })} {weightUnit}</span>
-                      </div>
+                      {ename !== 'Body Weight' ? (
+                        <div className="flex items-center gap-4 text-[10px] uppercase font-bold opacity-60 font-mono">
+                          <span>1RM: {onerm.toFixed(1)} {weightUnit}</span>
+                          <span className="opacity-30">|</span>
+                          <span>Vol: {vol.toLocaleString(undefined, { maximumFractionDigits: 1 })} {weightUnit}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-4 text-[10px] uppercase font-bold opacity-60 font-mono">
+                          <span>Weight: {onerm.toFixed(1)} {weightUnit}</span>
+                        </div>
+                      )}
                     </div>
                     
                     {/* Sets for this exercise */}
                     <div className="flex flex-wrap gap-2 pt-1">
-                      {rawLogs && rawLogs.trim() !== "" ? (
+                      {ename === 'Body Weight' ? (
+                        <div className="bg-background border rounded px-2.5 py-1 text-xs flex items-center gap-1.5 justify-between">
+                          <span className="opacity-45 text-[10px] font-semibold">Log</span>
+                          <span className="font-bold text-[11px]">{onerm.toFixed(1)} {weightUnit}</span>
+                        </div>
+                      ) : rawLogs && rawLogs.trim() !== "" ? (
                         rawLogs.split(',').map((setStr: string, sIdx: number) => {
                           const parts = setStr.split('x');
                           if (parts.length !== 2) return null;
