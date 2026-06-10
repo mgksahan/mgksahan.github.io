@@ -155,6 +155,85 @@ export const cognitoService = {
     return Promise.resolve();
   },
 
+  // 4.5. FORGOT PASSWORD
+  forgotPassword: (email) => {
+    if (!isConfigured) {
+      return new Promise((resolve, reject) => {
+        setTimeout(() => {
+          const users = getMockUsers();
+          if (!users[email]) {
+            return reject(new Error('User not found.'));
+          }
+          // Generate a 6-digit verification code
+          const code = Math.floor(100000 + Math.random() * 900000).toString();
+          users[email].resetCode = code;
+          saveMockUsers(users);
+          
+          console.log(`[DEMO MODE] Forgot password code for ${email} is: ${code}`);
+          resolve({
+            CodeDeliveryDetails: {
+              Destination: email,
+              DeliveryMedium: 'EMAIL'
+            }
+          });
+        }, 800);
+      });
+    }
+
+    const userPool = new CognitoUserPool(poolData);
+    const cognitoUser = new CognitoUser({ Username: email, Pool: userPool });
+
+    return new Promise((resolve, reject) => {
+      cognitoUser.forgotPassword({
+        onSuccess: (data) => {
+          resolve(data);
+        },
+        onFailure: (err) => {
+          reject(err);
+        },
+        inputVerificationCode: (data) => {
+          resolve(data);
+        }
+      });
+    });
+  },
+
+  // 4.6. CONFIRM PASSWORD
+  confirmPassword: (email, code, newPassword) => {
+    if (!isConfigured) {
+      return new Promise((resolve, reject) => {
+        setTimeout(() => {
+          const users = getMockUsers();
+          const user = users[email];
+          if (!user) return reject(new Error('User not found.'));
+          
+          if (user.resetCode === code) {
+            user.password = newPassword;
+            delete user.resetCode;
+            saveMockUsers(users);
+            resolve('SUCCESS');
+          } else {
+            reject(new Error('Invalid verification code.'));
+          }
+        }, 800);
+      });
+    }
+
+    const userPool = new CognitoUserPool(poolData);
+    const cognitoUser = new CognitoUser({ Username: email, Pool: userPool });
+
+    return new Promise((resolve, reject) => {
+      cognitoUser.confirmPassword(code, newPassword, {
+        onSuccess: () => {
+          resolve('SUCCESS');
+        },
+        onFailure: (err) => {
+          reject(err);
+        }
+      });
+    });
+  },
+
   // 5. GET CURRENT USER
   getCurrentUser: () => {
     const savedUser = localStorage.getItem('active_blog_user');
