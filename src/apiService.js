@@ -19,11 +19,12 @@ export const apiService = {
   // 2. CREATE DYNAMODB POST
   createPost: async (postData, token) => {
     if (!API_URL) throw new Error('API URL is not configured.');
+    const authHeader = token ? (token.startsWith('Bearer ') ? token : `Bearer ${token}`) : '';
     const res = await fetch(`${API_URL}/posts`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': token
+        'Authorization': authHeader
       },
       body: JSON.stringify(postData)
     });
@@ -55,7 +56,7 @@ export const apiService = {
       'Content-Type': 'application/json'
     };
     if (token) {
-      headers['Authorization'] = token;
+      headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
     }
 
     const res = await fetch(`${API_URL}/comments`, {
