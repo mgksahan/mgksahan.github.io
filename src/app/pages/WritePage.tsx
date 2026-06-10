@@ -7,6 +7,7 @@ import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Separator } from '../components/ui/separator';
+import { Badge } from '../components/ui/badge';
 import { PenTool, Eye, Calendar, Clock, User, ArrowLeft } from 'lucide-react';
 import { marked } from 'marked';
 import { toast } from 'sonner';
