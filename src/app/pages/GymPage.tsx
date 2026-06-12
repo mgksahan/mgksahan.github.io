@@ -4,7 +4,7 @@ import routinesData from '../data/routines.json';
 import { 
   Play, Plus, Trash2, Check, Clock, Award, Flame, X, 
   ChevronDown, ChevronUp, Search, ArrowLeft, Dumbbell, History, 
-  TrendingUp, RotateCcw, AlertTriangle, CheckCircle2, ChevronRight,
+  TrendingUp, RotateCcw, AlertTriangle, CheckCircle2, ChevronRight, ChevronLeft,
   Edit, Save
 } from 'lucide-react';
 import { toast } from 'sonner';
