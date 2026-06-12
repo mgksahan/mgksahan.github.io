@@ -775,6 +775,9 @@ export function GymPage() {
                           className="bg-zinc-950 border border-zinc-800 text-[10px] font-bold rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-rose-500"
                         >
                           <option value={0}>Off / None</option>
+                          <option value={10}>10 seconds</option>
+                          <option value={15}>15 seconds</option>
+                          <option value={20}>20 seconds</option>
                           <option value={30}>30 seconds</option>
                           <option value={45}>45 seconds</option>
                           <option value={60}>60 seconds</option>
