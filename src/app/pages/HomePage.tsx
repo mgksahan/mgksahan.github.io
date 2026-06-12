@@ -147,9 +147,6 @@ export function HomePage() {
           <div>
             <h1 className="text-4xl mb-1 font-bold tracking-tight">Sahan Gamage</h1>
             <p className="text-lg opacity-60 font-medium">Embedded Systems & Electronics Engineer</p>
-            <div className="text-xs text-primary font-semibold mt-1">
-              ✨ Kevindi is cool
-            </div>
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm opacity-60">
             <span className="flex items-center gap-1.5">

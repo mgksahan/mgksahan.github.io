@@ -60,7 +60,7 @@ export function RootLayout() {
         <Outlet />
       </main>
       <footer className="glow-line-t py-6 bg-card/30 text-center text-xs opacity-50 font-medium">
-        <p className="copyright">© Kevindi | Kevindi is cool 😎</p>
+        <p className="copyright">© Sahan | Built with Antigravity</p>
       </footer>
     </div>
   );
