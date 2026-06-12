@@ -314,8 +314,8 @@ export function GymPage() {
       targetSet.completed = nextCompleted;
 
       if (nextCompleted) {
-        // Only trigger timer if weight and reps are set
-        if (targetSet.weight && targetSet.reps) {
+        // Only trigger timer if weight and reps are set, and timer is set to a value > 0
+        if (targetSet.weight && targetSet.reps && copy[exerciseIdx].timer > 0) {
           setRestTimeLeft(copy[exerciseIdx].timer);
           setIsRestTimerActive(true);
         }
@@ -762,6 +762,7 @@ export function GymPage() {
                           }}
                           className="bg-zinc-950 border border-zinc-800 text-[10px] font-bold rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-rose-500"
                         >
+                          <option value={0}>Off / None</option>
                           <option value={30}>30 seconds</option>
                           <option value={45}>45 seconds</option>
                           <option value={60}>60 seconds</option>
