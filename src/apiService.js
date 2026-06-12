@@ -112,5 +112,22 @@ export const apiService = {
       console.error('[API ERROR] fetchFitnessDay failed:', e);
       return [];
     }
+  },
+
+  // 8. CREATE FITNESS LOG
+  createFitnessLog: async (fitnessData) => {
+    if (!API_URL) throw new Error('API URL is not configured.');
+    const res = await fetch(`${API_URL}/fitness`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(fitnessData)
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || errData.message || 'Failed to submit fitness log.');
+    }
+    return await res.json();
   }
 };
