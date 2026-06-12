@@ -484,21 +484,20 @@ export function GymPage() {
               weightVal = String(W);
             }
 
-            // Generate Warmup Sets (40%, 60%, 80% of target weight)
-            const warmups = [
-              { weight: String(roundToNearest5LbsInKg(W * 0.40)), reps: '5', completed: false, isWarmup: true },
-              { weight: String(roundToNearest5LbsInKg(W * 0.60)), reps: '5', completed: false, isWarmup: true },
-              { weight: String(roundToNearest5LbsInKg(W * 0.80)), reps: '3', completed: false, isWarmup: true }
-            ];
-
-            const adjustedWarmups = warmups.map(w => {
-              if (ex.name === 'Weighted Pull-Up') {
-                const addedVal = parseFloat(w.weight) || 0;
-                const totalVal = Math.round((pbBodyWeight + addedVal) * 100) / 100;
-                return { ...w, weight: String(totalVal) };
-              }
-              return w;
-            });
+            // Generate Warmup Sets
+            let warmupSets: any[] = [];
+            if (ex.name === 'Weighted Pull-Up') {
+              // Exactly 1 warmup set of 3 reps at bodyweight
+              warmupSets = [
+                { weight: String(pbBodyWeight), reps: '3', completed: false, isWarmup: true }
+              ];
+            } else {
+              warmupSets = [
+                { weight: String(roundToNearest5LbsInKg(W * 0.40)), reps: '5', completed: false, isWarmup: true },
+                { weight: String(roundToNearest5LbsInKg(W * 0.60)), reps: '5', completed: false, isWarmup: true },
+                { weight: String(roundToNearest5LbsInKg(W * 0.80)), reps: '3', completed: false, isWarmup: true }
+              ];
+            }
 
             // Generate Work Sets
             const workSets = Array.from({ length: setsCount }, () => ({
@@ -509,7 +508,7 @@ export function GymPage() {
 
             return {
               ...ex,
-              sets: [...adjustedWarmups, ...workSets],
+              sets: [...warmupSets, ...workSets],
               expanded: true
             };
           } else {
@@ -971,7 +970,9 @@ export function GymPage() {
       const total1RM = est1RM > bodyWeight ? est1RM : bodyWeight + 20;
       const targetTotal = total1RM * pct;
       const addedWeight = targetTotal - bodyWeight;
-      if (addedWeight <= 0) return 0;
+      if (addedWeight <= 1.3) {
+        return 1.3; // Minimum added weight is exactly 1.3 kg
+      }
       return roundToNearest5LbsInKg(addedWeight);
     } else {
       const target = est1RM * pct;
@@ -1152,21 +1153,20 @@ export function GymPage() {
             weightVal = String(W);
           }
 
-          // Generate Warmup Sets (40%, 60%, 80%)
-          const warmups = [
-            { weight: String(roundToNearest5LbsInKg(W * 0.40)), reps: '5', completed: false, isWarmup: true },
-            { weight: String(roundToNearest5LbsInKg(W * 0.60)), reps: '5', completed: false, isWarmup: true },
-            { weight: String(roundToNearest5LbsInKg(W * 0.80)), reps: '3', completed: false, isWarmup: true }
-          ];
-
-          const adjustedWarmups = warmups.map(w => {
-            if (liftName === 'Weighted Pull-Up') {
-              const addedVal = parseFloat(w.weight) || 0;
-              const totalVal = Math.round((bw + addedVal) * 100) / 100;
-              return { ...w, weight: String(totalVal) };
-            }
-            return w;
-          });
+          // Generate Warmup Sets
+          let warmupSets: any[] = [];
+          if (liftName === 'Weighted Pull-Up') {
+            // Exactly 1 warmup set of 3 reps at bodyweight
+            warmupSets = [
+              { weight: String(bw), reps: '3', completed: false, isWarmup: true }
+            ];
+          } else {
+            warmupSets = [
+              { weight: String(roundToNearest5LbsInKg(W * 0.40)), reps: '5', completed: false, isWarmup: true },
+              { weight: String(roundToNearest5LbsInKg(W * 0.60)), reps: '5', completed: false, isWarmup: true },
+              { weight: String(roundToNearest5LbsInKg(W * 0.80)), reps: '3', completed: false, isWarmup: true }
+            ];
+          }
 
           const workSets = Array.from({ length: setsCount }, () => ({
             weight: weightVal,
@@ -1174,7 +1174,7 @@ export function GymPage() {
             completed: false
           }));
 
-          const newSets = [...adjustedWarmups, ...workSets];
+          const newSets = [...warmupSets, ...workSets];
 
           // Preserve completed status if index matches
           const mergedSets = newSets.map((s, idx) => {
