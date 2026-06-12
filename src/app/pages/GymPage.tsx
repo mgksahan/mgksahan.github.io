@@ -122,6 +122,8 @@ export function GymPage() {
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
   const [workoutElapsedTime, setWorkoutElapsedTime] = useState(0);
   const [activeExercises, setActiveExercises] = useState<ActiveExercise[]>([]);
+  const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
   
   // --- Timers ---
   const [restTimeLeft, setRestTimeLeft] = useState(0);
@@ -167,6 +169,43 @@ export function GymPage() {
   const stopwatchIntervalRef = useRef<any>(null);
   const countdownIntervalRef = useRef<any>(null);
 
+  // --- Cloud Sync Helpers ---
+  const saveRoutinesToCloud = async (newRoutines: Routine[]) => {
+    if (!apiService.isConfigured) return;
+    try {
+      await apiService.createFitnessLog({
+        exercise_name: '__CONFIG_ROUTINES__',
+        workout_date: 'LATEST',
+        raw_logs: JSON.stringify(newRoutines),
+        one_rep_max_kg: 0,
+        one_rep_max_lbs: 0,
+        total_volume_lbs: 0
+      });
+    } catch (e) {
+      console.error('Failed to save routines to cloud:', e);
+    }
+  };
+
+  const saveProfileToCloud = async (week: number, weight: number, overrides: Record<string, number>) => {
+    if (!apiService.isConfigured) return;
+    try {
+      await apiService.createFitnessLog({
+        exercise_name: '__CONFIG_PROFILE__',
+        workout_date: 'LATEST',
+        raw_logs: JSON.stringify({
+          pbWeek: week,
+          bodyWeight: weight,
+          override1RMs: overrides
+        }),
+        one_rep_max_kg: 0,
+        one_rep_max_lbs: 0,
+        total_volume_lbs: 0
+      });
+    } catch (e) {
+      console.error('Failed to save profile to cloud:', e);
+    }
+  };
+
   // --- Web Audio API Synthetic Beep ---
   const playBeep = () => {
     try {
@@ -205,26 +244,67 @@ export function GymPage() {
     }
     setRoutines(list);
     localStorage.setItem('gym_custom_routines', JSON.stringify(list));
+    saveRoutinesToCloud(list);
   };
 
   // --- Load Routines and Exercise Database ---
   useEffect(() => {
-    const savedRoutines = localStorage.getItem('gym_custom_routines');
-    if (savedRoutines) {
+    const loadCloudConfig = async () => {
+      setIsCloudSyncing(true);
       try {
-        const parsed = JSON.parse(savedRoutines);
-        const hasPb = parsed.some((r: any) => r.id === 'powerbuilding');
-        if (!hasPb) {
-          parsed.push(getPowerbuildingRoutine());
-          localStorage.setItem('gym_custom_routines', JSON.stringify(parsed));
+        // Load routines
+        const routinesCloud = await apiService.fetchFitnessHistory('__CONFIG_ROUTINES__');
+        if (routinesCloud && routinesCloud.length > 0) {
+          const latestLog = routinesCloud.find((l: any) => l.workout_date === 'LATEST');
+          if (latestLog && latestLog.raw_logs) {
+            const parsed = JSON.parse(latestLog.raw_logs);
+            setRoutines(parsed);
+            localStorage.setItem('gym_custom_routines', latestLog.raw_logs);
+          } else {
+            initializeDefaultRoutines();
+          }
+        } else {
+          initializeDefaultRoutines();
         }
-        setRoutines(parsed);
+
+        // Load profile configurations
+        const profileCloud = await apiService.fetchFitnessHistory('__CONFIG_PROFILE__');
+        if (profileCloud && profileCloud.length > 0) {
+          const latestLog = profileCloud.find((l: any) => l.workout_date === 'LATEST');
+          if (latestLog && latestLog.raw_logs) {
+            const parsed = JSON.parse(latestLog.raw_logs);
+            if (parsed.pbWeek) {
+              setPbWeek(parsed.pbWeek);
+              localStorage.setItem('gym_pb_week', String(parsed.pbWeek));
+            }
+            if (parsed.bodyWeight) {
+              setPbBodyWeight(parsed.bodyWeight);
+              localStorage.setItem('gym_pb_body_weight', String(parsed.bodyWeight));
+            }
+            if (parsed.override1RMs) {
+              setOverride1RMs(parsed.override1RMs);
+              localStorage.setItem('gym_pb_override_1rms', JSON.stringify(parsed.override1RMs));
+            }
+          }
+        }
       } catch (e) {
-        initializeDefaultRoutines();
+        console.error('Failed to load cloud config, falling back to local storage:', e);
+        const savedRoutines = localStorage.getItem('gym_custom_routines');
+        if (savedRoutines) {
+          try {
+            setRoutines(JSON.parse(savedRoutines));
+          } catch (err) {
+            initializeDefaultRoutines();
+          }
+        } else {
+          initializeDefaultRoutines();
+        }
+      } finally {
+        setIsCloudSyncing(false);
       }
-    } else {
-      initializeDefaultRoutines();
-    }
+    };
+
+    loadCloudConfig();
 
     const loadExercises = async () => {
       try {
@@ -254,7 +334,7 @@ export function GymPage() {
     }
   }, []);
 
-  // --- Save Powerbuilding configurations ---
+  // --- Save Powerbuilding configurations locally (for quick optimistic reload) ---
   useEffect(() => {
     localStorage.setItem('gym_pb_week', String(pbWeek));
   }, [pbWeek]);
@@ -372,33 +452,101 @@ export function GymPage() {
       const exerciseNames = day.exercises.map(e => e.name);
       const historyMap = await fetchWorkoutHistory(exerciseNames);
 
-      // Populate weights & reps from latest historical log
+      // Populate weights & reps from latest historical log / AI progression coach
       setActiveExercises(prev => {
-        return prev.map(ex => {
+        let updatedOverrides = { ...override1RMs };
+        let updatedWeek = pbWeek;
+        let changedOverrides = false;
+
+        const result = prev.map(ex => {
+          const isMainLift = ex.name === 'Barbell Bench Press' || ex.name === 'Barbell Squat' || ex.name === 'Weighted Pull-Up';
           const history = historyMap[ex.name] || [];
-          if (history.length > 0) {
-            // Sort by date descending
-            const sorted = [...history].sort((a, b) => b.workout_date.localeCompare(a.workout_date));
-            const latest = sorted[0];
-            if (latest && latest.raw_logs) {
-              const prevSets = latest.raw_logs.split(',');
-              const updatedSets = ex.sets.map((set, setIdx) => {
-                const prevSet = prevSets[setIdx] || prevSets[prevSets.length - 1]; // fallback to last set if logged fewer sets previously
-                if (prevSet) {
-                  const [w, r] = prevSet.split('x');
-                  return {
-                    ...set,
-                    weight: w || '',
-                    reps: r || ''
-                  };
-                }
-                return set;
-              });
-              return { ...ex, sets: updatedSets };
+
+          if (routine.id === 'powerbuilding' && isMainLift) {
+            const coach = getCoachRecommendation(ex.name, history, updatedOverrides[ex.name], pbBodyWeight);
+            const W = coach.targetWeight;
+            const reps = coach.reps;
+            const setsCount = coach.sets;
+
+            if (updatedOverrides[ex.name] !== coach.est1RM) {
+              updatedOverrides[ex.name] = coach.est1RM;
+              changedOverrides = true;
             }
+            if (updatedWeek !== coach.week) {
+              updatedWeek = coach.week;
+              changedOverrides = true;
+            }
+
+            let weightVal = '';
+            if (ex.name === 'Weighted Pull-Up') {
+              weightVal = String(Math.round((pbBodyWeight + W) * 100) / 100);
+            } else {
+              weightVal = String(W);
+            }
+
+            // Generate Warmup Sets (40%, 60%, 80% of target weight)
+            const warmups = [
+              { weight: String(roundToNearest5LbsInKg(W * 0.40)), reps: '5', completed: false, isWarmup: true },
+              { weight: String(roundToNearest5LbsInKg(W * 0.60)), reps: '5', completed: false, isWarmup: true },
+              { weight: String(roundToNearest5LbsInKg(W * 0.80)), reps: '3', completed: false, isWarmup: true }
+            ];
+
+            const adjustedWarmups = warmups.map(w => {
+              if (ex.name === 'Weighted Pull-Up') {
+                const addedVal = parseFloat(w.weight) || 0;
+                const totalVal = Math.round((pbBodyWeight + addedVal) * 100) / 100;
+                return { ...w, weight: String(totalVal) };
+              }
+              return w;
+            });
+
+            // Generate Work Sets
+            const workSets = Array.from({ length: setsCount }, () => ({
+              weight: weightVal,
+              reps: String(reps),
+              completed: false
+            }));
+
+            return {
+              ...ex,
+              sets: [...adjustedWarmups, ...workSets],
+              expanded: true
+            };
+          } else {
+            // Normal / accessory lift population
+            if (history.length > 0) {
+              const sorted = [...history].sort((a, b) => b.workout_date.localeCompare(a.workout_date));
+              const latest = sorted[0];
+              if (latest && latest.raw_logs) {
+                const prevSets = latest.raw_logs.split(',');
+                const updatedSets = ex.sets.map((set, setIdx) => {
+                  const prevSet = prevSets[setIdx] || prevSets[prevSets.length - 1]; // fallback to last set if logged fewer sets previously
+                  if (prevSet) {
+                    const [w, r] = prevSet.split('x');
+                    return {
+                      ...set,
+                      weight: w || '',
+                      reps: r || ''
+                    };
+                  }
+                  return set;
+                });
+                return { ...ex, sets: updatedSets };
+              }
+            }
+            return ex;
           }
-          return ex;
         });
+
+        if (changedOverrides) {
+          setTimeout(() => {
+            setOverride1RMs(updatedOverrides);
+            setPbWeek(updatedWeek);
+            saveProfileToCloud(updatedWeek, pbBodyWeight, updatedOverrides);
+          }, 0);
+        }
+
+        return result;
       });
     } catch (err) {
       console.error('Failed to preload history weights:', err);
@@ -720,6 +868,7 @@ export function GymPage() {
         nextRoutines = [...prev, editingRoutine];
       }
       localStorage.setItem('gym_custom_routines', JSON.stringify(nextRoutines));
+      saveRoutinesToCloud(nextRoutines);
       return nextRoutines;
     });
     setEditingRoutine(null);
@@ -735,6 +884,7 @@ export function GymPage() {
       setRoutines(prev => {
         const next = prev.filter(r => r.id !== routineId);
         localStorage.setItem('gym_custom_routines', JSON.stringify(next));
+        saveRoutinesToCloud(next);
         return next;
       });
       toast.success('Routine deleted.');
@@ -802,67 +952,231 @@ export function GymPage() {
     return maxEst > 0 ? maxEst : 80;
   };
 
-  const calculateTargetWeight = (liftName: string, est1RM: number, week: number, bodyWeight: number) => {
+  const calculateTargetWeightVal = (liftName: string, est1RM: number, week: number, bodyWeight: number) => {
     const pct = getTargetPercentage(week);
     if (liftName === 'Weighted Pull-Up') {
       const total1RM = est1RM > bodyWeight ? est1RM : bodyWeight + 20;
       const targetTotal = total1RM * pct;
       const addedWeight = targetTotal - bodyWeight;
-      if (addedWeight <= 0) return 'Body Weight';
-      const roundedAdded = roundToNearest5LbsInKg(addedWeight);
-      return roundedAdded > 0 ? `+${roundedAdded} kg` : 'Body Weight';
+      if (addedWeight <= 0) return 0;
+      return roundToNearest5LbsInKg(addedWeight);
     } else {
       const target = est1RM * pct;
-      return `${roundToNearest5LbsInKg(target)} kg`;
+      return roundToNearest5LbsInKg(target);
     }
   };
 
-  const handleOverride1RM = (exerciseName: string, value: number) => {
-    setOverride1RMs(prev => ({
-      ...prev,
-      [exerciseName]: value
-    }));
+  const calculateTargetWeight = (liftName: string, est1RM: number, week: number, bodyWeight: number) => {
+    const W = calculateTargetWeightVal(liftName, est1RM, week, bodyWeight);
+    if (liftName === 'Weighted Pull-Up') {
+      return W > 0 ? `+${W} kg` : 'Body Weight';
+    }
+    return `${W} kg`;
   };
 
-  const applyPowerbuildingTargets = () => {
-    const reps = getTargetReps(pbWeek);
-    const setsCount = getTargetSets(pbWeek);
+  const handleOverride1RM = (exerciseName: string, value: number) => {
+    setOverride1RMs(prev => {
+      const next = { ...prev, [exerciseName]: value };
+      saveProfileToCloud(pbWeek, pbBodyWeight, next);
+      return next;
+    });
+    if (!isNaN(value) && value > 0) {
+      recalculateLiftSets(exerciseName, value, pbBodyWeight);
+    }
+  };
 
+  const handleBodyWeightChange = (value: number) => {
+    setPbBodyWeight(value);
+    saveProfileToCloud(pbWeek, value, override1RMs);
+    if (!isNaN(value) && value > 0) {
+      recalculateLiftSets('Weighted Pull-Up', override1RMs['Weighted Pull-Up'], value);
+    }
+  };
+
+  // --- AI Progression Coach Deduction ---
+  const getCoachRecommendation = (
+    liftName: string, 
+    customHistory?: any[], 
+    custom1RM?: number, 
+    customBodyWeight?: number
+  ) => {
+    const history = customHistory || workoutHistoryMap[liftName] || [];
+    const bodyWeight = customBodyWeight !== undefined ? customBodyWeight : pbBodyWeight;
+    let est1RM = 0;
+    if (custom1RM !== undefined && custom1RM > 0) {
+      est1RM = custom1RM;
+    } else if (override1RMs[liftName] !== undefined && override1RMs[liftName] > 0) {
+      est1RM = override1RMs[liftName];
+    } else {
+      let maxEst = 0;
+      history.forEach(log => {
+        if (log.raw_logs) {
+          log.raw_logs.split(',').forEach((setStr: string) => {
+            const [wStr, rStr] = setStr.split('x');
+            const w = parseFloat(wStr);
+            const r = parseInt(rStr);
+            if (!isNaN(w) && !isNaN(r) && r > 0) {
+              const est = w * (1 + r / 30.0);
+              if (est > maxEst) maxEst = est;
+            }
+          });
+        }
+      });
+      est1RM = maxEst > 0 ? maxEst : (liftName === 'Barbell Bench Press' ? 100 : liftName === 'Barbell Squat' ? 135 : 105);
+    }
+    
+    if (history.length === 0) {
+      const targetWeightVal = calculateTargetWeightVal(liftName, est1RM, 1, bodyWeight);
+      return {
+        week: 1,
+        targetWeight: targetWeightVal,
+        sets: 4,
+        reps: 5,
+        message: `Welcome! Starting your cycle at Week 1 (5s @ 75% 1RM).`,
+        est1RM
+      };
+    }
+
+    const sorted = [...history].sort((a, b) => b.workout_date.localeCompare(a.workout_date));
+    const latestLog = sorted[0];
+
+    if (!latestLog || !latestLog.raw_logs) {
+      const targetWeightVal = calculateTargetWeightVal(liftName, est1RM, 1, bodyWeight);
+      return {
+        week: 1,
+        targetWeight: targetWeightVal,
+        sets: 4,
+        reps: 5,
+        message: `Starting your cycle at Week 1 (5s @ 75% 1RM).`,
+        est1RM
+      };
+    }
+
+    const sets = latestLog.raw_logs.split(',');
+    const workingSets = sets.map((s: string) => {
+      const [wStr, rStr] = s.split('x');
+      return { weight: parseFloat(wStr) || 0, reps: parseInt(rStr) || 0 };
+    }).filter(s => s.reps <= 6 && s.weight >= est1RM * 0.60);
+
+    if (workingSets.length === 0) {
+      const targetWeightVal = calculateTargetWeightVal(liftName, est1RM, 1, bodyWeight);
+      return {
+        week: 1,
+        targetWeight: targetWeightVal,
+        sets: 4,
+        reps: 5,
+        message: `Starting cycle at Week 1 (no recent heavy sets detected).`,
+        est1RM
+      };
+    }
+
+    const repsList = workingSets.map(s => s.reps);
+    const completedReps = Math.min(...repsList);
+    const completedSetsCount = workingSets.length;
+
+    let previousWeek = 1;
+    if (completedReps === 5) previousWeek = 1;
+    else if (completedReps === 4) previousWeek = 2;
+    else if (completedReps === 3) previousWeek = 3;
+    else if (completedReps === 2) previousWeek = 4;
+    else {
+      const avgReps = repsList.reduce((a, b) => a + b, 0) / repsList.length;
+      previousWeek = avgReps >= 4.5 ? 1 : avgReps >= 3.5 ? 2 : avgReps >= 2.5 ? 3 : 4;
+    }
+
+    const targetRepsForPrevWeek = getTargetReps(previousWeek);
+    const targetSetsForPrevWeek = getTargetSets(previousWeek);
+    
+    const succeeded = completedReps >= targetRepsForPrevWeek && completedSetsCount >= targetSetsForPrevWeek;
+
+    let nextWeek = previousWeek;
+    let next1RM = est1RM;
+    let message = "";
+
+    if (succeeded) {
+      if (previousWeek === 4) {
+        nextWeek = 1;
+        next1RM = roundToNearest5LbsInKg(est1RM + 2.268);
+        message = `Completed Week 4! Progression success (+5 lbs / +2.27kg 1RM). Resets to Week 1.`;
+      } else {
+        nextWeek = previousWeek + 1;
+        message = `Success! Completed all targets on ${latestLog.workout_date} (${completedSetsCount}x${completedReps}). Progressing to Week ${nextWeek}.`;
+      }
+    } else {
+      next1RM = roundToNearest5LbsInKg(Math.max(est1RM - 2.268, 20));
+      message = `Fatigue detected (missed reps on ${latestLog.workout_date}). Repeating Week ${previousWeek} at lower weight (-5 lbs 1RM).`;
+    }
+
+    const targetWeightVal = calculateTargetWeightVal(liftName, next1RM, nextWeek, bodyWeight);
+
+    return {
+      week: nextWeek,
+      targetWeight: targetWeightVal,
+      sets: getTargetSets(nextWeek),
+      reps: getTargetReps(nextWeek),
+      message,
+      est1RM: next1RM
+    };
+  };
+
+  const recalculateLiftSets = (liftName: string, weightOverride?: number, bodyWeightOverride?: number) => {
     setActiveExercises(prev => {
       return prev.map(ex => {
-        if (ex.name === 'Barbell Bench Press' || ex.name === 'Barbell Squat' || ex.name === 'Weighted Pull-Up') {
-          const est1RM = getEstimated1RM(ex.name);
-          const targetStr = calculateTargetWeight(ex.name, est1RM, pbWeek, pbBodyWeight);
-          
+        if (ex.name === liftName) {
+          const history = workoutHistoryMap[liftName] || [];
+          const coach = getCoachRecommendation(liftName, history, weightOverride, bodyWeightOverride);
+          const W = coach.targetWeight;
+          const reps = coach.reps;
+          const setsCount = coach.sets;
+
           let weightVal = '';
-          if (ex.name === 'Weighted Pull-Up') {
-            if (targetStr === 'Body Weight') {
-              weightVal = String(pbBodyWeight);
-            } else {
-              const addedNum = parseFloat(targetStr.replace('+', '').replace(' kg', '')) || 0;
-              weightVal = String(Math.round((pbBodyWeight + addedNum) * 100) / 100);
-            }
+          const bw = bodyWeightOverride !== undefined ? bodyWeightOverride : pbBodyWeight;
+          if (liftName === 'Weighted Pull-Up') {
+            weightVal = String(Math.round((bw + W) * 100) / 100);
           } else {
-            weightVal = targetStr.replace(' kg', '');
+            weightVal = String(W);
           }
 
-          const newSets = Array.from({ length: setsCount }, () => ({
+          // Generate Warmup Sets (40%, 60%, 80%)
+          const warmups = [
+            { weight: String(roundToNearest5LbsInKg(W * 0.40)), reps: '5', completed: false, isWarmup: true },
+            { weight: String(roundToNearest5LbsInKg(W * 0.60)), reps: '5', completed: false, isWarmup: true },
+            { weight: String(roundToNearest5LbsInKg(W * 0.80)), reps: '3', completed: false, isWarmup: true }
+          ];
+
+          const adjustedWarmups = warmups.map(w => {
+            if (liftName === 'Weighted Pull-Up') {
+              const addedVal = parseFloat(w.weight) || 0;
+              const totalVal = Math.round((bw + addedVal) * 100) / 100;
+              return { ...w, weight: String(totalVal) };
+            }
+            return w;
+          });
+
+          const workSets = Array.from({ length: setsCount }, () => ({
             weight: weightVal,
             reps: String(reps),
             completed: false
           }));
 
+          const newSets = [...adjustedWarmups, ...workSets];
+
+          // Preserve completed status if index matches
+          const mergedSets = newSets.map((s, idx) => {
+            if (ex.sets[idx]) {
+              return { ...s, completed: ex.sets[idx].completed };
+            }
+            return s;
+          });
+
           return {
             ...ex,
-            sets: newSets,
-            expanded: true
+            sets: mergedSets
           };
         }
         return ex;
       });
     });
-
-    toast.success(`Powerbuilding Week ${pbWeek} targets applied to main lifts!`);
   };
 
   const mainLiftsForDay = useMemo(() => {
@@ -1019,6 +1333,33 @@ export function GymPage() {
     return null;
   }, [workoutFinished]);
 
+  // --- Horizontal Swipe Gesture Handlers ---
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+
+  const handleTouchStart = (e: any) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: any) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchEndX.current;
+    if (diff > 75) {
+      // Swipe left -> Next exercise
+      if (activeExerciseIndex < activeExercises.length - 1) {
+        setActiveExerciseIndex(prev => prev + 1);
+      }
+    } else if (diff < -75) {
+      // Swipe right -> Previous exercise
+      if (activeExerciseIndex > 0) {
+        setActiveExerciseIndex(prev => prev - 1);
+      }
+    }
+  };
+
   // ==================== RENDERS ====================
 
   // 1. SESSION RECOVERY DIALOG
@@ -1102,7 +1443,12 @@ export function GymPage() {
   // 3. ACTIVE WORKOUT SCREEN
   if (isWorkoutActive) {
     return (
-      <div className="flex-1 flex flex-col bg-zinc-950 text-white select-none pb-20 animate-fade-in">
+      <div 
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="flex-1 flex flex-col bg-zinc-950 text-white select-none pb-20 animate-fade-in"
+      >
         {/* Top Header Stopwatch Navigation */}
         <div className="sticky top-0 z-30 bg-zinc-950/80 border-b border-zinc-900 backdrop-blur px-4 py-3 flex items-center justify-between">
           <button
@@ -1173,140 +1519,69 @@ export function GymPage() {
           </div>
         )}
 
-        {/* Main Active Workout Exercises Scroll */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-          <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1">
-            <Dumbbell size={12} className="text-rose-500" />
-            {selectedDay ? `${selectedRoutine?.name} › ${selectedDay.name}` : 'Custom Workout Session'}
+        {/* Swipe-enabled Horizontal Slider View */}
+        <div className="flex-1 flex flex-col justify-between px-4 py-4 space-y-4">
+          
+          {/* Header Indicators */}
+          <div className="space-y-2">
+            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex justify-between items-center select-none">
+              <span className="flex items-center gap-1.5 truncate max-w-[65%]">
+                <Dumbbell size={11} className="text-rose-500 flex-shrink-0" />
+                {selectedDay ? `${selectedRoutine?.name} › ${selectedDay.name}` : 'Custom Workout Session'}
+              </span>
+              <span className="font-black text-rose-450 tabular-nums flex-shrink-0">
+                Exercise {activeExerciseIndex + 1} of {activeExercises.length}
+              </span>
+            </div>
+
+            {/* Pagination Step Dots */}
+            <div className="flex gap-1.5 py-1.5 overflow-x-auto no-scrollbar">
+              {activeExercises.map((ex, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveExerciseIndex(idx)}
+                  className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+                    idx === activeExerciseIndex 
+                      ? 'w-8 bg-rose-500' 
+                      : 'w-2 bg-zinc-800 hover:bg-zinc-700'
+                  }`}
+                  title={ex.name}
+                />
+              ))}
+            </div>
           </div>
 
-          {/* Powerbuilding Planner Panel */}
-          {selectedRoutine?.id === 'powerbuilding' && mainLiftsForDay.length > 0 && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3 shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-rose-500 uppercase tracking-wider">
-                  <TrendingUp size={14} /> Powerbuilding Peaking Planner
-                </div>
-                {/* Week Selector */}
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-zinc-400 font-semibold">Cycle Week:</span>
-                  <select
-                    value={pbWeek}
-                    onChange={(e) => setPbWeek(Number(e.target.value))}
-                    className="bg-zinc-950 border border-zinc-800 text-[10px] font-bold rounded-lg px-2 py-1 text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
-                  >
-                    <option value={1}>Week 1 (5s @ 75%)</option>
-                    <option value={2}>Week 2 (4s @ 80%)</option>
-                    <option value={3}>Week 3 (3s @ 85%)</option>
-                    <option value={4}>Week 4 (2s @ 90%)</option>
-                  </select>
-                </div>
-              </div>
-              
-              {hasPullUp && (
-                <div className="flex items-center justify-between text-xs border-b border-zinc-800/60 pb-2">
-                  <span className="text-zinc-400 font-semibold">Your Body Weight:</span>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      value={pbBodyWeight}
-                      onChange={(e) => setPbBodyWeight(Number(e.target.value))}
-                      className="w-16 h-7 bg-zinc-950 border border-zinc-800 rounded-lg text-center font-bold text-xs text-white focus:ring-1 focus:ring-rose-500"
-                    />
-                    <span className="text-zinc-500 font-bold">kg</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2 py-1">
-                {mainLiftsForDay.map(lift => {
-                  const est1RM = getEstimated1RM(lift.name);
-                  const targetStr = calculateTargetWeight(lift.name, est1RM, pbWeek, pbBodyWeight);
-                  const reps = getTargetReps(pbWeek);
-                  const sets = getTargetSets(pbWeek);
-                  
-                  return (
-                    <div key={lift.name} className="flex justify-between items-center text-xs bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900">
-                      <div className="space-y-1 pr-2">
-                        <span className="font-extrabold text-zinc-200 block">{lift.name}</span>
-                        <span className="text-[10px] text-zinc-400 block font-medium">
-                          Target: <span className="text-rose-400 font-bold">{sets} sets × {reps} reps @ {targetStr}</span>
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="flex flex-col items-end">
-                          <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">Est 1RM</span>
-                          <input
-                            type="number"
-                            value={override1RMs[lift.name] !== undefined ? override1RMs[lift.name] : Math.round(est1RM * 10) / 10}
-                            onChange={(e) => handleOverride1RM(lift.name, Number(e.target.value))}
-                            className="w-16 h-7 bg-zinc-950 border border-zinc-800 rounded-lg text-center font-bold text-xs text-white focus:ring-1 focus:ring-rose-500"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={applyPowerbuildingTargets}
-                  className="w-full h-9 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-sm"
-                >
-                  <Check size={12} className="stroke-[3]" /> Apply Peaking Targets to Workout
-                </button>
-
-                <div className="bg-zinc-950/40 p-2.5 rounded-xl text-[10px] text-zinc-400 border border-zinc-900/60 leading-relaxed">
-                  <div className="font-bold text-rose-400 mb-1 flex items-center gap-1">
-                    <Award size={10} /> Autoregulation & Peaking Progression
-                  </div>
-                  After completing your main lifts, check your RPE (Rate of Perceived Exertion):
-                  <ul className="list-disc pl-3.5 mt-1 space-y-0.5">
-                    <li><strong className="text-zinc-300">RPE 7-8 (2 reps left):</strong> Perfect! Increase your 1RM baseline by <span className="text-emerald-400 font-bold">+2.27 kg (+5 lbs)</span> for the next cycle.</li>
-                    <li><strong className="text-zinc-300">RPE 9-10 (0-1 reps left):</strong> Heavy. Maintain current 1RM baseline for next week.</li>
-                    <li><strong className="text-zinc-300">RPE &lt; 7 (3+ reps left):</strong> Too light. Increase 1RM baseline by <span className="text-emerald-400 font-bold">+4.54 kg (+10 lbs)</span>.</li>
-                    <li><strong className="text-zinc-300">Missed reps / Fail:</strong> Reduce 1RM baseline by <span className="text-rose-400 font-bold">-2.27 kg (-5 lbs)</span>.</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-
+          {/* Active Exercise Slide Card */}
           {activeExercises.length > 0 ? (
-            activeExercises.map((ex, exIdx) => {
+            (() => {
+              const exIdx = activeExerciseIndex;
+              const ex = activeExercises[exIdx];
+              if (!ex) return null;
+
               const exerciseHistory = workoutHistoryMap[ex.name] || [];
               const sortedHistory = [...exerciseHistory].sort((a, b) => b.workout_date.localeCompare(a.workout_date));
               const latestWorkout = sortedHistory[0];
               const previousSets = latestWorkout ? latestWorkout.raw_logs.split(',') : [];
 
               const completedSetsCount = ex.sets.filter(s => s.completed).length;
+              const isMainLift = ex.name === 'Barbell Bench Press' || ex.name === 'Barbell Squat' || ex.name === 'Weighted Pull-Up';
 
               return (
-                <div 
-                  key={exIdx} 
-                  className={`border rounded-2xl transition-all ${
-                    ex.expanded 
-                      ? 'border-zinc-800 bg-zinc-900/40 shadow-lg' 
-                      : 'border-zinc-900 bg-zinc-900/15'
-                  }`}
-                >
-                  {/* Collapsed Header */}
-                  <div 
-                    onClick={() => handleToggleExerciseExpanded(exIdx)}
-                    className="p-4 flex items-center justify-between cursor-pointer select-none"
-                  >
-                    <div className="space-y-1 flex-1 pr-3">
-                      <h4 className="font-extrabold text-sm tracking-tight text-white leading-tight">
-                        {ex.name}
-                      </h4>
-                      <span className="text-[10px] text-zinc-400 font-bold tracking-wider uppercase flex items-center gap-1">
-                        <Check size={10} className="text-emerald-500" />
-                        {completedSetsCount} / {ex.sets.length} sets logged
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
+                <div className="flex-1 flex flex-col justify-between space-y-4">
+                  <div className="border border-zinc-900 bg-zinc-900/10 rounded-3xl p-4 space-y-4 shadow-lg flex-1">
+                    
+                    {/* Header info */}
+                    <div className="flex items-center justify-between pb-2 border-b border-zinc-900/60">
+                      <div className="space-y-0.5">
+                        <h4 className="font-extrabold text-sm tracking-tight text-white leading-tight">
+                          {ex.name}
+                        </h4>
+                        <span className="text-[9px] text-zinc-400 font-bold tracking-wider uppercase flex items-center gap-1">
+                          <Check size={9} className="text-emerald-500" />
+                          {completedSetsCount} / {ex.sets.length} sets logged
+                        </span>
+                      </div>
+                      
                       {!ex.templateLock && (
                         <button
                           onClick={(e) => {
@@ -1316,158 +1591,217 @@ export function GymPage() {
                           className="p-2 text-zinc-500 hover:text-rose-500 rounded-lg hover:bg-rose-500/10 cursor-pointer"
                           title="Remove exercise"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={13} />
                         </button>
                       )}
-                      <div className="text-zinc-400">
-                        {ex.expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </div>
                     </div>
-                  </div>
 
-                  {/* Expanded Body Panel */}
-                  {ex.expanded && (
-                    <div className="px-4 pb-4 border-t border-zinc-900/80 pt-3 space-y-4">
-                      {/* Rest Time Customizer */}
-                      <div className="flex items-center justify-between text-xs text-zinc-400 border-b border-zinc-900/60 pb-2">
-                        <span className="font-semibold flex items-center gap-1">
-                          <Clock size={11} className="text-zinc-500" /> Rest Timer setting:
-                        </span>
-                        <select
-                          value={ex.timer}
-                          onChange={(e) => {
-                            const val = Number(e.target.value);
-                            setActiveExercises(prev => prev.map((item, i) => i === exIdx ? { ...item, timer: val } : item));
-                          }}
-                          className="bg-zinc-950 border border-zinc-800 text-[10px] font-bold rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-rose-500"
-                        >
-                          <option value={0}>Off / None</option>
-                          <option value={10}>10 seconds</option>
-                          <option value={15}>15 seconds</option>
-                          <option value={20}>20 seconds</option>
-                          <option value={30}>30 seconds</option>
-                          <option value={45}>45 seconds</option>
-                          <option value={60}>60 seconds</option>
-                          <option value={90}>90 seconds</option>
-                          <option value={120}>2 minutes</option>
-                          <option value={180}>3 minutes</option>
-                          <option value={240}>4 minutes</option>
-                        </select>
-                      </div>
-
-                      {/* Sets Logger Table */}
-                      <div className="overflow-x-auto select-none">
-                        <table className="w-full text-left border-collapse text-xs">
-                          <thead>
-                            <tr className="border-b border-zinc-900/80 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                              <th className="pb-2 pl-1 w-12 text-center">Set</th>
-                              <th className="pb-2">Previous</th>
-                              <th className="pb-2 text-center w-20">Weight</th>
-                              <th className="pb-2 text-center w-16">Reps</th>
-                              <th className="pb-2 pr-1 text-center w-12">Log</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-zinc-900/40">
-                            {ex.sets.map((set, setIdx) => {
-                              const prevSet = previousSets[setIdx] || previousSets[previousSets.length - 1];
-                              const prevFormatted = prevSet ? prevSet.replace('x', ' × ') + ' kg' : '—';
-
-                              return (
-                                <tr 
-                                  key={setIdx} 
-                                  className={`transition-colors ${
-                                    set.completed 
-                                      ? 'bg-emerald-500/5 text-emerald-400 font-bold' 
-                                      : 'text-zinc-300'
-                                  }`}
-                                >
-                                  <td className="py-2.5 text-center font-black">{setIdx + 1}</td>
-                                  <td className="py-2.5 text-[10px] font-bold text-zinc-500 tabular-nums">
-                                    {prevFormatted}
-                                  </td>
-                                  <td className="py-2.5 text-center">
-                                    <input
-                                      type="number"
-                                      step="any"
-                                      placeholder="0"
-                                      value={set.weight}
-                                      onChange={(e) => handleUpdateSet(exIdx, setIdx, 'weight', e.target.value)}
-                                      className="w-16 h-8 bg-zinc-950 border border-zinc-850 rounded-lg text-center font-extrabold text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500 focus:border-rose-500"
-                                    />
-                                  </td>
-                                  <td className="py-2.5 text-center">
-                                    <input
-                                      type="number"
-                                      placeholder="0"
-                                      value={set.reps}
-                                      onChange={(e) => handleUpdateSet(exIdx, setIdx, 'reps', e.target.value)}
-                                      className="w-12 h-8 bg-zinc-950 border border-zinc-850 rounded-lg text-center font-extrabold text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
-                                    />
-                                  </td>
-                                  <td className="py-2.5 pr-1 text-center">
-                                    <button
-                                      onClick={() => handleToggleSetCompleted(exIdx, setIdx)}
-                                      className={`w-8 h-8 rounded-lg border flex items-center justify-center cursor-pointer transition-all ${
-                                        set.completed
-                                          ? 'bg-emerald-500 border-emerald-500 text-white'
-                                          : 'border-zinc-800 bg-zinc-950 text-zinc-600 hover:text-zinc-400'
-                                      }`}
-                                    >
-                                      <Check size={14} className="stroke-[3]" />
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* Set Modifiers */}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleAddSet(exIdx)}
-                          className="flex-1 h-9 border border-dashed border-zinc-800 bg-zinc-950/20 hover:bg-zinc-900/40 rounded-xl text-[11px] font-bold text-zinc-400 flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                        >
-                          <Plus size={12} /> Add Set
-                        </button>
-                        {ex.sets.length > 1 && (
-                          <button
-                            onClick={() => handleRemoveSet(exIdx)}
-                            className="h-9 px-3 border border-zinc-850 hover:bg-rose-500/5 text-rose-400 text-[11px] font-bold rounded-xl flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                          >
-                            <Trash2 size={12} /> Remove
-                          </button>
-                        )}
-                      </div>
-
-                      {/* In-workout Progression History */}
-                      {sortedHistory.length > 0 && (
-                        <div className="pt-3 border-t border-zinc-900/80 space-y-2">
-                          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1">
-                            <History size={10} className="text-zinc-500" /> Past Session History
-                          </span>
-                          <div className="space-y-1 max-h-32 overflow-y-auto pr-1 select-none divide-y divide-zinc-900/30">
-                            {sortedHistory.slice(0, 3).map((h, i) => (
-                              <div key={i} className="py-2 flex justify-between items-center text-[10px]">
-                                <div className="space-y-0.5">
-                                  <span className="font-bold text-zinc-300 block">{h.workout_date}</span>
-                                  <span className="text-zinc-500 block font-medium">Sets: {h.raw_logs.replace(/,/g, ', ')}</span>
+                    {/* AI Progression Coach panel - Rendered contextually on main lift card */}
+                    {selectedRoutine?.id === 'powerbuilding' && isMainLift && (
+                      <div className="bg-zinc-950/60 border border-zinc-900 rounded-2xl p-3.5 space-y-3 shadow-inner">
+                        {(() => {
+                          const coach = getCoachRecommendation(ex.name);
+                          const W = coach.targetWeight;
+                          
+                          return (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-rose-500 uppercase tracking-wider">
+                                  <TrendingUp size={12} /> AI Progression Coach
                                 </div>
-                                <div className="text-right space-y-0.5">
-                                  <span className="text-zinc-300 font-bold block">1RM: {h.one_rep_max_kg} kg</span>
-                                  <span className="text-zinc-500 block font-medium">Vol: {h.total_volume_lbs} lbs</span>
+                                <div className="text-[9px] font-bold text-zinc-400 bg-zinc-900/40 px-2 py-1 rounded border border-zinc-900/60">
+                                  Calculated Week: <span className="text-rose-450 font-black">Week {coach.week}</span>
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        </div>
+
+                              <div className="text-[10px] leading-relaxed text-zinc-300 bg-zinc-900/40 p-2.5 rounded-xl border border-zinc-900/60">
+                                <span className="font-bold text-rose-400 block mb-1">Coaching Log Analysis:</span>
+                                {coach.message}
+                                <span className="block mt-1.5 font-extrabold text-white text-[11px] border-t border-zinc-900/50 pt-1 flex justify-between items-center">
+                                  <span>Suggested Sets & Reps:</span>
+                                  <span className="text-emerald-450 font-black">
+                                    {coach.sets} sets × {coach.reps} reps @ {ex.name === 'Weighted Pull-Up' ? `+${W} kg added` : `${W} kg`}
+                                  </span>
+                                </span>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-4 text-[9px]">
+                                {ex.name === 'Weighted Pull-Up' && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-zinc-500 font-bold uppercase">Body Weight:</span>
+                                    <input
+                                      type="number"
+                                      value={pbBodyWeight}
+                                      onChange={(e) => handleBodyWeightChange(Number(e.target.value))}
+                                      className="w-12 h-6 bg-zinc-950 border border-zinc-800 rounded text-center font-bold text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                                    />
+                                    <span className="text-zinc-500 font-bold">kg</span>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center gap-1 ml-auto">
+                                  <span className="text-zinc-500 font-bold uppercase">Estimated 1RM:</span>
+                                  <input
+                                    type="number"
+                                    value={override1RMs[ex.name] !== undefined ? override1RMs[ex.name] : Math.round(coach.est1RM * 10) / 10}
+                                    onChange={(e) => handleOverride1RM(ex.name, Number(e.target.value))}
+                                    className="w-14 h-6 bg-zinc-950 border border-zinc-800 rounded text-center font-bold text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                                  />
+                                  <span className="text-zinc-500 font-bold">kg</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Rest Time Customizer */}
+                    <div className="flex items-center justify-between text-xs text-zinc-400 border-b border-zinc-900/60 pb-2">
+                      <span className="font-semibold flex items-center gap-1">
+                        <Clock size={11} className="text-zinc-500" /> Rest Timer setting:
+                      </span>
+                      <select
+                        value={ex.timer}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setActiveExercises(prev => prev.map((item, i) => i === exIdx ? { ...item, timer: val } : item));
+                        }}
+                        className="bg-zinc-950 border border-zinc-850 text-[10px] font-bold rounded-lg px-2 py-1 text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                      >
+                        <option value={0}>Off / None</option>
+                        <option value={10}>10 seconds</option>
+                        <option value={15}>15 seconds</option>
+                        <option value={20}>20 seconds</option>
+                        <option value={30}>30 seconds</option>
+                        <option value={45}>45 seconds</option>
+                        <option value={60}>60 seconds</option>
+                        <option value={90}>90 seconds</option>
+                        <option value={120}>2 minutes</option>
+                        <option value={180}>3 minutes</option>
+                        <option value={240}>4 minutes</option>
+                      </select>
+                    </div>
+
+                    {/* Sets Logger Table */}
+                    <div className="overflow-x-auto select-none">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-zinc-900/80 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                            <th className="pb-2 pl-1 w-12 text-center">Set</th>
+                            <th className="pb-2">Previous</th>
+                            <th className="pb-2 text-center w-20">Weight</th>
+                            <th className="pb-2 text-center w-16">Reps</th>
+                            <th className="pb-2 pr-1 text-center w-12">Log</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-900/30">
+                          {ex.sets.map((set, setIdx) => {
+                            const prevSet = previousSets[setIdx] || previousSets[previousSets.length - 1];
+                            const prevFormatted = prevSet ? prevSet.replace('x', ' × ') + ' kg' : '—';
+                            const isSetWarmup = (set as any).isWarmup;
+
+                            return (
+                              <tr 
+                                key={setIdx} 
+                                className={`transition-colors ${
+                                  set.completed 
+                                    ? 'bg-emerald-500/5 text-emerald-400 font-bold' 
+                                    : isSetWarmup
+                                      ? 'bg-amber-500/5 text-amber-500 font-medium'
+                                      : 'text-zinc-300'
+                                }`}
+                              >
+                                <td className="py-2.5 text-center font-black">
+                                  {isSetWarmup 
+                                    ? `W${setIdx + 1}` 
+                                    : setIdx + 1 - (ex.sets.filter(s => (s as any).isWarmup).length || 0)}
+                                </td>
+                                <td className="py-2.5 text-[10px] font-bold text-zinc-500 tabular-nums">
+                                  {prevFormatted}
+                                </td>
+                                <td className="py-2.5 text-center">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    placeholder="0"
+                                    value={set.weight}
+                                    onChange={(e) => handleUpdateSet(exIdx, setIdx, 'weight', e.target.value)}
+                                    className="w-16 h-8 bg-zinc-950 border border-zinc-850 rounded-lg text-center font-extrabold text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500 focus:border-rose-500"
+                                  />
+                                </td>
+                                <td className="py-2.5 text-center">
+                                  <input
+                                    type="number"
+                                    placeholder="0"
+                                    value={set.reps}
+                                    onChange={(e) => handleUpdateSet(exIdx, setIdx, 'reps', e.target.value)}
+                                    className="w-12 h-8 bg-zinc-950 border border-zinc-850 rounded-lg text-center font-extrabold text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                                  />
+                                </td>
+                                <td className="py-2.5 pr-1 text-center">
+                                  <button
+                                    onClick={() => handleToggleSetCompleted(exIdx, setIdx)}
+                                    className={`w-8 h-8 rounded-lg border flex items-center justify-center cursor-pointer transition-all ${
+                                      set.completed
+                                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                                        : 'border-zinc-800 bg-zinc-950 text-zinc-600 hover:text-zinc-400'
+                                    }`}
+                                  >
+                                    <Check size={14} className="stroke-[3]" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Set Modifiers */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleAddSet(exIdx)}
+                        className="flex-1 h-9 border border-dashed border-zinc-800 bg-zinc-950/20 hover:bg-zinc-900/40 rounded-xl text-[11px] font-bold text-zinc-400 flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <Plus size={12} /> Add Set
+                      </button>
+                      {ex.sets.length > 1 && (
+                        <button
+                          onClick={() => handleRemoveSet(exIdx)}
+                          className="h-9 px-3 border border-zinc-850 hover:bg-rose-500/5 text-rose-450 text-[11px] font-bold rounded-xl flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={12} /> Remove
+                        </button>
                       )}
                     </div>
-                  )}
+
+                    {/* In-workout Progression History */}
+                    {sortedHistory.length > 0 && (
+                      <div className="pt-3 border-t border-zinc-900/80 space-y-2">
+                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+                          <History size={10} className="text-zinc-500" /> Past Session History
+                        </span>
+                        <div className="space-y-1 max-h-32 overflow-y-auto pr-1 select-none divide-y divide-zinc-900/30">
+                          {sortedHistory.slice(0, 3).map((h, i) => (
+                            <div key={i} className="py-2 flex justify-between items-center text-[10px]">
+                              <div className="space-y-0.5">
+                                <span className="font-bold text-zinc-300 block">{h.workout_date}</span>
+                                <span className="text-zinc-500 block font-medium">Sets: {h.raw_logs.replace(/,/g, ', ')}</span>
+                              </div>
+                              <div className="text-right space-y-0.5">
+                                <span className="text-zinc-300 font-bold block">1RM: {h.one_rep_max_kg} kg</span>
+                                <span className="text-zinc-500 block font-medium">Vol: {h.total_volume_lbs} lbs</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
-            })
+            })()
           ) : (
             <div className="py-12 border border-zinc-900 border-dashed rounded-3xl text-center bg-zinc-950 p-6 space-y-4">
               <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto">
@@ -1476,19 +1810,51 @@ export function GymPage() {
               <div className="space-y-1">
                 <h4 className="font-bold text-sm text-white">Active session is empty</h4>
                 <p className="text-xs text-zinc-500 max-w-[220px] mx-auto">
-                  Click the button below to add exercises from your database to log your training.
+                  Click the button below to add exercises.
                 </p>
               </div>
             </div>
           )}
 
-          {/* Add Exercise Trigger Button */}
-          <button
-            onClick={() => setIsAddExerciseOpen(true)}
-            className="w-full h-12 border border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900/50 rounded-2xl text-xs font-bold text-zinc-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Plus size={14} /> Add Exercise
-          </button>
+          {/* Large Bottom Navigation & Swipe Action Bar */}
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => {
+                if (activeExerciseIndex > 0) {
+                  setActiveExerciseIndex(prev => prev - 1);
+                }
+              }}
+              disabled={activeExerciseIndex === 0}
+              className="flex-1 h-12 border border-zinc-800 bg-zinc-950 hover:bg-zinc-900 disabled:opacity-30 rounded-2xl text-xs font-bold text-zinc-300 flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-[0.98]"
+            >
+              <ChevronLeft size={16} /> Previous
+            </button>
+
+            <button
+              onClick={() => setIsAddExerciseOpen(true)}
+              className="h-12 w-12 border border-zinc-800 bg-zinc-950 hover:bg-zinc-900 rounded-2xl flex items-center justify-center text-zinc-300 cursor-pointer active:scale-[0.98]"
+              title="Add exercise on the fly"
+            >
+              <Plus size={18} />
+            </button>
+
+            {activeExerciseIndex < activeExercises.length - 1 ? (
+              <button
+                onClick={() => setActiveExerciseIndex(prev => prev + 1)}
+                className="flex-1 h-12 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-[0.98]"
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            ) : (
+              <button
+                onClick={handleFinishWorkout}
+                disabled={isSubmitting}
+                className="flex-1 h-12 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/50 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-[0.98]"
+              >
+                {isSubmitting ? 'Saving...' : 'Finish Workout'}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Search Exercise Full Drawer Modal */}
