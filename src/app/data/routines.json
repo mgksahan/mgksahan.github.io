@@ -1,0 +1,834 @@
+[
+  {
+    "id": "1",
+    "name": "mgk.sahan's 3 Day Plan",
+    "description": "",
+    "days": [
+      {
+        "id": "1",
+        "name": "Workout Day #1",
+        "day_index": "1",
+        "exercises": [
+          {
+            "name": "Dumbbell Incline Bench Press",
+            "setcount": 3,
+            "timer": 180
+          }
+        ]
+      },
+      {
+        "id": "2",
+        "name": "Workout Day #2",
+        "day_index": "2",
+        "exercises": []
+      },
+      {
+        "id": "3",
+        "name": "Workout Day #3",
+        "day_index": "3",
+        "exercises": []
+      }
+    ]
+  },
+  {
+    "id": "1659794680",
+    "name": "PPLPPLAR",
+    "description": "My modified version of Reddit Metallicapdas PPL",
+    "days": [
+      {
+        "id": "10",
+        "name": "Random Session",
+        "day_index": "7",
+        "exercises": [
+          {
+            "name": "Machine Deltoid Raise",
+            "setcount": 8,
+            "timer": 90
+          },
+          {
+            "name": "Machine Ab Crunch",
+            "setcount": 6,
+            "timer": 180
+          },
+          {
+            "name": "unilateral tricep machine extension blue machine ",
+            "setcount": 5,
+            "timer": 120
+          },
+          {
+            "name": "Machine Bicep Curls Unilateral",
+            "setcount": 4,
+            "timer": 90
+          },
+          {
+            "name": "Dumbbell External Rotation",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Machine Ab Crunch",
+            "setcount": 4,
+            "timer": 120
+          },
+          {
+            "name": "Dumbbell Seated Alternating Hammer Curl",
+            "setcount": 3,
+            "timer": 90
+          },
+          {
+            "name": "Dumbbell Incline Curl",
+            "setcount": 3,
+            "timer": 165
+          },
+          {
+            "name": "Weighted Pull-Up",
+            "setcount": 2,
+            "timer": 180
+          },
+          {
+            "name": "Dead Hang",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell One-Arm Row",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Alternating Seated Curl",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Parallel Bar Leg Raise",
+            "setcount": 1,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Alternating Hammer Curl",
+            "setcount": 3,
+            "timer": 120
+          },
+          {
+            "name": "Unilateral Face Pull Home Gym",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Push-Up",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Barbell Bench Press",
+            "setcount": 9,
+            "timer": 180
+          },
+          {
+            "name": "Machine Incline Chest Press",
+            "setcount": 6,
+            "timer": 180
+          },
+          {
+            "name": "Barbell Shoulder Press",
+            "setcount": 8,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Incline Bench Press",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Cable One-Arm Tricep Extension",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Seated Side Lateral Raise",
+            "setcount": 5,
+            "timer": 180
+          },
+          {
+            "name": "Machine Lat Pulldown",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Alternating Bicep Curl",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Barbell Incline Bench Press",
+            "setcount": 7,
+            "timer": 180
+          },
+          {
+            "name": "Barbell Squat",
+            "setcount": 5,
+            "timer": 180
+          },
+          {
+            "name": "Machine Tricep Extension",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Seated Bent-Over Reverse Fly",
+            "setcount": 3,
+            "timer": 180
+          }
+        ]
+      },
+      {
+        "id": "4",
+        "name": "Arms + Side Delts",
+        "day_index": "8",
+        "exercises": [
+          {
+            "name": "Machine Deltoid Raise",
+            "setcount": 8,
+            "timer": 90
+          },
+          {
+            "name": "unilateral tricep machine extension blue machine ",
+            "setcount": 6,
+            "timer": 120
+          },
+          {
+            "name": "Machine Bicep Curls Unilateral",
+            "setcount": 6,
+            "timer": 45
+          },
+          {
+            "name": "Machine Ab Crunch",
+            "setcount": 5,
+            "timer": 90
+          },
+          {
+            "name": "Dumbbell External Rotation",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Seated Shoulder Press",
+            "setcount": 6,
+            "timer": 150
+          },
+          {
+            "name": "Dumbbell Seated One-Arm Tricep Extension",
+            "setcount": 4,
+            "timer": 90
+          },
+          {
+            "name": "Dumbbell Incline Curl",
+            "setcount": 6,
+            "timer": 120
+          },
+          {
+            "name": "Barbell Shrug",
+            "setcount": 5,
+            "timer": 180
+          },
+          {
+            "name": "Cable One-Arm Tricep Pushdown",
+            "setcount": 5,
+            "timer": 120
+          },
+          {
+            "name": "Machine Cable Crunch ",
+            "setcount": 3,
+            "timer": 180
+          }
+        ]
+      },
+      {
+        "id": "7",
+        "name": "Push 1",
+        "day_index": "8",
+        "exercises": [
+          {
+            "name": "Barbell Bench Press",
+            "setcount": 7,
+            "timer": 240
+          },
+          {
+            "name": "Barbell Incline Bench Press",
+            "setcount": 4,
+            "timer": 120
+          },
+          {
+            "name": "Machine Deltoid Raise",
+            "setcount": 4,
+            "timer": 90
+          },
+          {
+            "name": "unilateral tricep machine extension blue machine ",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Machine Ab Crunch",
+            "setcount": 4,
+            "timer": 120
+          },
+          {
+            "name": "Dumbbell Incline Bench Press",
+            "setcount": 3,
+            "timer": 90
+          },
+          {
+            "name": "Dumbbell Seated One-Arm Tricep Extension",
+            "setcount": 3,
+            "timer": 90
+          },
+          {
+            "name": "Machine Ab Crunch",
+            "setcount": 4,
+            "timer": 90
+          },
+          {
+            "name": "Cable One-Arm Tricep Extension",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Seated Side Lateral Raise",
+            "setcount": 4,
+            "timer": 90
+          },
+          {
+            "name": "Cable One-Arm Tricep Extension",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Parallel Bar Leg Raise",
+            "setcount": 3,
+            "timer": 90
+          },
+          {
+            "name": "Push-Up",
+            "setcount": 2,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Deep Push-Up",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Seated Shoulder Press",
+            "setcount": 2,
+            "timer": 120
+          },
+          {
+            "name": "Barbell Squat",
+            "setcount": 5,
+            "timer": 180
+          },
+          {
+            "name": "Cable Rope Overhead Tricep Extension",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Barbell Shoulder Press",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Incline Fly",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Barbell Bent-Over Row",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Barbell Row",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Alternating Bicep Curl",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Cable Seated Row",
+            "setcount": 5,
+            "timer": 210
+          },
+          {
+            "name": "Machine Lat Pulldown",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell One-Arm Row",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Cable Tricep Pushdown (Rope)",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Cable One-Arm Tricep Pushdown",
+            "setcount": 6,
+            "timer": 30
+          },
+          {
+            "name": "Machine Fly",
+            "setcount": 6,
+            "timer": 180
+          },
+          {
+            "name": "Decline Crunch",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Tricep Extension",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell One-Arm Tricep Extension",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Seated Side Lateral Raise",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Weighted Pull-Up",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Barbell Squat",
+            "setcount": 3,
+            "timer": 180
+          }
+        ]
+      },
+      {
+        "id": "8",
+        "name": "Pull 1",
+        "day_index": "8",
+        "exercises": [
+          {
+            "name": "Dumbbell One-Arm Row",
+            "setcount": 5,
+            "timer": 120
+          },
+          {
+            "name": "Weighted Pull-Up",
+            "setcount": 3,
+            "timer": 240
+          },
+          {
+            "name": "Barbell Squat",
+            "setcount": 7,
+            "timer": 240
+          },
+          {
+            "name": "Close Grip Cable Seated Row",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Machine Reverse Fly",
+            "setcount": 4,
+            "timer": 90
+          },
+          {
+            "name": "Machine Bicep Curls Unilateral",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Cable Seated Row",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Shoulder Shrug",
+            "setcount": 3,
+            "timer": 105
+          },
+          {
+            "name": "Dumbbell Seated Bent-Over Reverse Fly",
+            "setcount": 4,
+            "timer": 120
+          },
+          {
+            "name": "Barbell Row",
+            "setcount": 3,
+            "timer": 165
+          },
+          {
+            "name": "Dumbbell Alternating Bicep Curl",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Dead Hang",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Bent-Over Reverse Fly",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Cable Lat Pulldown (Wide Grip)",
+            "setcount": 6,
+            "timer": 120
+          },
+          {
+            "name": "Barbell Shrug",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Machine Lat Pulldown",
+            "setcount": 8,
+            "timer": 150
+          },
+          {
+            "name": "Machine Seated Row (Close to Wide Low)",
+            "setcount": 7,
+            "timer": 180
+          },
+          {
+            "name": "Close Grip Cable Seated Row",
+            "setcount": 2,
+            "timer": 180
+          },
+          {
+            "name": "Weight Plate Shrug",
+            "setcount": 4,
+            "timer": 120
+          },
+          {
+            "name": "Cable Seated Row (Funny Grip)",
+            "setcount": 5,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Incline Bench Press",
+            "setcount": 5,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Seated Side Lateral Raise",
+            "setcount": 7,
+            "timer": 180
+          },
+          {
+            "name": "Machine Lat Pulldown",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Barbell Shoulder Press",
+            "setcount": 3,
+            "timer": 180
+          }
+        ]
+      },
+      {
+        "id": "9",
+        "name": "Push 2",
+        "day_index": "8",
+        "exercises": [
+          {
+            "name": "Barbell Bench Press",
+            "setcount": 7,
+            "timer": 240
+          },
+          {
+            "name": "Dumbbell Incline Bench Press",
+            "setcount": 4,
+            "timer": 150
+          },
+          {
+            "name": "Dumbbell Seated Shoulder Press",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Seated One-Arm Tricep Extension",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Machine Deltoid Raise",
+            "setcount": 4,
+            "timer": 90
+          },
+          {
+            "name": "Machine Incline Chest Press",
+            "setcount": 5,
+            "timer": 120
+          },
+          {
+            "name": "Dumbbell Seated Side Lateral Raise",
+            "setcount": 3,
+            "timer": 150
+          },
+          {
+            "name": "Dumbbell Seated One-Arm Tricep Extension",
+            "setcount": 3,
+            "timer": 45
+          },
+          {
+            "name": "Barbell Shoulder Press",
+            "setcount": 6,
+            "timer": 180
+          },
+          {
+            "name": "Cable One-Arm Tricep Extension",
+            "setcount": 7,
+            "timer": 120
+          },
+          {
+            "name": "Cable One-Arm Lateral Raise",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "unilateral tricep machine extension blue machine ",
+            "setcount": 5,
+            "timer": 90
+          },
+          {
+            "name": "Machine Cable Crunch ",
+            "setcount": 5,
+            "timer": 150
+          },
+          {
+            "name": "unilateral tricep machine extension blue machine ",
+            "setcount": 6,
+            "timer": 180
+          },
+          {
+            "name": "Cable One-Arm Tricep Pushdown",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Cable One-Arm Tricep Extension",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Cable One-Arm Tricep Extension",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Cable One-Arm Tricep Extension",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Cable One-Arm Tricep Extension",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Cable Lateral Raise",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Barbell Incline Bench Press",
+            "setcount": 7,
+            "timer": 180
+          },
+          {
+            "name": "Machine Shoulder Press",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Machine Fly",
+            "setcount": 5,
+            "timer": 180
+          },
+          {
+            "name": "Machine Ab Crunch",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Barbell Military Press",
+            "setcount": 6,
+            "timer": 90
+          },
+          {
+            "name": "Weighted Pull-Up",
+            "setcount": 3,
+            "timer": 120
+          }
+        ]
+      },
+      {
+        "id": "1659794680",
+        "name": "Pull 2",
+        "day_index": "8",
+        "exercises": [
+          {
+            "name": "Weighted Pull-Up",
+            "setcount": 9,
+            "timer": 300
+          },
+          {
+            "name": "Unilateral Face Pull Home Gym",
+            "setcount": 5,
+            "timer": 180
+          },
+          {
+            "name": "Machine Lat Pulldown",
+            "setcount": 8,
+            "timer": 210
+          },
+          {
+            "name": "Machine Seated Row (Close to Wide Low)",
+            "setcount": 4,
+            "timer": 90
+          },
+          {
+            "name": "Machine Bicep Curls Unilateral",
+            "setcount": 6,
+            "timer": 120
+          },
+          {
+            "name": "dumbbell seated shrug ",
+            "setcount": 4,
+            "timer": 105
+          },
+          {
+            "name": "Cable Lat Pulldown (Wide Grip)",
+            "setcount": 6,
+            "timer": 120
+          },
+          {
+            "name": "Dumbbell Reverse Fly",
+            "setcount": 4,
+            "timer": 90
+          },
+          {
+            "name": "unilateral tricep machine extension blue machine ",
+            "setcount": 6,
+            "timer": 105
+          },
+          {
+            "name": "Dumbbell Alternating Bicep Curl",
+            "setcount": 5,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Incline Curl",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Dumbbell Shoulder Shrug",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Machine Reverse Fly",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Low Row",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Pull-Up",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Machine Reverse Fly",
+            "setcount": 5,
+            "timer": 180
+          }
+        ]
+      },
+      {
+        "id": "1659794682",
+        "name": "Legs 1",
+        "day_index": "8",
+        "exercises": [
+          {
+            "name": "Barbell Squat",
+            "setcount": 7,
+            "timer": 240
+          },
+          {
+            "name": "Machine Single-Leg Extension ",
+            "setcount": 4,
+            "timer": 120
+          },
+          {
+            "name": "Machine Single-Leg Curl ",
+            "setcount": 4,
+            "timer": 120
+          },
+          {
+            "name": "Barbell Deadlift",
+            "setcount": 4,
+            "timer": 180
+          },
+          {
+            "name": "Calf raise on leg press ",
+            "setcount": 6,
+            "timer": 90
+          },
+          {
+            "name": "Dumbbell Wrist Curl (Palms Down)",
+            "setcount": 7,
+            "timer": 90
+          },
+          {
+            "name": "Dumbbell Wrist Curl (Palms Up)",
+            "setcount": 5,
+            "timer": 45
+          },
+          {
+            "name": "Weighted Pull-Up",
+            "setcount": 1,
+            "timer": 180
+          },
+          {
+            "name": "Machine Leg Curl (Prone)",
+            "setcount": 3,
+            "timer": 180
+          },
+          {
+            "name": "Machine Single-Leg Curl",
+            "setcount": 4,
+            "timer": 180
+          }
+        ]
+      }
+    ]
+  }
+]

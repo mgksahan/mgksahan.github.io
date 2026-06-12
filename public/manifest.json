@@ -13,7 +13,7 @@
       "type": "image/png"
     }
   ],
-  "start_url": "/fitness",
+  "start_url": "/gym",
   "background_color": "#09090b",
   "theme_color": "#f43f5e",
   "display": "standalone",

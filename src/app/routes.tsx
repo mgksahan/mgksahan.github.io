@@ -6,6 +6,7 @@ import { InterestsPage } from "./pages/InterestsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { FitnessPage } from "./pages/FitnessPage";
 import { WritePage } from "./pages/WritePage";
+import { GymPage } from "./pages/GymPage";
 
 export const router = createBrowserRouter([
   {
@@ -17,6 +18,7 @@ export const router = createBrowserRouter([
       { path: "interests", Component: InterestsPage },
       { path: "login", Component: LoginPage },
       { path: "fitness", Component: FitnessPage },
+      { path: "gym", Component: GymPage },
       { path: "write", Component: WritePage },
       { path: "album", element: <Navigate to="/fitness" replace /> },
       { path: "*", element: <Navigate to="/" replace /> },

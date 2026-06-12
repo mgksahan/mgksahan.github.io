@@ -12,8 +12,20 @@ export function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const isGym = location.pathname === '/gym';
+
   const isActive = (to: string, exact: boolean) =>
     exact ? location.pathname === to : location.pathname.startsWith(to);
+
+  if (isGym) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex flex-col">
+        <main className="flex-1 flex flex-col">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
