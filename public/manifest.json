@@ -3,12 +3,12 @@
   "name": "Sahan's Fitness Tracker",
   "icons": [
     {
-      "src": "https://avatars.githubusercontent.com/u/50710155?v=4",
+      "src": "/dumbbell_icon.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "https://avatars.githubusercontent.com/u/50710155?v=4",
+      "src": "/dumbbell_icon.png",
       "sizes": "512x512",
       "type": "image/png"
     }
