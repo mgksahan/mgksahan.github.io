@@ -924,19 +924,30 @@ export function GymPage() {
     return Math.round(roundedLbs * 0.45359237 * 100) / 100;
   };
 
+  const isWithinTwoMonths = (dateStr?: string) => {
+    if (!dateStr) return false;
+    const logDate = new Date(dateStr);
+    if (isNaN(logDate.getTime())) return false;
+    const now = new Date();
+    const diffTime = now.getTime() - logDate.getTime();
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    return diffDays <= 60; // 60 days is approximately 2 months
+  };
+
   const getEstimated1RM = (exerciseName: string) => {
     if (override1RMs[exerciseName] !== undefined && override1RMs[exerciseName] > 0) {
       return override1RMs[exerciseName];
     }
     const history = workoutHistoryMap[exerciseName] || [];
-    if (history.length === 0) {
+    const recentHistory = history.filter(log => isWithinTwoMonths(log.workout_date));
+    if (recentHistory.length === 0) {
       if (exerciseName === 'Barbell Bench Press') return 100;
       if (exerciseName === 'Barbell Squat') return 135;
       if (exerciseName === 'Weighted Pull-Up') return 105; // total weight
       return 80;
     }
     let maxEst = 0;
-    history.forEach(log => {
+    recentHistory.forEach(log => {
       if (log.raw_logs) {
         log.raw_logs.split(',').forEach((setStr: string) => {
           const [wStr, rStr] = setStr.split('x');
@@ -1003,6 +1014,7 @@ export function GymPage() {
     customBodyWeight?: number
   ) => {
     const history = customHistory || workoutHistoryMap[liftName] || [];
+    const recentHistory = history.filter(log => isWithinTwoMonths(log.workout_date));
     const bodyWeight = customBodyWeight !== undefined ? customBodyWeight : pbBodyWeight;
     let est1RM = 0;
     if (custom1RM !== undefined && custom1RM > 0) {
@@ -1011,7 +1023,7 @@ export function GymPage() {
       est1RM = override1RMs[liftName];
     } else {
       let maxEst = 0;
-      history.forEach(log => {
+      recentHistory.forEach(log => {
         if (log.raw_logs) {
           log.raw_logs.split(',').forEach((setStr: string) => {
             const [wStr, rStr] = setStr.split('x');
@@ -1028,7 +1040,7 @@ export function GymPage() {
       est1RM = maxEst > 0 ? maxEst : (liftName === 'Barbell Bench Press' ? 100 : liftName === 'Barbell Squat' ? 135 : 105);
     }
     
-    if (history.length === 0) {
+    if (recentHistory.length === 0) {
       const targetWeightVal = calculateTargetWeightVal(liftName, est1RM, 1, bodyWeight);
       return {
         week: 1,
@@ -1040,7 +1052,7 @@ export function GymPage() {
       };
     }
 
-    const sorted = [...history].sort((a, b) => b.workout_date.localeCompare(a.workout_date));
+    const sorted = [...recentHistory].sort((a, b) => b.workout_date.localeCompare(a.workout_date));
     const latestLog = sorted[0];
 
     if (!latestLog || !latestLog.raw_logs) {
