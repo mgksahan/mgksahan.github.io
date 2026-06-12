@@ -942,7 +942,9 @@ export function GymPage() {
           const [wStr, rStr] = setStr.split('x');
           const w = parseFloat(wStr);
           const r = parseInt(rStr);
-          if (!isNaN(w) && !isNaN(r) && r > 0) {
+          // Only calculate estimated 1RM for sets of 10 reps or fewer
+          // to avoid high-rep sets inflating the estimated 1RM
+          if (!isNaN(w) && !isNaN(r) && r > 0 && r <= 10) {
             const est = w * (1 + r / 30.0);
             if (est > maxEst) maxEst = est;
           }
@@ -1015,7 +1017,8 @@ export function GymPage() {
             const [wStr, rStr] = setStr.split('x');
             const w = parseFloat(wStr);
             const r = parseInt(rStr);
-            if (!isNaN(w) && !isNaN(r) && r > 0) {
+            // Limit historical 1RM estimation to sets with 10 or fewer reps
+            if (!isNaN(w) && !isNaN(r) && r > 0 && r <= 10) {
               const est = w * (1 + r / 30.0);
               if (est > maxEst) maxEst = est;
             }
