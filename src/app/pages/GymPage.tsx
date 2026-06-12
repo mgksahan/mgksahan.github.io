@@ -677,6 +677,18 @@ export function GymPage() {
                 +10s
               </button>
               <button
+                onClick={() => setRestTimeLeft(prev => {
+                  if (prev <= 10) {
+                    setIsRestTimerActive(false);
+                    return 0;
+                  }
+                  return prev - 10;
+                })}
+                className="px-2.5 py-1 bg-zinc-900 border border-zinc-800 text-[10px] font-bold rounded-lg text-emerald-300 active:scale-95"
+              >
+                -10s
+              </button>
+              <button
                 onClick={() => {
                   setRestTimeLeft(0);
                   setIsRestTimerActive(false);
