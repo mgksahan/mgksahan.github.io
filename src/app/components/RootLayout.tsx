@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router';
 import { Button } from './ui/button';
 import { BookOpen, Heart, Dumbbell, ChevronLeft } from 'lucide-react';
@@ -11,6 +12,20 @@ const navLinks = [
 export function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const isGymOrFitness = location.pathname.startsWith('/gym') || location.pathname.startsWith('/fitness');
+    const favicon = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
+    const appleFavicon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement | null;
+
+    if (isGymOrFitness) {
+      if (favicon) favicon.href = '/dumbbell_icon.png';
+      if (appleFavicon) appleFavicon.href = '/dumbbell_icon.png';
+    } else {
+      if (favicon) favicon.href = '/favicon.svg';
+      if (appleFavicon) appleFavicon.href = '/favicon.svg';
+    }
+  }, [location.pathname]);
 
   const isGym = location.pathname === '/gym';
 
