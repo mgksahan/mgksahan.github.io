@@ -304,7 +304,7 @@ export function DiaryPage() {
         <div className="flex items-center gap-2.5 self-start sm:self-center">
           {user ? (
             <>
-              <Button onClick={() => navigate('/write')} size="sm" className="cursor-pointer">
+              <Button onClick={() => navigate('/diary/write')} size="sm" className="cursor-pointer">
                 <PenTool className="w-4.5 h-4.5 mr-1.5" />
                 Write Entry
               </Button>

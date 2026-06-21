@@ -14,28 +14,53 @@ export function RootLayout() {
   const location = useLocation();
 
   useEffect(() => {
-    const isGymOrFitness = location.pathname.startsWith('/gym') || location.pathname.startsWith('/fitness');
-    const isDiary = location.pathname.startsWith('/diary') || location.pathname.startsWith('/write');
+    const isGymOrFitness = location.pathname.startsWith('/fitness');
+    const isDiary = location.pathname.startsWith('/diary');
     const favicon = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
     const appleFavicon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement | null;
-    const manifest = document.querySelector("link[rel='manifest']") as HTMLLinkElement | null;
+    let manifest = document.querySelector("link[rel='manifest']") as HTMLLinkElement | null;
 
     if (isGymOrFitness) {
       if (favicon) favicon.href = '/dumbbell_icon.png';
       if (appleFavicon) appleFavicon.href = '/dumbbell_icon.png';
-      if (manifest) manifest.href = '/manifest.json';
+      if (!manifest) {
+        manifest = document.createElement('link');
+        manifest.rel = 'manifest';
+        document.head.appendChild(manifest);
+      }
+      manifest.href = '/manifest.json';
     } else if (isDiary) {
       if (favicon) favicon.href = '/favicon.svg';
       if (appleFavicon) appleFavicon.href = '/diary_icon.png';
-      if (manifest) manifest.href = '/diary_manifest.json';
+      if (!manifest) {
+        manifest = document.createElement('link');
+        manifest.rel = 'manifest';
+        document.head.appendChild(manifest);
+      }
+      manifest.href = '/diary_manifest.json';
     } else {
       if (favicon) favicon.href = '/favicon.svg';
       if (appleFavicon) appleFavicon.href = '/favicon.svg';
-      if (manifest) manifest.href = '/manifest.json';
+      if (manifest) {
+        manifest.remove();
+      }
+    }
+
+    // Register PWA service worker with scoped path matching
+    if ('serviceWorker' in navigator) {
+      if (isGymOrFitness) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/fitness' })
+          .then((reg) => console.log('Fitness PWA SW registered:', reg.scope))
+          .catch((err) => console.error('Fitness PWA SW registration failed:', err));
+      } else if (isDiary) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/diary' })
+          .then((reg) => console.log('Diary PWA SW registered:', reg.scope))
+          .catch((err) => console.error('Diary PWA SW registration failed:', err));
+      }
     }
   }, [location.pathname]);
 
-  const isGym = location.pathname === '/gym';
+  const isGym = location.pathname === '/fitness/gym';
 
   const isActive = (to: string, exact: boolean) =>
     exact ? location.pathname === to : location.pathname.startsWith(to);
