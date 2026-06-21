@@ -14,13 +14,14 @@ export function RootLayout() {
   const location = useLocation();
 
   useEffect(() => {
-    const isGymOrFitness = location.pathname.startsWith('/fitness');
+    const isGym = location.pathname.startsWith('/gym');
+    const isFitness = location.pathname.startsWith('/fitness');
     const isDiary = location.pathname.startsWith('/diary');
     const favicon = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
     const appleFavicon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement | null;
     let manifest = document.querySelector("link[rel='manifest']") as HTMLLinkElement | null;
 
-    if (isGymOrFitness) {
+    if (isGym) {
       if (favicon) favicon.href = '/dumbbell_icon.png';
       if (appleFavicon) appleFavicon.href = '/dumbbell_icon.png';
       if (!manifest) {
@@ -29,6 +30,12 @@ export function RootLayout() {
         document.head.appendChild(manifest);
       }
       manifest.href = '/manifest.json';
+    } else if (isFitness) {
+      if (favicon) favicon.href = '/dumbbell_icon.png';
+      if (appleFavicon) appleFavicon.href = '/dumbbell_icon.png';
+      if (manifest) {
+        manifest.remove();
+      }
     } else if (isDiary) {
       if (favicon) favicon.href = '/favicon.svg';
       if (appleFavicon) appleFavicon.href = '/diary_icon.png';
@@ -48,8 +55,8 @@ export function RootLayout() {
 
     // Register PWA service worker with scoped path matching
     if ('serviceWorker' in navigator) {
-      if (isGymOrFitness) {
-        navigator.serviceWorker.register('/sw.js', { scope: '/fitness' })
+      if (isGym) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/gym' })
           .then((reg) => console.log('Fitness PWA SW registered:', reg.scope))
           .catch((err) => console.error('Fitness PWA SW registration failed:', err));
       } else if (isDiary) {
@@ -60,7 +67,7 @@ export function RootLayout() {
     }
   }, [location.pathname]);
 
-  const isGym = location.pathname === '/fitness/gym';
+  const isGym = location.pathname === '/gym';
 
   const isActive = (to: string, exact: boolean) =>
     exact ? location.pathname === to : location.pathname.startsWith(to);

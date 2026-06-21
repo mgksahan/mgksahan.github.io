@@ -1,5 +1,5 @@
 {
-  "id": "/fitness",
+  "id": "/gym",
   "short_name": "Fitness",
   "name": "Sahan's Fitness Tracker",
   "icons": [
@@ -16,8 +16,8 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "/fitness/gym",
-  "scope": "/fitness",
+  "start_url": "/gym",
+  "scope": "/gym",
   "background_color": "#09090b",
   "theme_color": "#f43f5e",
   "display": "standalone",
