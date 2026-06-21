@@ -56,11 +56,11 @@ export function RootLayout() {
     // Register PWA service worker with scoped path matching
     if ('serviceWorker' in navigator) {
       if (isGym) {
-        navigator.serviceWorker.register('/sw.js', { scope: '/gym' })
+        navigator.serviceWorker.register('/sw.js', { scope: '/gym/' })
           .then((reg) => console.log('Fitness PWA SW registered:', reg.scope))
           .catch((err) => console.error('Fitness PWA SW registration failed:', err));
       } else if (isDiary) {
-        navigator.serviceWorker.register('/sw.js', { scope: '/diary' })
+        navigator.serviceWorker.register('/sw.js', { scope: '/diary/' })
           .then((reg) => console.log('Diary PWA SW registered:', reg.scope))
           .catch((err) => console.error('Diary PWA SW registration failed:', err));
       }

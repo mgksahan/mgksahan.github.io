@@ -16,8 +16,8 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "/diary",
-  "scope": "/diary",
+  "start_url": "/diary/",
+  "scope": "/diary/",
   "background_color": "#09090b",
   "theme_color": "#863bff",
   "display": "standalone",

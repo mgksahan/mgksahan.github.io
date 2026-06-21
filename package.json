@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && mkdir -p dist/gym dist/diary dist/diary/write dist/write dist/fitness && cp dist/index.html dist/gym/index.html && cp dist/index.html dist/diary/index.html && cp dist/index.html dist/diary/write/index.html && cp dist/index.html dist/write/index.html && cp dist/index.html dist/fitness/index.html",
     "lint": "eslint .",
     "preview": "vite preview"
   },
