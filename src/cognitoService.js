@@ -234,7 +234,6 @@ export const cognitoService = {
     });
   },
 
-  // 5. GET CURRENT USER
   getCurrentUser: () => {
     const savedUser = localStorage.getItem('active_blog_user');
     if (savedUser) {
@@ -245,5 +244,96 @@ export const cognitoService = {
       }
     }
     return null;
+  },
+
+  // BIOMETRIC SUPPORT
+  hasBiometrics: () => {
+    return !!(localStorage.getItem('bio_cred_id') && localStorage.getItem('bio_session_data'));
+  },
+
+  registerBiometrics: async (email, password, name) => {
+    try {
+      if (!window.PublicKeyCredential) {
+        throw new Error('Biometrics not supported on this browser.');
+      }
+      const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      if (!available) {
+        throw new Error('Biometric hardware not available on this device.');
+      }
+
+      const challenge = new Uint8Array(16);
+      window.crypto.getRandomValues(challenge);
+      const userId = new Uint8Array(16);
+      window.crypto.getRandomValues(userId);
+
+      const createOptions = {
+        publicKey: {
+          challenge: challenge,
+          rp: { name: "Sahan's Diary", id: window.location.hostname },
+          user: { id: userId, name: email, displayName: name },
+          pubKeyCredParams: [
+            { type: "public-key", alg: -7 },
+            { type: "public-key", alg: -257 }
+          ],
+          authenticatorSelection: {
+            authenticatorAttachment: "platform",
+            userVerification: "required"
+          },
+          timeout: 60000
+        }
+      };
+
+      const credential = await navigator.credentials.create(createOptions);
+      if (!credential) {
+        throw new Error('Failed to create credential.');
+      }
+
+      const credentialId = btoa(String.fromCharCode.apply(null, new Uint8Array(credential.rawId)));
+      localStorage.setItem('bio_cred_id', credentialId);
+      localStorage.setItem('bio_session_data', JSON.stringify({ email, password, name }));
+      return true;
+    } catch (err) {
+      console.error('Biometric registration error:', err);
+      throw err;
+    }
+  },
+
+  authenticateBiometrics: async () => {
+    try {
+      const credentialIdStr = localStorage.getItem('bio_cred_id');
+      const sessionDataStr = localStorage.getItem('bio_session_data');
+      if (!credentialIdStr || !sessionDataStr) {
+        throw new Error('No biometrics registered.');
+      }
+
+      const challenge = new Uint8Array(16);
+      window.crypto.getRandomValues(challenge);
+      const rawId = new Uint8Array(atob(credentialIdStr).split("").map(c => c.charCodeAt(0)));
+
+      const getOptions = {
+        publicKey: {
+          challenge: challenge,
+          rpId: window.location.hostname,
+          allowCredentials: [{ id: rawId, type: 'public-key' }],
+          userVerification: 'required',
+          timeout: 60000
+        }
+      };
+
+      const assertion = await navigator.credentials.get(getOptions);
+      if (!assertion) {
+        throw new Error('Biometric verification failed.');
+      }
+
+      return JSON.parse(sessionDataStr);
+    } catch (err) {
+      console.error('Biometric auth error:', err);
+      throw err;
+    }
+  },
+
+  clearBiometrics: () => {
+    localStorage.removeItem('bio_cred_id');
+    localStorage.removeItem('bio_session_data');
   }
 };

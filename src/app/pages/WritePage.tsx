@@ -156,7 +156,7 @@ export function WritePage() {
         </div>
 
         {/* Live Preview */}
-        <div className="border rounded-2xl bg-card text-card-foreground shadow-sm p-6 space-y-4 h-[630px] flex flex-col">
+        <div className="hidden lg:flex border rounded-2xl bg-card text-card-foreground shadow-sm p-6 space-y-4 h-[630px] flex flex-col">
           <div className="flex items-center gap-2 text-sm font-semibold opacity-85 border-b pb-2">
             <Eye className="w-4 h-4" />
             <span>LIVE RENDER PREVIEW</span>

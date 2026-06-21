@@ -15,15 +15,23 @@ export function RootLayout() {
 
   useEffect(() => {
     const isGymOrFitness = location.pathname.startsWith('/gym') || location.pathname.startsWith('/fitness');
+    const isDiary = location.pathname.startsWith('/diary') || location.pathname.startsWith('/write');
     const favicon = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
     const appleFavicon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement | null;
+    const manifest = document.querySelector("link[rel='manifest']") as HTMLLinkElement | null;
 
     if (isGymOrFitness) {
       if (favicon) favicon.href = '/dumbbell_icon.png';
       if (appleFavicon) appleFavicon.href = '/dumbbell_icon.png';
+      if (manifest) manifest.href = '/manifest.json';
+    } else if (isDiary) {
+      if (favicon) favicon.href = '/favicon.svg';
+      if (appleFavicon) appleFavicon.href = '/diary_icon.png';
+      if (manifest) manifest.href = '/diary_manifest.json';
     } else {
       if (favicon) favicon.href = '/favicon.svg';
       if (appleFavicon) appleFavicon.href = '/favicon.svg';
+      if (manifest) manifest.href = '/manifest.json';
     }
   }, [location.pathname]);
 

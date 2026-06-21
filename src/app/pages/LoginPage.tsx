@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { cognitoService } from '../../cognitoService';
-import { ShieldCheck, Info } from 'lucide-react';
+import { ShieldCheck, Info, Fingerprint } from 'lucide-react';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -21,6 +21,27 @@ export function LoginPage() {
   const [verificationCode, setVerificationCode] = useState('');
   const [verifyEmail, setVerifyEmail] = useState('');
   const [demoCodeNotice, setDemoCodeNotice] = useState('');
+  const [showBioButton, setShowBioButton] = useState(false);
+
+  useEffect(() => {
+    setShowBioButton(cognitoService.hasBiometrics());
+  }, []);
+
+  const handleBiometricLogin = async () => {
+    setIsLoading(true);
+    try {
+      const bioSession = await cognitoService.authenticateBiometrics();
+      const success = await login(bioSession.email, bioSession.password);
+      if (success) {
+        toast.success('Welcome back (Authenticated with biometrics)!');
+        navigate('/');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Biometric login failed. Please enter your password.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const [resetEmail, setResetEmail] = useState('');
   const [resetCode, setResetCode] = useState('');
@@ -40,6 +61,30 @@ export function LoginPage() {
       const success = await login(loginData.email, loginData.password);
       if (success) {
         toast.success('Welcome back!');
+        
+        // Setup biometrics if supported and not setup yet
+        if (window.PublicKeyCredential && !cognitoService.hasBiometrics()) {
+          try {
+            const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+            if (available) {
+              setTimeout(async () => {
+                const setupBio = window.confirm("Enable biometric fingerprint / face lock for subsequent logins on this device?");
+                if (setupBio) {
+                  try {
+                    await cognitoService.registerBiometrics(loginData.email, loginData.password, 'Sahan');
+                    toast.success('Biometric login registered successfully!');
+                    setShowBioButton(true);
+                  } catch (bioErr: any) {
+                    console.error(bioErr);
+                  }
+                }
+              }, 500);
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        }
+        
         navigate('/');
       }
     } catch (err: any) {
@@ -315,6 +360,19 @@ export function LoginPage() {
                   <Button type="submit" className="w-full cursor-pointer" disabled={isLoading}>
                     {isLoading ? 'Logging in...' : 'Login'}
                   </Button>
+
+                  {showBioButton && (
+                    <Button 
+                      type="button" 
+                      onClick={handleBiometricLogin} 
+                      variant="outline" 
+                      className="w-full cursor-pointer mt-2 border-primary hover:bg-primary/10 flex items-center justify-center gap-2"
+                      disabled={isLoading}
+                    >
+                      <Fingerprint className="w-4 h-4 text-primary animate-pulse" />
+                      Login with Fingerprint / Face ID
+                    </Button>
+                  )}
                 </form>
               </TabsContent>
 
