@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router';
 import { Button } from './ui/button';
 import { BookOpen, Heart, Dumbbell, ChevronLeft } from 'lucide-react';
@@ -12,6 +12,18 @@ const navLinks = [
 export function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    setIsStandalone(mediaQuery.matches || (window.navigator as any).standalone === true);
+
+    const handler = (e: MediaQueryListEvent) => {
+      setIsStandalone(e.matches);
+    };
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
 
   useEffect(() => {
     const isGym = location.pathname.startsWith('/gym');
@@ -72,7 +84,7 @@ export function RootLayout() {
   const isActive = (to: string, exact: boolean) =>
     exact ? location.pathname === to : location.pathname.startsWith(to);
 
-  if (isGym) {
+  if (isGym || isStandalone) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col">
         <main className="flex-1 flex flex-col">
