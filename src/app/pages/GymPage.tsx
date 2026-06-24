@@ -466,17 +466,15 @@ export function GymPage() {
     
     const sortedLogs = [...allLogs].sort((a, b) => b.workout_date.localeCompare(a.workout_date));
     const latestDate = sortedLogs[0].workout_date;
-    const latestLogs = sortedLogs.filter(l => l.workout_date === latestDate);
+    
+    // Use the state machine to get the exact day index for the latest date
+    const { dateAssignments } = analyzeWorkoutHistoryForDays(historyMap);
+    const latestDayIndex = dateAssignments[latestDate] || 0;
+    const isDay5 = latestDayIndex === 5;
     
     let detectedWeek = 0;
-    let isDay5 = false;
     
-    const hasSquat = latestLogs.some(l => l.liftName === 'Barbell Squat');
-    const hasPullUp = latestLogs.some(l => l.liftName === 'Weighted Pull-Up');
-    if (hasSquat && hasPullUp) {
-      isDay5 = true;
-    }
-    
+    const latestLogs = sortedLogs.filter(l => l.workout_date === latestDate);
     for (const log of latestLogs) {
       const raw = log.raw_logs || '';
       const sets = raw.split(',').map((s: string) => {
@@ -486,7 +484,7 @@ export function GymPage() {
       
       const week = estimateWeekFromSets(sets);
       if (week > 0) {
-        detectedWeek = week;
+        detectedWeek = Math.max(detectedWeek, week);
       }
     }
     
