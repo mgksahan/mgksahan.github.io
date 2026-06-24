@@ -502,9 +502,9 @@ export function GymPage() {
 
   const analyzeLastSession = useMemo(() => {
     const allLogs: any[] = [];
-    const mainLifts = ['Barbell Bench Press', 'Barbell Squat', 'Weighted Pull-Up'];
+    const trackLifts = ['Barbell Bench Press', 'Barbell Squat', 'Weighted Pull-Up', 'Machine Deltoid Raise', 'Machine Ab Crunch'];
     
-    mainLifts.forEach(liftName => {
+    trackLifts.forEach(liftName => {
       const history = workoutHistoryMap[liftName] || [];
       history.forEach(log => {
         allLogs.push({ ...log, liftName });
@@ -578,32 +578,43 @@ export function GymPage() {
       const maxRepsOfHeavy = Math.max(...heavySets.map(s => s.reps));
       
       let matchedWeek = 0;
-      if (heavySetsCount >= 4 && maxRepsOfHeavy >= 5) matchedWeek = 1;
-      else if (heavySetsCount >= 4 && maxRepsOfHeavy === 4) matchedWeek = 2;
-      else if (heavySetsCount >= 3 && maxRepsOfHeavy === 3) matchedWeek = 3;
-      else if (heavySetsCount >= 3 && maxRepsOfHeavy === 2) matchedWeek = 4;
-      else if (heavySetsCount >= 3 && maxRepsOfHeavy === 1) matchedWeek = 4;
+      const isMainLift = log.liftName === 'Barbell Bench Press' || log.liftName === 'Barbell Squat' || log.liftName === 'Weighted Pull-Up';
       
-      const matchesPrescription = matchedWeek > 0;
+      if (isMainLift) {
+        if (heavySetsCount >= 4 && maxRepsOfHeavy >= 5) matchedWeek = 1;
+        else if (heavySetsCount >= 4 && maxRepsOfHeavy === 4) matchedWeek = 2;
+        else if (heavySetsCount >= 3 && maxRepsOfHeavy === 3) matchedWeek = 3;
+        else if (heavySetsCount >= 3 && maxRepsOfHeavy === 2) matchedWeek = 4;
+        else if (heavySetsCount >= 3 && maxRepsOfHeavy === 1) matchedWeek = 4;
+      }
+      
+      const matchesPrescription = isMainLift ? (matchedWeek > 0) : true;
       
       return {
         liftName: log.liftName,
         setsCount: heavySetsCount,
         maxReps: maxRepsOfHeavy,
         matchedWeek,
-        matchesPrescription
+        matchesPrescription,
+        isMainLift
       };
     });
     
     if (isJefitImport) {
-      const matchedWeeks = liftAnalyses.map(l => l.matchedWeek).filter(w => w > 0);
+      const mainLiftsInSession = liftAnalyses.filter(l => l.isMainLift);
+      const matchedWeeks = mainLiftsInSession.map(l => l.matchedWeek).filter(w => w > 0);
       const uniqueWeeks = [...new Set(matchedWeeks)];
       
-      if (liftAnalyses.length > 0 && uniqueWeeks.length === 1 && liftAnalyses.every(l => l.matchesPrescription)) {
-        isOnProgram = true;
-        expectedWeek = uniqueWeeks[0];
+      if (mainLiftsInSession.length > 0) {
+        if (uniqueWeeks.length === 1 && mainLiftsInSession.every(l => l.matchesPrescription)) {
+          isOnProgram = true;
+          expectedWeek = uniqueWeeks[0];
+        } else {
+          isOnProgram = false;
+        }
       } else {
-        isOnProgram = false;
+        isOnProgram = true;
+        expectedWeek = pbWeek;
       }
     } else {
       isOnProgram = appWorkout.isOnProgram;
@@ -694,10 +705,10 @@ export function GymPage() {
           console.error('Failed to load latest body weight from history:', err);
         }
 
-        // Fetch history for the 3 main lifts on mount to estimate training cycle position and update pbWeek
+        // Fetch history for the 3 main lifts and key accessories on mount to estimate training cycle position and update pbWeek
         try {
-          const mainLifts = ['Barbell Bench Press', 'Barbell Squat', 'Weighted Pull-Up'];
-          const historyPromises = mainLifts.map(async (name) => {
+          const trackLifts = ['Barbell Bench Press', 'Barbell Squat', 'Weighted Pull-Up', 'Machine Deltoid Raise', 'Machine Ab Crunch'];
+          const historyPromises = trackLifts.map(async (name) => {
             try {
               const history = await apiService.fetchFitnessHistory(name);
               return { name, history };
