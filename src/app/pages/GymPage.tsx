@@ -340,17 +340,152 @@ export function GymPage() {
     setTimeout(playBeep, 400);
   };
 
-  // --- Initialize Default Routines ---
-  const initializeDefaultRoutines = () => {
-    const list = [...routinesData] as Routine[];
-    const hasPb = list.some(r => r.id === 'powerbuilding');
-    if (!hasPb) {
-      list.push(getPowerbuildingRoutine());
+  const autoEstimateCycleWeek = (historyMap: Record<string, any[]>, currentWeek: number) => {
+    const allLogs: any[] = [];
+    const mainLifts = ['Barbell Bench Press', 'Barbell Squat', 'Weighted Pull-Up'];
+    
+    mainLifts.forEach(liftName => {
+      const history = historyMap[liftName] || [];
+      history.forEach(log => {
+        allLogs.push({ ...log, liftName });
+      });
+    });
+    
+    if (allLogs.length === 0) return currentWeek;
+    
+    const sortedLogs = [...allLogs].sort((a, b) => b.workout_date.localeCompare(a.workout_date));
+    const latestDate = sortedLogs[0].workout_date;
+    const latestLogs = sortedLogs.filter(l => l.workout_date === latestDate);
+    
+    let detectedWeek = 0;
+    let isDay5 = false;
+    
+    const hasSquat = latestLogs.some(l => l.liftName === 'Barbell Squat');
+    const hasPullUp = latestLogs.some(l => l.liftName === 'Weighted Pull-Up');
+    if (hasSquat && hasPullUp) {
+      isDay5 = true;
     }
-    setRoutines(list);
-    localStorage.setItem('gym_custom_routines', JSON.stringify(list));
-    saveRoutinesToCloud(list);
+    
+    for (const log of latestLogs) {
+      const raw = log.raw_logs || '';
+      const sets = raw.split(',').map((s: string) => {
+        const [w, r] = s.split('x');
+        return { weight: parseFloat(w) || 0, reps: parseInt(r) || 0 };
+      });
+      
+      const setsCount = sets.length;
+      const repsList = sets.map((s: any) => s.reps);
+      const minReps = repsList.length > 0 ? Math.min(...repsList) : 0;
+      
+      if (setsCount >= 4 && minReps >= 5) detectedWeek = 1;
+      else if (setsCount >= 4 && minReps >= 4) detectedWeek = 2;
+      else if (setsCount >= 3 && minReps >= 3) detectedWeek = 3;
+      else if (setsCount >= 3 && minReps >= 2) detectedWeek = 4;
+    }
+    
+    if (detectedWeek > 0) {
+      if (isDay5) {
+        return detectedWeek < 4 ? detectedWeek + 1 : 1;
+      }
+      return detectedWeek;
+    }
+    
+    return currentWeek;
   };
+
+  const analyzeLastSession = useMemo(() => {
+    const allLogs: any[] = [];
+    const mainLifts = ['Barbell Bench Press', 'Barbell Squat', 'Weighted Pull-Up'];
+    
+    mainLifts.forEach(liftName => {
+      const history = workoutHistoryMap[liftName] || [];
+      history.forEach(log => {
+        allLogs.push({ ...log, liftName });
+      });
+    });
+    
+    if (allLogs.length === 0) return null;
+    
+    const sortedLogs = [...allLogs].sort((a, b) => b.workout_date.localeCompare(a.workout_date));
+    const latestDate = sortedLogs[0].workout_date;
+    const dayLogs = sortedLogs.filter(log => log.workout_date === latestDate);
+    
+    const hasBench = dayLogs.some(l => l.liftName === 'Barbell Bench Press');
+    const hasSquat = dayLogs.some(l => l.liftName === 'Barbell Squat');
+    const hasPullUp = dayLogs.some(l => l.liftName === 'Weighted Pull-Up');
+    
+    let detectedDayName = 'Custom Session';
+    let expectedWeek = 1;
+    let isOnProgram = true;
+    let isJefitImport = false;
+    
+    if (hasPullUp && hasSquat) {
+      detectedDayName = 'Day 5: Squat & Pull-Up Focus';
+    } else if (hasSquat) {
+      detectedDayName = 'Day 3: Squat Focus';
+    } else if (hasPullUp) {
+      detectedDayName = 'Day 2: Pull-Up Focus';
+    } else if (hasBench) {
+      detectedDayName = 'Day 1/4: Bench Focus';
+    }
+    
+    const liftAnalyses = dayLogs.map(log => {
+      const raw = log.raw_logs || '';
+      const sets = raw.split(',').map((s: string) => {
+        const [w, r] = s.split('x');
+        return { weight: parseFloat(w) || 0, reps: parseInt(r) || 0 };
+      });
+      
+      const localSummaryRaw = localStorage.getItem('gym_last_workout_summary');
+      let isLocal = false;
+      if (localSummaryRaw) {
+        try {
+          const localSummary = JSON.parse(localSummaryRaw);
+          if (localSummary.date === latestDate) {
+            isLocal = true;
+          }
+        } catch (e) {}
+      }
+      
+      if (!isLocal) {
+        isJefitImport = true;
+      }
+      
+      const setsCount = sets.length;
+      const repsList = sets.map((s: any) => s.reps);
+      const minReps = repsList.length > 0 ? Math.min(...repsList) : 0;
+      
+      let matchedWeek = 0;
+      if (setsCount >= 4 && minReps >= 5) matchedWeek = 1;
+      else if (setsCount >= 4 && minReps >= 4) matchedWeek = 2;
+      else if (setsCount >= 3 && minReps >= 3) matchedWeek = 3;
+      else if (setsCount >= 3 && minReps >= 2) matchedWeek = 4;
+      
+      const matchesPrescription = matchedWeek > 0;
+      if (!matchesPrescription) {
+        isOnProgram = false;
+      } else {
+        expectedWeek = matchedWeek;
+      }
+      
+      return {
+        liftName: log.liftName,
+        setsCount,
+        minReps,
+        matchedWeek,
+        matchesPrescription
+      };
+    });
+    
+    return {
+      date: latestDate,
+      dayName: detectedDayName,
+      isOnProgram,
+      isJefitImport,
+      expectedWeek,
+      lifts: liftAnalyses
+    };
+  }, [workoutHistoryMap]);
 
   // --- Load Routines and Exercise Database ---
   useEffect(() => {
@@ -375,11 +510,13 @@ export function GymPage() {
         // Load profile configurations
         const profileCloud = await apiService.fetchFitnessHistory('__CONFIG_PROFILE__');
         let initialBodyWeight = pbBodyWeight;
+        let initialWeek = pbWeek;
         if (profileCloud && profileCloud.length > 0) {
           const latestLog = profileCloud.find((l: any) => l.workout_date === 'LATEST');
           if (latestLog && latestLog.raw_logs) {
             const parsed = JSON.parse(latestLog.raw_logs);
             if (parsed.pbWeek) {
+              initialWeek = parsed.pbWeek;
               setPbWeek(parsed.pbWeek);
               localStorage.setItem('gym_pb_week', String(parsed.pbWeek));
             }
@@ -412,11 +549,45 @@ export function GymPage() {
             if (closestWeight && closestWeight > 0 && closestWeight !== initialBodyWeight) {
               setPbBodyWeight(closestWeight);
               localStorage.setItem('gym_pb_body_weight', String(closestWeight));
-              saveProfileToCloud(pbWeek, closestWeight, override1RMs);
+              saveProfileToCloud(initialWeek, closestWeight, override1RMs);
             }
           }
         } catch (err) {
           console.error('Failed to load latest body weight from history:', err);
+        }
+
+        // Fetch history for the 3 main lifts on mount to estimate training cycle position and update pbWeek
+        try {
+          const mainLifts = ['Barbell Bench Press', 'Barbell Squat', 'Weighted Pull-Up'];
+          const historyPromises = mainLifts.map(async (name) => {
+            try {
+              const history = await apiService.fetchFitnessHistory(name);
+              return { name, history };
+            } catch (e) {
+              return { name, history: [] };
+            }
+          });
+          
+          const results = await Promise.all(historyPromises);
+          const newHistoryMap: Record<string, any[]> = {};
+          results.forEach(res => {
+            newHistoryMap[res.name] = res.history;
+          });
+          
+          setWorkoutHistoryMap(prev => {
+            const updated = { ...prev, ...newHistoryMap };
+            const estimatedWeek = autoEstimateCycleWeek(updated, initialWeek);
+            if (estimatedWeek !== initialWeek) {
+              setTimeout(() => {
+                setPbWeek(estimatedWeek);
+                localStorage.setItem('gym_pb_week', String(estimatedWeek));
+                saveProfileToCloud(estimatedWeek, pbBodyWeight, override1RMs);
+              }, 0);
+            }
+            return updated;
+          });
+        } catch (err) {
+          console.error('Failed to load main lifts history and estimate cycle week on mount:', err);
         }
       } catch (e) {
         console.error('Failed to load cloud config, falling back to local storage:', e);
@@ -2119,18 +2290,50 @@ export function GymPage() {
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
         
         {/* Last Workout Quick Info Card */}
-        {lastWorkout && (
-          <div className="border border-zinc-900 bg-zinc-900/20 rounded-2xl p-4 flex items-center justify-between backdrop-blur-sm">
+        {analyzeLastSession && (
+          <div className="border border-zinc-900 bg-zinc-900/20 rounded-2xl p-4 flex items-center justify-between backdrop-blur-sm animate-fade-in">
             <div className="space-y-1">
-              <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest flex items-center gap-1 leading-none">
-                <Flame size={10} /> Last session completed
-              </span>
-              <h4 className="font-extrabold text-sm text-white">{lastWorkout.dayName}</h4>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest flex items-center gap-1 leading-none">
+                  <Flame size={10} /> Last session completed
+                </span>
+                <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase ${
+                  analyzeLastSession.isOnProgram 
+                    ? 'bg-emerald-500/10 text-emerald-450 border border-emerald-500/20' 
+                    : 'bg-amber-500/10 text-amber-450 border border-amber-500/20'
+                }`}>
+                  {analyzeLastSession.isOnProgram 
+                    ? `On Program (Week ${analyzeLastSession.expectedWeek})` 
+                    : 'Off Program / Adjusted'}
+                </span>
+                {analyzeLastSession.isJefitImport && (
+                  <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase bg-blue-500/10 text-blue-450 border border-blue-500/20">
+                    Jefit Import
+                  </span>
+                )}
+              </div>
+              <h4 className="font-extrabold text-sm text-white">{analyzeLastSession.dayName}</h4>
               <span className="text-[10px] text-zinc-500 font-medium block">
-                {lastWorkout.date} · {lastWorkout.exercisesCount} exercises · {lastWorkout.volume} lbs
+                Performed on: <span className="text-zinc-300 font-bold">{analyzeLastSession.date}</span>
               </span>
+              <div className="text-[9px] text-zinc-400 font-semibold space-y-0.5 pt-1">
+                {analyzeLastSession.lifts.map((l: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-1">
+                    <span className="text-zinc-500">•</span>
+                    <span>{l.liftName}:</span>
+                    <span className="text-white font-bold">{l.setsCount} sets × {l.minReps} reps</span>
+                    {l.matchesPrescription ? (
+                      <span className="text-emerald-500 text-[8px]">(Matches Week {l.matchedWeek})</span>
+                    ) : (
+                      <span className="text-amber-500 text-[8px]">(Adjusted)</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="w-10 h-10 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+              analyzeLastSession.isOnProgram ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'
+            }`}>
               <CheckCircle2 size={20} />
             </div>
           </div>
