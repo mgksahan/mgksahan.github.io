@@ -129,5 +129,21 @@ export const apiService = {
       throw new Error(errData.error || errData.message || 'Failed to submit fitness log.');
     }
     return await res.json();
+  },
+
+  // 9. SYNC RENPHO WEIGHT
+  syncRenphoWeight: async () => {
+    if (!API_URL) throw new Error('API URL is not configured.');
+    const res = await fetch(`${API_URL}/fitness/sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || errData.message || 'Failed to sync Renpho weight.');
+    }
+    return await res.json();
   }
 };

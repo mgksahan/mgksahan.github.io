@@ -5,7 +5,7 @@ import {
   Play, Plus, Trash2, Check, Clock, Award, Flame, X, 
   ChevronDown, ChevronUp, Search, ArrowLeft, Dumbbell, History, 
   TrendingUp, RotateCcw, AlertTriangle, CheckCircle2, ChevronRight, ChevronLeft,
-  Edit, Save
+  Edit, Save, RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 // @ts-ignore
@@ -160,6 +160,11 @@ export function GymPage() {
     const saved = localStorage.getItem('gym_pb_body_weight');
     return saved ? Number(saved) : 74;
   });
+  const [pbPlateIncrement, setPbPlateIncrement] = useState<number>(() => {
+    const saved = localStorage.getItem('gym_pb_plate_increment');
+    return saved ? Number(saved) : 1.25;
+  });
+  const [isSyncingWeight, setIsSyncingWeight] = useState<boolean>(false);
   const [override1RMs, setOverride1RMs] = useState<Record<string, number>>(() => {
     const saved = localStorage.getItem('gym_pb_override_1rms');
     return saved ? JSON.parse(saved) : {};
@@ -186,7 +191,7 @@ export function GymPage() {
     }
   };
 
-  const saveProfileToCloud = async (week: number, weight: number, overrides: Record<string, number>) => {
+  const saveProfileToCloud = async (week: number, weight: number, overrides: Record<string, number>, plateIncrement?: number) => {
     if (!apiService.isConfigured) return;
     try {
       await apiService.createFitnessLog({
@@ -195,7 +200,8 @@ export function GymPage() {
         raw_logs: JSON.stringify({
           pbWeek: week,
           bodyWeight: weight,
-          override1RMs: overrides
+          override1RMs: overrides,
+          plateIncrement: plateIncrement !== undefined ? plateIncrement : pbPlateIncrement
         }),
         one_rep_max_kg: 0,
         one_rep_max_lbs: 0,
@@ -203,6 +209,105 @@ export function GymPage() {
       });
     } catch (e) {
       console.error('Failed to save profile to cloud:', e);
+    }
+  };
+
+  const getClosestBodyWeightFromHistory = (history: any[], targetDateStr: string, fallback: number) => {
+    if (!history || history.length === 0) return fallback;
+    const targetDate = new Date(targetDateStr);
+    let closestEntry: any = null;
+    let minDiffMs = Infinity;
+    
+    for (const entry of history) {
+      const entryDate = new Date(entry.workout_date);
+      if (isNaN(entryDate.getTime())) continue;
+      const diffMs = Math.abs(targetDate.getTime() - entryDate.getTime());
+      if (diffMs < minDiffMs) {
+        minDiffMs = diffMs;
+        closestEntry = entry;
+      }
+    }
+    
+    if (closestEntry) {
+      return Number(closestEntry.one_rep_max_kg) || fallback;
+    }
+    return fallback;
+  };
+
+  const handlePlateIncrementChange = (value: number) => {
+    setPbPlateIncrement(value);
+    localStorage.setItem('gym_pb_plate_increment', String(value));
+    saveProfileToCloud(pbWeek, pbBodyWeight, override1RMs, value);
+    recalculateLiftSets('Weighted Pull-Up', override1RMs['Weighted Pull-Up'], pbBodyWeight);
+  };
+
+  const handleGlobalWeekChange = (newWeek: number) => {
+    setPbWeek(newWeek);
+    localStorage.setItem('gym_pb_week', String(newWeek));
+    saveProfileToCloud(newWeek, pbBodyWeight, override1RMs);
+    toast.success(`Training cycle updated to Week ${newWeek}!`);
+  };
+
+  const runSilentBackgroundSync = async (currentBW: number) => {
+    if (!apiService.isConfigured) return;
+    try {
+      console.log('[Auto-Sync] Running silent background Renpho sync...');
+      await apiService.syncRenphoWeight();
+      const history = await apiService.fetchFitnessHistory('Body Weight');
+      
+      setWorkoutHistoryMap(prev => ({
+        ...prev,
+        'Body Weight': history
+      }));
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      const closestWeight = getClosestBodyWeightFromHistory(history, todayStr, currentBW);
+      
+      if (closestWeight && closestWeight > 0 && closestWeight !== currentBW) {
+        setPbBodyWeight(closestWeight);
+        localStorage.setItem('gym_pb_body_weight', String(closestWeight));
+        saveProfileToCloud(pbWeek, closestWeight, override1RMs);
+        recalculateLiftSets('Weighted Pull-Up', override1RMs['Weighted Pull-Up'], closestWeight);
+        toast.success(`Renpho weight synced! Body Weight updated to ${closestWeight} kg.`, { duration: 4000 });
+      }
+    } catch (e) {
+      console.error('[Auto-Sync Error] Silent background sync failed:', e);
+    }
+  };
+
+  const handleSyncRenphoWeight = async () => {
+    setIsSyncingWeight(true);
+    const resolveToast = toast.loading('Connecting to Renpho & syncing weight...');
+    try {
+      if (!apiService.isConfigured) {
+        throw new Error('API URL is not configured.');
+      }
+      
+      await apiService.syncRenphoWeight();
+      const history = await apiService.fetchFitnessHistory('Body Weight');
+      
+      setWorkoutHistoryMap(prev => ({
+        ...prev,
+        'Body Weight': history
+      }));
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      const closestWeight = getClosestBodyWeightFromHistory(history, todayStr, pbBodyWeight);
+      
+      if (closestWeight && closestWeight > 0 && closestWeight !== pbBodyWeight) {
+        setPbBodyWeight(closestWeight);
+        localStorage.setItem('gym_pb_body_weight', String(closestWeight));
+        saveProfileToCloud(pbWeek, closestWeight, override1RMs);
+        recalculateLiftSets('Weighted Pull-Up', override1RMs['Weighted Pull-Up'], closestWeight);
+        toast.success(`Successfully synced! Body Weight updated to ${closestWeight} kg.`, { id: resolveToast });
+      } else {
+        toast.success(`Synced successfully! Body Weight is up to date (${pbBodyWeight} kg).`, { id: resolveToast });
+      }
+    } catch (e: any) {
+      console.error('[Renpho Sync Error]', e);
+      toast.error(e.message || 'Failed to sync Renpho weight. Please try again.', { id: resolveToast });
+    } finally {
+      setIsSyncingWeight(false);
     }
   };
 
@@ -269,6 +374,7 @@ export function GymPage() {
 
         // Load profile configurations
         const profileCloud = await apiService.fetchFitnessHistory('__CONFIG_PROFILE__');
+        let initialBodyWeight = pbBodyWeight;
         if (profileCloud && profileCloud.length > 0) {
           const latestLog = profileCloud.find((l: any) => l.workout_date === 'LATEST');
           if (latestLog && latestLog.raw_logs) {
@@ -278,6 +384,7 @@ export function GymPage() {
               localStorage.setItem('gym_pb_week', String(parsed.pbWeek));
             }
             if (parsed.bodyWeight) {
+              initialBodyWeight = parsed.bodyWeight;
               setPbBodyWeight(parsed.bodyWeight);
               localStorage.setItem('gym_pb_body_weight', String(parsed.bodyWeight));
             }
@@ -285,7 +392,31 @@ export function GymPage() {
               setOverride1RMs(parsed.override1RMs);
               localStorage.setItem('gym_pb_override_1rms', JSON.stringify(parsed.override1RMs));
             }
+            if (parsed.plateIncrement) {
+              setPbPlateIncrement(parsed.plateIncrement);
+              localStorage.setItem('gym_pb_plate_increment', String(parsed.plateIncrement));
+            }
           }
+        }
+
+        // Fetch time-series "Body Weight" history to find the most recent synced weight
+        try {
+          const weightHistory = await apiService.fetchFitnessHistory('Body Weight');
+          if (weightHistory && weightHistory.length > 0) {
+            setWorkoutHistoryMap(prev => ({
+              ...prev,
+              'Body Weight': weightHistory
+            }));
+            const todayStr = new Date().toISOString().split('T')[0];
+            const closestWeight = getClosestBodyWeightFromHistory(weightHistory, todayStr, initialBodyWeight);
+            if (closestWeight && closestWeight > 0 && closestWeight !== initialBodyWeight) {
+              setPbBodyWeight(closestWeight);
+              localStorage.setItem('gym_pb_body_weight', String(closestWeight));
+              saveProfileToCloud(pbWeek, closestWeight, override1RMs);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to load latest body weight from history:', err);
         }
       } catch (e) {
         console.error('Failed to load cloud config, falling back to local storage:', e);
@@ -447,10 +578,27 @@ export function GymPage() {
     setIsWorkoutActive(true);
     setWorkoutFinished(false);
 
+    // Auto-sync Renpho weight silently in background if starting a powerbuilding day with Weighted Pull-Up
+    if (routine.id === 'powerbuilding' && day.exercises.some(e => e.name === 'Weighted Pull-Up')) {
+      runSilentBackgroundSync(pbBodyWeight);
+    }
+
     // Fetch history in background and auto-populate
     try {
       const exerciseNames = day.exercises.map(e => e.name);
+      if (exerciseNames.includes('Weighted Pull-Up')) {
+        exerciseNames.push('Body Weight');
+      }
       const historyMap = await fetchWorkoutHistory(exerciseNames);
+
+      // Get closest body weight for the workout from history
+      const todayStr = new Date().toISOString().split('T')[0];
+      const workoutBW = getClosestBodyWeightFromHistory(historyMap['Body Weight'] || [], todayStr, pbBodyWeight);
+      
+      let changedBW = false;
+      if (workoutBW !== pbBodyWeight) {
+        changedBW = true;
+      }
 
       // Populate weights & reps from latest historical log / AI progression coach
       setActiveExercises(prev => {
@@ -463,7 +611,7 @@ export function GymPage() {
           const history = historyMap[ex.name] || [];
 
           if (routine.id === 'powerbuilding' && isMainLift) {
-            const coach = getCoachRecommendation(ex.name, history, updatedOverrides[ex.name], pbBodyWeight);
+            const coach = getCoachRecommendation(ex.name, history, updatedOverrides[ex.name], workoutBW);
             const W = coach.targetWeight;
             const reps = coach.reps;
             const setsCount = coach.sets;
@@ -479,7 +627,7 @@ export function GymPage() {
 
             let weightVal = '';
             if (ex.name === 'Weighted Pull-Up') {
-              weightVal = String(Math.round((pbBodyWeight + W) * 100) / 100);
+              weightVal = String(Math.round((workoutBW + W) * 100) / 100);
             } else {
               weightVal = String(W);
             }
@@ -537,11 +685,21 @@ export function GymPage() {
           }
         });
 
-        if (changedOverrides) {
+        if (changedOverrides || changedBW) {
           setTimeout(() => {
-            setOverride1RMs(updatedOverrides);
-            setPbWeek(updatedWeek);
-            saveProfileToCloud(updatedWeek, pbBodyWeight, updatedOverrides);
+            if (changedOverrides) {
+              setOverride1RMs(updatedOverrides);
+              setPbWeek(updatedWeek);
+            }
+            if (changedBW) {
+              setPbBodyWeight(workoutBW);
+              localStorage.setItem('gym_pb_body_weight', String(workoutBW));
+            }
+            saveProfileToCloud(
+              changedOverrides ? updatedWeek : pbWeek,
+              changedBW ? workoutBW : pbBodyWeight,
+              changedOverrides ? updatedOverrides : override1RMs
+            );
           }, 0);
         }
 
@@ -973,7 +1131,9 @@ export function GymPage() {
       if (addedWeight <= 1.3) {
         return 1.3; // Minimum added weight is exactly 1.3 kg
       }
-      return roundToNearest5LbsInKg(addedWeight);
+      const extraWeight = addedWeight - 1.3;
+      const roundedExtra = Math.round(extraWeight / pbPlateIncrement) * pbPlateIncrement;
+      return Math.round((1.3 + roundedExtra) * 100) / 100;
     } else {
       const target = est1RM * pct;
       return roundToNearest5LbsInKg(target);
@@ -1042,13 +1202,13 @@ export function GymPage() {
     }
     
     if (recentHistory.length === 0) {
-      const targetWeightVal = calculateTargetWeightVal(liftName, est1RM, 1, bodyWeight);
+      const targetWeightVal = calculateTargetWeightVal(liftName, est1RM, pbWeek, bodyWeight);
       return {
-        week: 1,
+        week: pbWeek,
         targetWeight: targetWeightVal,
-        sets: 4,
-        reps: 5,
-        message: `Welcome! Starting your cycle at Week 1 (5s @ 75% 1RM).`,
+        sets: getTargetSets(pbWeek),
+        reps: getTargetReps(pbWeek),
+        message: `Welcome! Starting your cycle. Performing Week ${pbWeek} targets (${getTargetReps(pbWeek)}s @ ${Math.round(getTargetPercentage(pbWeek)*100)}% 1RM).`,
         est1RM
       };
     }
@@ -1057,13 +1217,13 @@ export function GymPage() {
     const latestLog = sorted[0];
 
     if (!latestLog || !latestLog.raw_logs) {
-      const targetWeightVal = calculateTargetWeightVal(liftName, est1RM, 1, bodyWeight);
+      const targetWeightVal = calculateTargetWeightVal(liftName, est1RM, pbWeek, bodyWeight);
       return {
-        week: 1,
+        week: pbWeek,
         targetWeight: targetWeightVal,
-        sets: 4,
-        reps: 5,
-        message: `Starting your cycle at Week 1 (5s @ 75% 1RM).`,
+        sets: getTargetSets(pbWeek),
+        reps: getTargetReps(pbWeek),
+        message: `Starting cycle. Performing Week ${pbWeek} targets (${getTargetReps(pbWeek)}s @ ${Math.round(getTargetPercentage(pbWeek)*100)}% 1RM).`,
         est1RM
       };
     }
@@ -1075,13 +1235,13 @@ export function GymPage() {
     }).filter(s => s.reps <= 6 && s.weight >= est1RM * 0.60);
 
     if (workingSets.length === 0) {
-      const targetWeightVal = calculateTargetWeightVal(liftName, est1RM, 1, bodyWeight);
+      const targetWeightVal = calculateTargetWeightVal(liftName, est1RM, pbWeek, bodyWeight);
       return {
-        week: 1,
+        week: pbWeek,
         targetWeight: targetWeightVal,
-        sets: 4,
-        reps: 5,
-        message: `Starting cycle at Week 1 (no recent heavy sets detected).`,
+        sets: getTargetSets(pbWeek),
+        reps: getTargetReps(pbWeek),
+        message: `No recent heavy sets detected. Performing Week ${pbWeek} targets (${getTargetReps(pbWeek)}s @ ${Math.round(getTargetPercentage(pbWeek)*100)}% 1RM).`,
         est1RM
       };
     }
@@ -1105,31 +1265,28 @@ export function GymPage() {
     
     const succeeded = completedReps >= targetRepsForPrevWeek && completedSetsCount >= targetSetsForPrevWeek;
 
-    let nextWeek = previousWeek;
     let next1RM = est1RM;
     let message = "";
 
     if (succeeded) {
       if (previousWeek === 4) {
-        nextWeek = 1;
         next1RM = roundToNearest5LbsInKg(est1RM + 2.268);
-        message = `Completed Week 4! Progression success (+5 lbs / +2.27kg 1RM). Resets to Week 1.`;
+        message = `Completed Week 4! Progression success (+5 lbs / +2.27kg 1RM). Resets to Week 1. Performing Week ${pbWeek} targets.`;
       } else {
-        nextWeek = previousWeek + 1;
-        message = `Success! Completed all targets on ${latestLog.workout_date} (${completedSetsCount}x${completedReps}). Progressing to Week ${nextWeek}.`;
+        message = `Success! Completed all targets on ${latestLog.workout_date} (${completedSetsCount}x${completedReps}). Performing Week ${pbWeek} targets.`;
       }
     } else {
       next1RM = roundToNearest5LbsInKg(Math.max(est1RM - 2.268, 20));
-      message = `Fatigue detected (missed reps on ${latestLog.workout_date}). Repeating Week ${previousWeek} at lower weight (-5 lbs 1RM).`;
+      message = `Fatigue detected (missed reps on ${latestLog.workout_date}). 1RM adjusted down (-5 lbs) to manage systematic fatigue. Performing Week ${pbWeek} targets.`;
     }
 
-    const targetWeightVal = calculateTargetWeightVal(liftName, next1RM, nextWeek, bodyWeight);
+    const targetWeightVal = calculateTargetWeightVal(liftName, next1RM, pbWeek, bodyWeight);
 
     return {
-      week: nextWeek,
+      week: pbWeek,
       targetWeight: targetWeightVal,
-      sets: getTargetSets(nextWeek),
-      reps: getTargetReps(nextWeek),
+      sets: getTargetSets(pbWeek),
+      reps: getTargetReps(pbWeek),
       message,
       est1RM: next1RM
     };
@@ -1288,6 +1445,14 @@ export function GymPage() {
         volume: Math.round(totalVolLbs)
       });
       setWorkoutFinished(true);
+
+      if (selectedRoutine?.id === 'powerbuilding' && selectedDay?.id === 'pb-day-5') {
+        const nextGlobalWeek = pbWeek < 4 ? pbWeek + 1 : 1;
+        setPbWeek(nextGlobalWeek);
+        localStorage.setItem('gym_pb_week', String(nextGlobalWeek));
+        saveProfileToCloud(nextGlobalWeek, pbBodyWeight, override1RMs);
+        toast.success(`Week ${pbWeek} completed! Your Automated Coach has progressed you to Week ${nextGlobalWeek}. All lift targets are now synchronized.`, { duration: 8000 });
+      }
 
       // Trigger confetti!
       confetti({
@@ -1970,6 +2135,43 @@ export function GymPage() {
             </div>
           </div>
         )}
+
+
+
+        {/* Global Cycle Week Card */}
+        <div className="border border-zinc-900 bg-zinc-900/20 rounded-2xl p-4 flex items-center justify-between backdrop-blur-sm">
+          <div className="space-y-1">
+            <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest flex items-center gap-1 leading-none">
+              <Clock size={10} /> Powerbuilding Training Cycle
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-sm text-white">Week {pbWeek}</span>
+              <span className="text-[10px] text-zinc-500 font-medium">of 4-week cycle</span>
+            </div>
+            <span className="text-[9px] text-zinc-400 font-semibold block leading-tight">
+              {pbWeek === 1 ? 'Phase 1: Volume Accumulation (4 sets × 5 reps @ 75% 1RM)' :
+               pbWeek === 2 ? 'Phase 2: Volume Accumulation (4 sets × 4 reps @ 80% 1RM)' :
+               pbWeek === 3 ? 'Phase 3: Heavy Peaking (3 sets × 3 reps @ 85% 1RM)' :
+               'Phase 4: Maximum Peaking (3 sets × 2 reps @ 90% 1RM)'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => handleGlobalWeekChange(pbWeek > 1 ? pbWeek - 1 : 4)}
+              className="h-8 w-8 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 font-bold rounded-lg text-xs cursor-pointer flex items-center justify-center transition-colors"
+              title="Previous Week"
+            >
+              -
+            </button>
+            <button
+              onClick={() => handleGlobalWeekChange(pbWeek < 4 ? pbWeek + 1 : 1)}
+              className="h-8 w-8 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 font-bold rounded-lg text-xs cursor-pointer flex items-center justify-center transition-colors"
+              title="Next Week"
+            >
+              +
+            </button>
+          </div>
+        </div>
 
         {/* Start Workout Quick Options */}
         <div className="space-y-2">
