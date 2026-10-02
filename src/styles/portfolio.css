@@ -32,9 +32,10 @@ body {
   overflow-x: hidden;
 }
 
-a {
+a, button {
   color: var(--ice);
   text-underline-offset: 3px;
+  cursor: pointer;
 }
 
 a:focus-visible, button:focus-visible {
@@ -56,18 +57,26 @@ nav {
   align-items: center;
   padding: 1.5rem 0;
   font-size: 0.95rem;
+  position: relative;
+  z-index: 50;
 }
 
 nav .name {
   font-family: var(--mono);
   color: var(--muted);
   text-decoration: none;
+  cursor: pointer;
+}
+
+nav .name:hover {
+  color: var(--ice);
 }
 
 nav div a {
   margin-left: 1.5rem;
   color: var(--text);
   text-decoration: none;
+  cursor: pointer;
 }
 
 nav div a:hover {
@@ -181,6 +190,7 @@ h2 {
 .contact a {
   font: 500 1.5rem var(--sans);
   word-break: break-all;
+  cursor: pointer;
 }
 
 footer {
@@ -225,6 +235,7 @@ footer {
   font-size: 1.05rem;
   border-radius: 4px;
   display: inline-block;
+  cursor: pointer;
 }
 
 .btn:hover {
@@ -277,6 +288,7 @@ footer {
   transform: translate(-50%, -50%);
   background: radial-gradient(closest-side, rgba(111, 211, 255, 0.16), transparent);
   z-index: 0;
+  pointer-events: none;
 }
 
 .photo img {
