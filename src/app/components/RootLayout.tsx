@@ -26,13 +26,48 @@ export function RootLayout() {
     const isGym = location.pathname.startsWith('/gym');
     const isFitness = location.pathname.startsWith('/fitness');
     const isDiary = location.pathname.startsWith('/diary');
-    const favicon = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
-    const appleFavicon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement | null;
-    let manifest = document.querySelector("link[rel='manifest']") as HTMLLinkElement | null;
+    const setDefaultFavicons = () => {
+      // Remove any override favicon links
+      document.querySelectorAll("link[rel*='icon']").forEach((el) => el.remove());
+
+      const configs = [
+        { rel: 'icon', href: '/favicon-black.svg', type: 'image/svg+xml', media: '(prefers-color-scheme: light)' },
+        { rel: 'icon', href: '/favicon-white.svg', type: 'image/svg+xml', media: '(prefers-color-scheme: dark)' },
+        { rel: 'icon', href: '/favicon-black-32.png', type: 'image/png', sizes: '32x32', media: '(prefers-color-scheme: light)' },
+        { rel: 'icon', href: '/favicon-white-32.png', type: 'image/png', sizes: '32x32', media: '(prefers-color-scheme: dark)' },
+        { rel: 'apple-touch-icon', href: '/favicon-black-180.png', media: '(prefers-color-scheme: light)' },
+        { rel: 'apple-touch-icon', href: '/favicon-white-180.png', media: '(prefers-color-scheme: dark)' },
+      ];
+
+      configs.forEach((cfg) => {
+        const link = document.createElement('link');
+        link.rel = cfg.rel;
+        link.href = cfg.href;
+        if (cfg.type) link.type = cfg.type;
+        if (cfg.sizes) link.setAttribute('sizes', cfg.sizes);
+        if (cfg.media) link.media = cfg.media;
+        document.head.appendChild(link);
+      });
+    };
+
+    const setSingleFavicon = (iconPath: string, appleIconPath?: string) => {
+      document.querySelectorAll("link[rel*='icon']").forEach((el) => el.remove());
+
+      const link = document.createElement('link');
+      link.rel = 'icon';
+      link.href = iconPath;
+      document.head.appendChild(link);
+
+      if (appleIconPath) {
+        const appleLink = document.createElement('link');
+        appleLink.rel = 'apple-touch-icon';
+        appleLink.href = appleIconPath;
+        document.head.appendChild(appleLink);
+      }
+    };
 
     if (isGym) {
-      if (favicon) favicon.href = '/dumbbell_icon.png';
-      if (appleFavicon) appleFavicon.href = '/dumbbell_icon.png';
+      setSingleFavicon('/dumbbell_icon.png', '/dumbbell_icon.png');
       if (!manifest) {
         manifest = document.createElement('link');
         manifest.rel = 'manifest';
@@ -40,14 +75,12 @@ export function RootLayout() {
       }
       manifest.href = '/manifest.json';
     } else if (isFitness) {
-      if (favicon) favicon.href = '/dumbbell_icon.png';
-      if (appleFavicon) appleFavicon.href = '/dumbbell_icon.png';
+      setSingleFavicon('/dumbbell_icon.png', '/dumbbell_icon.png');
       if (manifest) {
         manifest.remove();
       }
     } else if (isDiary) {
-      if (favicon) favicon.href = '/favicon.svg';
-      if (appleFavicon) appleFavicon.href = '/diary_icon.png';
+      setSingleFavicon('/favicon-black.svg', '/diary_icon.png');
       if (!manifest) {
         manifest = document.createElement('link');
         manifest.rel = 'manifest';
@@ -55,8 +88,11 @@ export function RootLayout() {
       }
       manifest.href = '/diary_manifest.json';
     } else {
-      if (favicon) favicon.href = '/favicon.svg';
-      if (appleFavicon) appleFavicon.href = '/favicon.svg';
+      // Check if we need to restore default favicons (e.g. if previous page had custom favicon)
+      const hasMediaFavicon = document.querySelector("link[rel='icon'][media]");
+      if (!hasMediaFavicon) {
+        setDefaultFavicons();
+      }
       if (manifest) {
         manifest.remove();
       }
