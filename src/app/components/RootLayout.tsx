@@ -26,6 +26,8 @@ export function RootLayout() {
     const isGym = location.pathname.startsWith('/gym');
     const isFitness = location.pathname.startsWith('/fitness');
     const isDiary = location.pathname.startsWith('/diary');
+    let manifest = document.querySelector("link[rel='manifest']") as HTMLLinkElement | null;
+
     const setDefaultFavicons = () => {
       // Remove any override favicon links
       document.querySelectorAll("link[rel*='icon']").forEach((el) => el.remove());
