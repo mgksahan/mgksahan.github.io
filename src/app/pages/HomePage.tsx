@@ -1,6 +1,102 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import sahanPhoto from '../../assets/sahan.webp';
+import { apiService } from '../../apiService';
+import { getPosts } from '../../postsLoader';
+
+type RailPost = {
+  slug?: string;
+  id?: string;
+  title: string;
+  date: string;
+  categories: string[];
+  content: string;
+};
+
+// First markdown image in the post body, used as the card cover
+function coverImage(content: string) {
+  const m = content.match(/!\[[^\]]*\]\(\s*<?([^)\s>]+)>?[^)]*\)/);
+  return m ? m[1] : null;
+}
+
+// Plain-text preview: drop images, code, markdown syntax
+function excerpt(content: string, max = 140) {
+  const text = content
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[#>*_`~|-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
+}
+
+function formatDate(date: string) {
+  const d = new Date(`${date}T00:00:00`);
+  return isNaN(d.getTime()) ? date : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function PostsRail() {
+  const [posts, setPosts] = useState<RailPost[] | null>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const dbPosts = (await apiService.fetchPosts()) as RailPost[];
+      const merged = [...dbPosts, ...(getPosts() as RailPost[])]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 12);
+      if (!cancelled) setPosts(merged);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const scrollByCard = (dir: number) => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const card = rail.querySelector<HTMLElement>('.post-card');
+    rail.scrollBy({ left: dir * ((card?.offsetWidth || 300) + 16), behavior: 'smooth' });
+  };
+
+  return (
+    <section id="posts">
+      <div className="posts-head">
+        <h2>Posts</h2>
+        <div className="posts-nav">
+          <button type="button" aria-label="Previous posts" onClick={() => scrollByCard(-1)}>&larr;</button>
+          <button type="button" aria-label="Next posts" onClick={() => scrollByCard(1)}>&rarr;</button>
+          <Link to="/diary">All posts</Link>
+        </div>
+      </div>
+      <div className="posts-rail" ref={railRef} tabIndex={0} aria-label="Recent posts">
+        {posts === null &&
+          [0, 1, 2].map((i) => <div key={i} className="post-card skeleton" aria-hidden="true" />)}
+        {posts?.length === 0 && <p className="posts-empty">No posts yet.</p>}
+        {posts?.map((post) => {
+          const slug = post.slug || post.id || '';
+          const cover = coverImage(post.content);
+          return (
+            <Link key={slug} to="/diary" state={{ openPostSlug: slug }} className="post-card">
+              {cover && <img src={cover} alt="" loading="lazy" />}
+              <div className="post-body">
+                <div className="post-meta">
+                  <time dateTime={post.date}>{formatDate(post.date)}</time>
+                  {post.categories?.[0] && <span>{post.categories[0]}</span>}
+                </div>
+                <h3>{post.title}</h3>
+                <p>{excerpt(post.content)}</p>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 export function HomePage() {
   useEffect(() => {
@@ -80,7 +176,7 @@ export function HomePage() {
       revealSeq();
     }
 
-    const els = document.querySelectorAll('section h2, .do-line, .proj, .cfg, .about p, .timeline li, .contact a, .contact p');
+    const els = document.querySelectorAll('section h2, .proj, .cfg, .about p, .timeline li, .contact a, .contact p');
     els.forEach((e: Element) => {
       e.classList.add('reveal');
       if (e.parentNode) {
@@ -141,12 +237,7 @@ export function HomePage() {
         </div>
       </header>
 
-      <section id="do">
-        <h2>What I do</h2>
-        <p className="do-line"><span className="v">I connect</span> systems that were never built to talk to each other.</p>
-        <p className="do-line"><span className="v">I shape</span> messy data feeds into something you can trust.</p>
-        <p className="do-line"><span className="v">I keep</span> integrations running long after launch.</p>
-      </section>
+      <PostsRail />
 
       <section id="work">
         <h2>Selected work</h2>

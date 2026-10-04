@@ -35,6 +35,36 @@ export const apiService = {
     return await res.json();
   },
 
+  // 2b. UPLOAD POST IMAGE (presigned S3 PUT, served via CloudFront)
+  uploadImage: async (file, token) => {
+    if (!API_URL) throw new Error('API URL is not configured.');
+    const authHeader = token ? (token.startsWith('Bearer ') ? token : `Bearer ${token}`) : '';
+    const res = await fetch(`${API_URL}/uploads`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader
+      },
+      body: JSON.stringify({ contentType: file.type, size: file.size })
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Failed to prepare image upload.');
+    }
+    const { uploadUrl, imageUrl, cacheControl } = await res.json();
+
+    const putRes = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': file.type,
+        'Cache-Control': cacheControl
+      },
+      body: file
+    });
+    if (!putRes.ok) throw new Error('Image upload to storage failed.');
+    return imageUrl;
+  },
+
   // 3. FETCH DYNAMODB COMMENTS
   fetchComments: async (postSlug) => {
     if (!API_URL) return [];

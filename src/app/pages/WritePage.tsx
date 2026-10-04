@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../../apiService';
@@ -8,7 +8,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Separator } from '../components/ui/separator';
 import { Badge } from '../components/ui/badge';
-import { PenTool, Eye, Calendar, Clock, User, ArrowLeft } from 'lucide-react';
+import { PenTool, Eye, Calendar, Clock, User, ArrowLeft, ImagePlus } from 'lucide-react';
 import { marked } from 'marked';
 import { toast } from 'sonner';
 
@@ -22,6 +22,9 @@ export function WritePage() {
   const [content, setContent] = useState('');
   
   const [writeLoading, setWriteLoading] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Check auth
   useEffect(() => {
@@ -39,6 +42,39 @@ export function WritePage() {
       </div>
     );
   }
+
+  // Upload images to S3 and insert markdown at the cursor
+  const handleImageFiles = async (fileList: FileList | File[] | null) => {
+    const files = Array.from(fileList || []).filter((f) => f.type.startsWith('image/'));
+    if (!files.length) return;
+
+    const textarea = document.getElementById('post-content') as HTMLTextAreaElement | null;
+    const insertAt = textarea ? textarea.selectionEnd : content.length;
+
+    setUploadingCount((n) => n + files.length);
+    const results = await Promise.allSettled(
+      files.map((file) => apiService.uploadImage(file, user.token))
+    );
+    setUploadingCount((n) => n - files.length);
+
+    const snippets: string[] = [];
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        const alt = files[i].name.replace(/\.[^.]+$/, '').replace(/[\[\]]/g, '');
+        snippets.push(`![${alt}](${r.value})`);
+      } else {
+        toast.error(`${files[i].name}: ${r.reason?.message || 'upload failed'}`);
+      }
+    });
+    if (!snippets.length) return;
+
+    const markdown = `\n${snippets.join('\n\n')}\n`;
+    setContent((prev) => {
+      const pos = Math.min(insertAt, prev.length);
+      return prev.slice(0, pos) + markdown + prev.slice(pos);
+    });
+    toast.success(snippets.length === 1 ? 'Image uploaded.' : `${snippets.length} images uploaded.`);
+  };
 
   const handlePublishPost = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,7 +173,31 @@ export function WritePage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="post-content">Body Content (Markdown Supported)</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="post-content">Body Content (Markdown Supported)</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="cursor-pointer"
+                  disabled={uploadingCount > 0}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImagePlus className="w-4 h-4 mr-2" />
+                  {uploadingCount > 0 ? `Uploading ${uploadingCount}...` : 'Add image'}
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    handleImageFiles(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </div>
               <Textarea
                 id="post-content"
                 placeholder="# Hello World!&#10;&#10;Write your post body content here using markdown rules..."
@@ -145,12 +205,34 @@ export function WritePage() {
                 onChange={(e) => setContent(e.target.value)}
                 required
                 rows={12}
-                className="font-mono text-sm leading-relaxed"
+                className={`font-mono text-sm leading-relaxed ${dragOver ? 'ring-2 ring-primary' : ''}`}
+                onDragOver={(e) => {
+                  if (e.dataTransfer.types.includes('Files')) {
+                    e.preventDefault();
+                    setDragOver(true);
+                  }
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  if (e.dataTransfer.files.length) {
+                    e.preventDefault();
+                    setDragOver(false);
+                    handleImageFiles(e.dataTransfer.files);
+                  }
+                }}
+                onPaste={(e) => {
+                  const images = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'));
+                  if (images.length) {
+                    e.preventDefault();
+                    handleImageFiles(images);
+                  }
+                }}
               />
+              <p className="text-xs opacity-60">Drop, paste or add images (JPEG, PNG, GIF, WebP, AVIF; up to 10 MB each).</p>
             </div>
           </div>
 
-          <Button type="submit" disabled={writeLoading} className="w-full cursor-pointer mt-4">
+          <Button type="submit" disabled={writeLoading || uploadingCount > 0} className="w-full cursor-pointer mt-4">
             {writeLoading ? 'Publishing to DynamoDB...' : 'Publish Article'}
           </Button>
         </div>
