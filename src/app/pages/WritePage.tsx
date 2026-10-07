@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../../apiService';
 import { Button } from '../components/ui/button';
@@ -14,7 +14,9 @@ import { toast } from 'sonner';
 
 export function WritePage() {
   const navigate = useNavigate();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isAdmin, isLoading: authLoading } = useAuth();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
@@ -25,16 +27,44 @@ export function WritePage() {
   const [uploadingCount, setUploadingCount] = useState(0);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [editLoading, setEditLoading] = useState(!!editId);
 
   // Check auth
   useEffect(() => {
     if (!authLoading && !user) {
       toast.error('You must be logged in to access this page.');
       navigate('/login');
+    } else if (!authLoading && !isAdmin) {
+      toast.error('Only the site owner can write posts.');
+      navigate('/diary');
     }
-  }, [user, authLoading, navigate]);
+  }, [user, isAdmin, authLoading, navigate]);
 
-  if (authLoading || !user) {
+  // Edit mode: load the existing post into the editor
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      const posts = await apiService.fetchPosts();
+      const post = posts.find((p: { id?: string }) => p.id === editId);
+      if (cancelled) return;
+      if (!post) {
+        toast.error('Post not found.');
+        navigate('/diary');
+        return;
+      }
+      setTitle(post.title || '');
+      setCategory(post.categories?.[0] || '');
+      setTags((post.tags || []).join(', '));
+      setContent(post.content || '');
+      setEditLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editId, navigate]);
+
+  if (authLoading || !user || !isAdmin || editLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] space-y-3">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -99,11 +129,15 @@ export function WritePage() {
         authorName: user.name
       };
 
-      await apiService.createPost(postData, user.token);
-      toast.success('Article published to DynamoDB successfully!');
-      
-      // Navigate to diary page
-      navigate('/diary');
+      if (editId) {
+        await apiService.updatePost(editId, postData, user.token);
+        toast.success('Post updated.');
+        navigate('/diary', { state: { openPostSlug: editId } });
+      } else {
+        await apiService.createPost(postData, user.token);
+        toast.success('Article published to DynamoDB successfully!');
+        navigate('/diary');
+      }
     } catch (err: any) {
       toast.error(err.message || 'Failed to publish post.');
     } finally {
@@ -127,7 +161,7 @@ export function WritePage() {
         </Button>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <PenTool className="w-5 h-5 text-primary" />
-          Write Post
+          {editId ? 'Edit Post' : 'Write Post'}
         </h1>
         <div className="w-16"></div> {/* spacer */}
       </div>
@@ -233,7 +267,7 @@ export function WritePage() {
           </div>
 
           <Button type="submit" disabled={writeLoading || uploadingCount > 0} className="w-full cursor-pointer mt-4">
-            {writeLoading ? 'Publishing to DynamoDB...' : 'Publish Article'}
+            {writeLoading ? 'Saving...' : editId ? 'Save Changes' : 'Publish Article'}
           </Button>
         </div>
 

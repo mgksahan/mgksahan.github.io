@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { Calendar, X } from 'lucide-react';
 import { apiService } from '../../apiService';
-import { getPosts } from '../../postsLoader';
 
 type Post = {
   slug?: string;
@@ -53,9 +52,8 @@ export function InterestsPage() {
     const loadPostsData = async () => {
       setPostsLoading(true);
       try {
-        const staticPosts = getPosts() as Post[];
         const dbPosts = await apiService.fetchPosts() as Post[];
-        setPosts([...dbPosts, ...staticPosts]);
+        setPosts(dbPosts);
       } catch (err) {
         console.error('Failed to load posts for Interests:', err);
       } finally {

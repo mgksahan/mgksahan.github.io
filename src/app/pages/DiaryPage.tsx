@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../../apiService';
-import { getPosts } from '../../postsLoader';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -21,7 +20,9 @@ import {
   Search,
   PenTool,
   BookOpen,
-  LogOut
+  LogOut,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { marked } from 'marked';
 import { toast } from 'sonner';
@@ -48,7 +49,7 @@ type Comment = {
 export function DiaryPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -94,10 +95,8 @@ export function DiaryPage() {
   const loadHybridPosts = async () => {
     setPostsLoading(true);
     try {
-      const staticPosts = getPosts() as Post[];
       const dbPosts = await apiService.fetchPosts() as Post[];
-      const merged = [...dbPosts, ...staticPosts];
-      const sorted = merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const sorted = dbPosts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setPosts(sorted);
     } catch (e) {
       console.error('Error loading hybrid posts:', e);
@@ -139,6 +138,20 @@ export function DiaryPage() {
     }
   };
 
+  const isEditable = (post: Post) => isAdmin && !!post.id;
+
+  const handleDeletePost = async (post: Post) => {
+    if (!post.id || !window.confirm(`Delete "${post.title}"? This cannot be undone.`)) return;
+    try {
+      await apiService.deletePost(post.id, user?.token);
+      setPosts((prev) => prev.filter((p) => p.id !== post.id));
+      setActivePost(null);
+      toast.success('Post deleted.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete post.');
+    }
+  };
+
   const handleTagClick = (e: React.MouseEvent, tag: string) => {
     e.stopPropagation();
     // Navigate to Interests tag cloud page with this tag selected
@@ -157,15 +170,39 @@ export function DiaryPage() {
 
     return (
       <div className="container mx-auto px-4 py-12 max-w-3xl space-y-8 animate-fade-in">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => setActivePost(null)}
-          className="cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Diary
-        </Button>
+        <div className="flex items-center justify-between gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setActivePost(null)}
+            className="cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Diary
+          </Button>
+          {isEditable(activePost) && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/diary/write?edit=${encodeURIComponent(activePost.id!)}`)}
+                className="cursor-pointer"
+              >
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleDeletePost(activePost)}
+                className="cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </Button>
+            </div>
+          )}
+        </div>
 
         <article className="border rounded-2xl bg-card text-card-foreground shadow-sm p-8 space-y-6">
           <header className="space-y-4">
@@ -304,10 +341,12 @@ export function DiaryPage() {
         <div className="flex items-center gap-2.5 self-start sm:self-center">
           {user ? (
             <>
-              <Button onClick={() => navigate('/diary/write')} size="sm" className="cursor-pointer">
-                <PenTool className="w-4.5 h-4.5 mr-1.5" />
-                Write Entry
-              </Button>
+              {isAdmin && (
+                <Button onClick={() => navigate('/diary/write')} size="sm" className="cursor-pointer">
+                  <PenTool className="w-4.5 h-4.5 mr-1.5" />
+                  Write Entry
+                </Button>
+              )}
               <Button onClick={handleLogout} variant="outline" size="sm" className="cursor-pointer">
                 <LogOut className="w-4 h-4 mr-1.5" />
                 Logout

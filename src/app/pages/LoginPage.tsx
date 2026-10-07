@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -12,6 +12,10 @@ import { ShieldCheck, Info, Fingerprint } from 'lucide-react';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const nextParam = searchParams.get('next');
+  // Where to go after login; only same-site paths
+  const nextPath = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : '/';
   const { login, signup, confirmSignUp, user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'login' | 'signup' | 'verify' | 'forgot' | 'reset'>('login');
@@ -34,7 +38,7 @@ export function LoginPage() {
       const success = await login(bioSession.email, bioSession.password);
       if (success) {
         toast.success('Welcome back (Authenticated with biometrics)!');
-        navigate('/');
+        navigate(nextPath);
       }
     } catch (err: any) {
       toast.error(err.message || 'Biometric login failed. Please enter your password.');
@@ -49,9 +53,9 @@ export function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      navigate('/');
+      navigate(nextPath);
     }
-  }, [user, navigate]);
+  }, [user, navigate, nextPath]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +89,7 @@ export function LoginPage() {
           }
         }
         
-        navigate('/');
+        navigate(nextPath);
       }
     } catch (err: any) {
       toast.error(err.message || 'Login failed. Please check your credentials.');

@@ -234,6 +234,24 @@ export const cognitoService = {
     });
   },
 
+  // Current ID token, refreshed through Cognito's refresh token when the stored one has expired
+  getIdToken: () => {
+    const saved = cognitoService.getCurrentUser();
+    if (!isConfigured) return Promise.resolve(saved?.token || null);
+    const cognitoUser = new CognitoUserPool(poolData).getCurrentUser();
+    if (!cognitoUser) return Promise.resolve(saved?.token || null);
+    return new Promise((resolve) => {
+      cognitoUser.getSession((err, session) => {
+        if (err || !session?.isValid()) return resolve(saved?.token || null);
+        const token = session.getIdToken().getJwtToken();
+        if (saved && saved.token !== token) {
+          localStorage.setItem('active_blog_user', JSON.stringify({ ...saved, token }));
+        }
+        resolve(token);
+      });
+    });
+  },
+
   getCurrentUser: () => {
     const savedUser = localStorage.getItem('active_blog_user');
     if (savedUser) {

@@ -1,4 +1,12 @@
+import { cognitoService } from './cognitoService';
+
 const API_URL = import.meta.env.VITE_API_URL || '';
+
+// Writes need the owner's Cognito ID token; prefer a freshly refreshed one over the stored copy
+async function bearer(token) {
+  const fresh = (await cognitoService.getIdToken()) || token;
+  return fresh ? (fresh.startsWith('Bearer ') ? fresh : `Bearer ${fresh}`) : '';
+}
 
 export const apiService = {
   isConfigured: !!API_URL,
@@ -19,7 +27,7 @@ export const apiService = {
   // 2. CREATE DYNAMODB POST
   createPost: async (postData, token) => {
     if (!API_URL) throw new Error('API URL is not configured.');
-    const authHeader = token ? (token.startsWith('Bearer ') ? token : `Bearer ${token}`) : '';
+    const authHeader = await bearer(token);
     const res = await fetch(`${API_URL}/posts`, {
       method: 'POST',
       headers: {
@@ -35,10 +43,42 @@ export const apiService = {
     return await res.json();
   },
 
+  // 2a. UPDATE / DELETE DYNAMODB POST (owner only)
+  updatePost: async (id, postData, token) => {
+    if (!API_URL) throw new Error('API URL is not configured.');
+    const authHeader = await bearer(token);
+    const res = await fetch(`${API_URL}/posts/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader
+      },
+      body: JSON.stringify(postData)
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Failed to save post.');
+    }
+    return await res.json();
+  },
+
+  deletePost: async (id, token) => {
+    if (!API_URL) throw new Error('API URL is not configured.');
+    const authHeader = await bearer(token);
+    const res = await fetch(`${API_URL}/posts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': authHeader }
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Failed to delete post.');
+    }
+  },
+
   // 2b. UPLOAD POST IMAGE (presigned S3 PUT, served via CloudFront)
   uploadImage: async (file, token) => {
     if (!API_URL) throw new Error('API URL is not configured.');
-    const authHeader = token ? (token.startsWith('Bearer ') ? token : `Bearer ${token}`) : '';
+    const authHeader = await bearer(token);
     const res = await fetch(`${API_URL}/uploads`, {
       method: 'POST',
       headers: {
@@ -150,7 +190,8 @@ export const apiService = {
     const res = await fetch(`${API_URL}/fitness`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': await bearer()
       },
       body: JSON.stringify(fitnessData)
     });
@@ -167,7 +208,8 @@ export const apiService = {
     const res = await fetch(`${API_URL}/fitness/sync`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': await bearer()
       }
     });
     if (!res.ok) {

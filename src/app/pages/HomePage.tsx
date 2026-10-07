@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import sahanPhoto from '../../assets/sahan.webp';
 import { apiService } from '../../apiService';
-import { getPosts } from '../../postsLoader';
 
 type RailPost = {
   slug?: string;
@@ -45,7 +44,7 @@ function PostsRail() {
     let cancelled = false;
     (async () => {
       const dbPosts = (await apiService.fetchPosts()) as RailPost[];
-      const merged = [...dbPosts, ...(getPosts() as RailPost[])]
+      const merged = [...dbPosts]
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 12);
       if (!cancelled) setPosts(merged);

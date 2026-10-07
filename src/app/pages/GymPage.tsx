@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { apiService } from '../../apiService';
+import { useAuth } from '../context/AuthContext';
 import routinesData from '../data/routines.json';
 import { 
   Play, Plus, Trash2, Check, Clock, Award, Flame, X, 
@@ -119,6 +120,9 @@ function getPowerbuildingRoutine(): Routine {
 }
 
 export function GymPage() {
+  // Reading history is public; saving workouts and syncing weight need the owner's login
+  const { isAdmin, isLoading: authLoading } = useAuth();
+
   // --- Core Workout State ---
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
   const [workoutElapsedTime, setWorkoutElapsedTime] = useState(0);
@@ -901,7 +905,7 @@ export function GymPage() {
     setWorkoutFinished(false);
 
     // Auto-sync Renpho weight silently in background if starting a powerbuilding day with Weighted Pull-Up
-    if (routine.id === 'powerbuilding' && day.exercises.some(e => e.name === 'Weighted Pull-Up')) {
+    if (isAdmin && routine.id === 'powerbuilding' && day.exercises.some(e => e.name === 'Weighted Pull-Up')) {
       runSilentBackgroundSync(pbBodyWeight);
     }
 
@@ -2496,6 +2500,19 @@ export function GymPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+
+        {!authLoading && !isAdmin && (
+          <a
+            href="/login?next=/gym"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+          >
+            <span className="flex items-center gap-2">
+              <AlertTriangle size={16} className="shrink-0" />
+              Not logged in: workouts and weight syncs won't be saved.
+            </span>
+            <span className="font-bold uppercase text-xs tracking-wider">Log in</span>
+          </a>
+        )}
         
         {/* Last Workout Quick Info Card */}
         {analyzeLastSession && (

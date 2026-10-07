@@ -14,6 +14,20 @@ interface AuthContextType {
   confirmSignUp: (email: string, code: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
+  isAdmin: boolean;
+}
+
+const OWNER_SUB = import.meta.env.VITE_OWNER_SUB;
+
+// Only decides whether to show owner controls; the API checks the token itself
+function tokenSub(token?: string): string | null {
+  try {
+    const payload = token?.split('.')[1];
+    if (!payload) return null;
+    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))).sub ?? null;
+  } catch {
+    return null;
+  }
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -66,8 +80,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const isAdmin = !!OWNER_SUB && tokenSub(user?.token) === OWNER_SUB;
+
   return (
-    <AuthContext.Provider value={{ user, login, signup, confirmSignUp, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, signup, confirmSignUp, logout, isLoading, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );
