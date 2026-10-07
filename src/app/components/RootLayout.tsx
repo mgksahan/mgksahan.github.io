@@ -165,9 +165,6 @@ export function RootLayout() {
       <main className="flex-1">
         <Outlet />
       </main>
-      <footer className="py-6 border-t border-[#22313a] text-center text-xs text-[#8399a4] font-mono">
-        <p>© Kevindi | Kevindi is cool 😎</p>
-      </footer>
     </div>
   );
 }

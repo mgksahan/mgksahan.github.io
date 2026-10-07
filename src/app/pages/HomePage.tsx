@@ -210,15 +210,6 @@ export function HomePage() {
 
   return (
     <div className="wrap">
-      <nav>
-        <Link to="/" className="name">sahan.gamage</Link>
-        <div>
-          <Link to="/diary">Diary</Link>
-          <Link to="/interests">Interests</Link>
-          <Link to="/fitness">Fitness</Link>
-        </div>
-      </nav>
-
       <header className="hero">
         <div className="left">
           <h1 className="greet" aria-label="Hi, I'm Sahan">
