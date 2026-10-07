@@ -175,7 +175,7 @@ export function HomePage() {
       revealSeq();
     }
 
-    const els = document.querySelectorAll('section h2, .proj, .cfg, .about p, .timeline li, .contact a, .contact p');
+    const els = document.querySelectorAll('section h2, .proj, .about p, .timeline li, .contact a, .contact p');
     els.forEach((e: Element) => {
       e.classList.add('reveal');
       if (e.parentNode) {
@@ -270,16 +270,6 @@ export function HomePage() {
             <p className="res">Result: replace with a real outcome.</p>
           </div>
         </article>
-      </section>
-
-      <section id="stack">
-        <h2>Stack</h2>
-        <pre className="cfg">
-<span className="k">languages:</span>  <span className="s">Python, C#, SQL, JavaScript</span>{"\n"}
-<span className="k">integration:</span> <span className="s">REST, MQTT, webhooks, message queues</span>{"\n"}
-<span className="k">cloud:</span>       <span className="s">Azure, Docker</span>{"\n"}
-<span className="k">tooling:</span>     <span className="s">Git, CI/CD, Grafana</span>
-        </pre>
       </section>
 
       <section id="about" className="about">
