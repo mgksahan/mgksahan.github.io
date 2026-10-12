@@ -7,6 +7,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { FitnessPage } from "./pages/FitnessPage";
 import { WritePage } from "./pages/WritePage";
 import { GymPage } from "./pages/GymPage";
+import { GymPlanPage } from "./pages/GymPlanPage";
 
 export const router = createBrowserRouter([
   {
@@ -17,7 +18,8 @@ export const router = createBrowserRouter([
       { path: "interests", Component: InterestsPage },
       { path: "login", Component: LoginPage },
       { path: "fitness", Component: FitnessPage },
-      { path: "gym", Component: GymPage },
+      { path: "gym", Component: GymPlanPage },
+      { path: "gym/tracker", Component: GymPage },
       { path: "diary", Component: DiaryPage },
       { path: "diary/write", Component: WritePage },
       { path: "write", element: <Navigate to="/diary/write" replace /> },

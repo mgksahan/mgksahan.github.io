@@ -115,7 +115,7 @@ export function RootLayout() {
   }, [location.pathname]);
 
   const isHome = location.pathname === '/';
-  const isGym = location.pathname === '/gym';
+  const isGym = location.pathname.startsWith('/gym');
 
   if (isHome) {
     return (
