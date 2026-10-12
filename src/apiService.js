@@ -217,5 +217,22 @@ export const apiService = {
       throw new Error(errData.error || errData.message || 'Failed to sync Renpho weight.');
     }
     return await res.json();
+  },
+
+  // 10. SYNC JEFIT WORKOUTS (owner only)
+  syncJefit: async () => {
+    if (!API_URL) throw new Error('API URL is not configured.');
+    const res = await fetch(`${API_URL}/fitness/jefit-sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': await bearer()
+      }
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || errData.message || 'Failed to sync Jefit workouts.');
+    }
+    return await res.json();
   }
 };

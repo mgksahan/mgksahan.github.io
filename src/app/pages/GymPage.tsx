@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { apiService } from '../../apiService';
 import { useAuth } from '../context/AuthContext';
 import routinesData from '../data/routines.json';
+import { Routine, RoutineDay, getPowerbuildingRoutine } from '../lib/gymPlan';
 import { 
   Play, Plus, Trash2, Check, Clock, Award, Flame, X, 
   ChevronDown, ChevronUp, Search, ArrowLeft, Dumbbell, History, 
@@ -11,26 +12,6 @@ import {
 import { toast } from 'sonner';
 // @ts-ignore
 import confetti from 'canvas-confetti';
-
-interface RoutineExercise {
-  name: string;
-  setcount: number;
-  timer: number;
-}
-
-interface RoutineDay {
-  id: string;
-  name: string;
-  day_index: string;
-  exercises: RoutineExercise[];
-}
-
-interface Routine {
-  id: string;
-  name: string;
-  description: string;
-  days: RoutineDay[];
-}
 
 interface ActiveSet {
   weight: string;
@@ -45,78 +26,6 @@ interface ActiveExercise {
   timer: number; // rest time in seconds
   expanded: boolean;
   templateLock?: boolean;
-}
-
-function getPowerbuildingRoutine(): Routine {
-  return {
-    id: 'powerbuilding',
-    name: 'Powerbuilding Routine',
-    description: 'Autoregulated 5-day cycle combining powerlifting peaking (Bench, Squat, Pull-Ups) with non-erasable bodybuilder accessories.',
-    days: [
-      {
-        id: 'pb-day-1',
-        name: 'Day 1: Powerbuilding Push A (Bench Focus)',
-        day_index: '1',
-        exercises: [
-          { name: 'Barbell Bench Press', setcount: 4, timer: 180 },
-          { name: 'Barbell Incline Bench Press', setcount: 4, timer: 120 },
-          { name: 'Machine Deltoid Raise', setcount: 4, timer: 90 },
-          { name: 'unilateral tricep machine extension blue machine ', setcount: 4, timer: 120 },
-          { name: 'Machine Ab Crunch', setcount: 4, timer: 120 }
-        ]
-      },
-      {
-        id: 'pb-day-2',
-        name: 'Day 2: Powerbuilding Pull + Squats A (Squat & Pull-Up Focus)',
-        day_index: '2',
-        exercises: [
-          { name: 'Weighted Pull-Up', setcount: 3, timer: 240 },
-          { name: 'Barbell Squat', setcount: 5, timer: 240 },
-          { name: 'Dumbbell One-Arm Row', setcount: 4, timer: 120 },
-          { name: 'Close Grip Cable Seated Row', setcount: 4, timer: 120 },
-          { name: 'Machine Reverse Fly', setcount: 4, timer: 90 },
-          { name: 'Machine Bicep Curls Unilateral', setcount: 4, timer: 90 }
-        ]
-      },
-      {
-        id: 'pb-day-3',
-        name: 'Day 3: Shoulders, Abs & Arms (Accessory Day)',
-        day_index: '3',
-        exercises: [
-          { name: 'Machine Deltoid Raise', setcount: 6, timer: 90 },
-          { name: 'Machine Ab Crunch', setcount: 5, timer: 90 },
-          { name: 'unilateral tricep machine extension blue machine ', setcount: 5, timer: 120 },
-          { name: 'Machine Bicep Curls Unilateral', setcount: 5, timer: 90 },
-          { name: 'Dumbbell External Rotation', setcount: 3, timer: 120 }
-        ]
-      },
-      {
-        id: 'pb-day-4',
-        name: 'Day 4: Powerbuilding Push B (Bench Focus)',
-        day_index: '4',
-        exercises: [
-          { name: 'Barbell Bench Press', setcount: 4, timer: 180 },
-          { name: 'Dumbbell Incline Bench Press', setcount: 4, timer: 120 },
-          { name: 'Machine Deltoid Raise', setcount: 4, timer: 90 },
-          { name: 'Dumbbell Seated One-Arm Tricep Extension', setcount: 4, timer: 120 },
-          { name: 'Machine Ab Crunch', setcount: 4, timer: 120 }
-        ]
-      },
-      {
-        id: 'pb-day-5',
-        name: 'Day 5: Powerbuilding Pull + Squats B (Squat & Pull-Up Focus)',
-        day_index: '5',
-        exercises: [
-          { name: 'Weighted Pull-Up', setcount: 3, timer: 240 },
-          { name: 'Barbell Squat', setcount: 5, timer: 240 },
-          { name: 'Barbell Row', setcount: 3, timer: 120 },
-          { name: 'Cable Seated Row', setcount: 4, timer: 120 },
-          { name: 'Dumbbell Seated Bent-Over Reverse Fly', setcount: 4, timer: 90 },
-          { name: 'Dumbbell Alternating Bicep Curl', setcount: 4, timer: 90 }
-        ]
-      }
-    ]
-  };
 }
 
 export function GymPage() {
@@ -2491,12 +2400,20 @@ export function GymPage() {
         </div>
         
         {/* Subtle quick back link to main website */}
-        <a
-          href="/fitness"
-          className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest border border-zinc-800 rounded-xl px-3 py-1.5 hover:bg-zinc-900/40"
-        >
-          Visualizer
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href="/gym"
+            className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest border border-zinc-800 rounded-xl px-3 py-1.5 hover:bg-zinc-900/40"
+          >
+            Plan
+          </a>
+          <a
+            href="/fitness"
+            className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest border border-zinc-800 rounded-xl px-3 py-1.5 hover:bg-zinc-900/40"
+          >
+            Visualizer
+          </a>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
