@@ -129,6 +129,7 @@ const WAVE_REPS = [5, 4, 3, 2];
 const BUMP_LB: Record<string, number> = { 'Barbell Bench Press': 1.25, 'Barbell Squat': 2.5, 'Weighted Pull-Up': 1.25 };
 const BACKOFF = { sets: 3, reps: 6, pct: 0.85 };
 const DELOAD = { pct: 0.70, reps: 5, backoffSets: 2 };
+const SESSIONS_PER_WEEK = 2;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // --- Helpers ---
@@ -202,7 +203,7 @@ function prescribe(E: number, phase: Phase, step: number) {
   };
 }
 
-export function planMainLift(name: string, rows: FitnessRow[], bodyWeightLb: number, today = localToday()): MainLiftPlan | null {
+export function planMainLift(name: string, rows: FitnessRow[], bodyWeightLb: number): MainLiftPlan | null {
   const isPullUp = name === 'Weighted Pull-Up';
   const step = 5;
   const sessions = datedRows(rows).map(r => {
@@ -223,16 +224,20 @@ export function planMainLift(name: string, rows: FitnessRow[], bodyWeightLb: num
   let cycle = 1;
   let misses = 0;
   let reason = 'Week 1 of the plan.';
-  const currentWeek = mondayOf(today);
-  const planSessions = sessions.filter(s => s.date >= PLAN_START);
-  const weeks = [...new Set(planSessions.map(s => mondayOf(s.date)))];
+  // A plan week is SESSIONS_PER_WEEK sessions of this lift, counted in order rather than by calendar,
+  // so the phase advances as soon as the second session is logged. Sessions earlier in week 1 of the
+  // plan (before PLAN_START) fill their slot but aren't judged.
+  const planWeekStart = mondayOf(PLAN_START);
+  const slots = sessions.filter(s => s.date >= planWeekStart);
 
-  for (const week of weeks) {
-    for (const s of planSessions.filter(p => mondayOf(p.date) === week)) {
-      if (phase === 'deload') continue;
+  for (let i = 0; i < slots.length; i += SESSIONS_PER_WEEK) {
+    const block = slots.slice(i, i + SESSIONS_PER_WEEK);
+    for (const s of block) {
+      if (phase === 'deload' || s.date < PLAN_START) continue;
       const { top } = prescribe(E, phase, step);
       const did = epley(s.top.lb, s.top.reps);
-      if (did >= epley(top.lb, top.reps) - 0.01) {
+      // 0.5% slack: kg-rounded logs (264.6 lb for 265) shouldn't count as misses
+      if (did >= epley(top.lb, top.reps) * 0.995) {
         E = Math.max(E + BUMP_LB[name], did);
         misses = 0;
         reason = `Hit ${Math.round(s.top.lb)}×${s.top.reps} on ${s.date}: max up.`;
@@ -244,8 +249,8 @@ export function planMainLift(name: string, rows: FitnessRow[], bodyWeightLb: num
       }
       eHistory.push({ date: s.date, E });
     }
-    // The current week isn't over: keep its phase for the rest of the week
-    if (week >= currentWeek) break;
+    // The week isn't finished: keep its phase for the rest of it
+    if (block.length < SESSIONS_PER_WEEK) break;
     if (phase === 'deload') {
       phase = 1;
       cycle += 1;
