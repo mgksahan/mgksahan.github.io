@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { Dumbbell, RefreshCw, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Dumbbell, RefreshCw, AlertTriangle, ChevronRight, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiService } from '../../apiService';
 import { useAuth } from '../context/AuthContext';
 import {
   FitnessRow, Routine, MainLiftPlan, AccessoryPlan, MAIN_LIFTS,
-  getPowerbuildingRoutine, planMainLift, planAccessory, nextDayIndex, lastAssignedDay, roundTo, toKg,
+  getPowerbuildingRoutine, planMainLift, planAccessoryOptions, alternativesFor, AccessoryOption, nextDayIndex, lastAssignedDay, roundTo, toKg,
 } from '../lib/gymPlan';
 
 const shortDate = (d: string) =>
@@ -102,6 +102,72 @@ function AccessoryCard({ plan }: { plan: AccessoryPlan }) {
   );
 }
 
+const daysAgo = (d: string | null) => {
+  if (!d) return 'never logged';
+  const n = Math.round((Date.now() - new Date(d + 'T12:00:00').getTime()) / 86400000);
+  return n <= 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`;
+};
+
+// One pane per either/or exercise: swipe or tap the arrows to switch. Opens on the one done most recently.
+function AccessoryCarousel({ options }: { options: AccessoryOption[] }) {
+  const start = options.reduce((best, o, i) => ((o.lastDate ?? '') > (options[best].lastDate ?? '') ? i : best), 0);
+  const [index, setIndex] = useState(start);
+  const track = useRef<HTMLDivElement>(null);
+
+  const goTo = (i: number) => {
+    const el = track.current;
+    if (el) el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
+    setIndex(i);
+  };
+  useEffect(() => {
+    const el = track.current;
+    if (el) el.scrollTo({ left: start * el.clientWidth });
+  }, [start]);
+
+  return (
+    <div className="border border-zinc-900 bg-zinc-900/20 rounded-2xl overflow-hidden">
+      <div
+        ref={track}
+        onScroll={e => {
+          const el = e.currentTarget;
+          const i = Math.round(el.scrollLeft / el.clientWidth);
+          if (i !== index) setIndex(i);
+        }}
+        className="flex overflow-x-auto snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {options.map(o => (
+          <div key={o.plan.name} className="snap-center shrink-0 w-full px-4 py-3 space-y-1.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <h3 className="font-bold text-[13px] text-zinc-100 leading-snug">{o.plan.name.trim()}</h3>
+              <span className="shrink-0 text-base font-extrabold text-white tabular-nums">
+                {o.plan.lb !== null ? `${o.estimated ? '~' : ''}${o.plan.lb} lb` : '—'}
+                <span className="text-zinc-400 font-bold text-sm"> · {o.plan.sets} × {o.plan.repLow}–{o.plan.repHigh}</span>
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400">{o.plan.note}</p>
+            <p className="text-[10px] text-zinc-500 tabular-nums">
+              Last done {daysAgo(o.lastDate)}
+              {o.plan.last && ` · ${o.plan.last.sets.map(s => `${Math.round(s.lb)}×${s.reps}`).join(', ')}`}
+            </p>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between border-t border-zinc-900 px-2 py-1">
+        <button aria-label="Previous option" disabled={index === 0} onClick={() => goTo(index - 1)}
+          className="p-1.5 text-zinc-400 disabled:opacity-20"><ChevronLeft size={16} /></button>
+        <span className="flex items-center gap-1.5">
+          {options.map((o, i) => (
+            <span key={o.plan.name} className={`h-1.5 rounded-full ${i === index ? 'w-4 bg-rose-400' : 'w-1.5 bg-zinc-700'}`} />
+          ))}
+          <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Swap · {index + 1}/{options.length}</span>
+        </span>
+        <button aria-label="Next option" disabled={index === options.length - 1} onClick={() => goTo(index + 1)}
+          className="p-1.5 text-zinc-400 disabled:opacity-20"><ChevronRight size={16} /></button>
+      </div>
+    </div>
+  );
+}
+
 export function GymPlanPage() {
   const { isAdmin, isLoading: authLoading } = useAuth();
   const [routine, setRoutine] = useState<Routine>(getPowerbuildingRoutine());
@@ -126,7 +192,7 @@ export function GymPlanPage() {
       setRoutine(active);
 
       const names = new Set<string>([...MAIN_LIFTS, 'Body Weight']);
-      getPowerbuildingRoutine().days.concat(active.days).forEach(d => d.exercises.forEach(e => names.add(e.name)));
+      getPowerbuildingRoutine().days.concat(active.days).forEach(d => d.exercises.forEach(e => { names.add(e.name); alternativesFor(e.name).forEach(a => names.add(a)); }));
       const entries = await Promise.all([...names].map(async name => {
         try {
           return [name, (await apiService.fetchFitnessHistory(name)) as FitnessRow[]] as const;
@@ -155,7 +221,7 @@ export function GymPlanPage() {
   const plans = useMemo(() => day.exercises.map(ex =>
     MAIN_LIFTS.includes(ex.name)
       ? planMainLift(ex.name, history[ex.name] || [], bodyWeightLb)
-      : planAccessory(ex.name, history[ex.name] || [], ex.setcount)
+      : planAccessoryOptions(ex.name, history, ex.setcount)
   ), [day, history, bodyWeightLb]);
 
   const handleSync = async () => {
@@ -256,10 +322,10 @@ export function GymPlanPage() {
                 <div key={i} className="border border-zinc-900 rounded-2xl px-4 py-3 text-[12px] text-zinc-400">
                   <span className="font-bold text-zinc-200">{day.exercises[i].name}</span>: no history yet. Log a session in Jefit and sync.
                 </div>
-              ) : p.kind === 'main' ? (
-                <MainLiftCard key={i} plan={p} />
+              ) : Array.isArray(p) ? (
+                p.length === 1 ? <AccessoryCard key={i} plan={p[0].plan} /> : <AccessoryCarousel key={`${day.id}-${i}`} options={p} />
               ) : (
-                <AccessoryCard key={i} plan={p} />
+                <MainLiftCard key={i} plan={p} />
               )
             )}
           </div>
