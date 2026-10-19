@@ -187,10 +187,27 @@ export interface MainLiftPlan {
   estMaxLb: number;
   top: { lb: number; reps: number };
   backoff: { sets: number; reps: number; lb: number };
+  warmups: { lb: number; reps: number }[];
   isPullUp: boolean;
   bodyWeightLb: number;
   reason: string;
   lastTop?: { date: string; lb: number; reps: number };
+}
+
+const BAR_LB = 45;
+
+// Ramp to the top set: about 19 reps, so warm-ups never tire the top set. For pull-ups the ramp
+// is on the added weight and lb is the total (body + added), like every other pull-up number here.
+function warmupsFor(topLb: number, isPullUp: boolean, bodyWeightLb: number) {
+  if (isPullUp) {
+    const added = topLb - bodyWeightLb;
+    const sets = [{ lb: bodyWeightLb, reps: 5 }];
+    if (added >= 10) sets.push({ lb: bodyWeightLb + roundTo(added * 0.5, 5), reps: 3 });
+    if (added >= 15) sets.push({ lb: bodyWeightLb + roundTo(added * 0.75, 5), reps: 1 });
+    return sets.filter((s, i) => i === 0 || (s.lb > sets[i - 1].lb && s.lb < topLb));
+  }
+  const sets = [{ lb: BAR_LB, reps: 10 }, { lb: roundTo(topLb * 0.5, 5), reps: 5 }, { lb: roundTo(topLb * 0.7, 5), reps: 3 }, { lb: roundTo(topLb * 0.85, 5), reps: 1 }];
+  return sets.filter((s, i) => i === 0 || (s.lb > sets[i - 1].lb && s.lb < topLb));
 }
 
 function prescribe(E: number, phase: Phase, step: number) {
@@ -276,7 +293,7 @@ export function planMainLift(name: string, rows: FitnessRow[], bodyWeightLb: num
   const { top, backoff } = prescribe(E, phase, step);
   const last = sessions[sessions.length - 1];
   return {
-    kind: 'main', name, phase, cycle, estMaxLb: E, top, backoff, isPullUp, bodyWeightLb, reason,
+    kind: 'main', name, phase, cycle, estMaxLb: E, top, backoff, warmups: warmupsFor(top.lb, isPullUp, bodyWeightLb), isPullUp, bodyWeightLb, reason,
     lastTop: { date: last.date, lb: last.top.lb, reps: last.top.reps },
   };
 }
