@@ -341,6 +341,58 @@ export function planAccessory(name: string, rows: FitnessRow[], setcount: number
   return { ...base, lb: shown(W), note: `Same weight; add reps until every set hits ${REP_HIGH}.`, last };
 }
 
+// --- Either/or accessories ---
+
+// Exercises he swaps between depending on what's free. toB converts a weight on `a` to the
+// equivalent on `b` when that's well known (dumbbell weights are per hand); null means unknown.
+const ALTERNATIVE_PAIRS: { a: string; b: string; toB: number | null }[] = [
+  { a: 'Barbell Incline Bench Press', b: 'Dumbbell Incline Bench Press', toB: 0.4 },
+  { a: 'Machine Bicep Curls Unilateral', b: 'Dumbbell Alternating Bicep Curl', toB: null },
+  { a: 'unilateral tricep machine extension blue machine ', b: 'Dumbbell Seated One-Arm Tricep Extension', toB: null },
+  { a: 'Close Grip Cable Seated Row', b: 'Cable Seated Row', toB: 1 },
+  { a: 'Dumbbell One-Arm Row', b: 'Barbell Row', toB: 2.2 },
+  { a: 'Machine Reverse Fly', b: 'Dumbbell Seated Bent-Over Reverse Fly', toB: null },
+];
+
+export function alternativesFor(name: string): string[] {
+  return ALTERNATIVE_PAIRS.flatMap(p => (p.a === name ? [p.b] : p.b === name ? [p.a] : []));
+}
+
+function convertLb(from: string, to: string, lb: number): number | null {
+  const p = ALTERNATIVE_PAIRS.find(x => (x.a === from && x.b === to) || (x.a === to && x.b === from));
+  if (!p || p.toB === null) return null;
+  return p.a === from ? lb * p.toB : lb / p.toB;
+}
+
+export interface AccessoryOption {
+  plan: AccessoryPlan;
+  lastDate: string | null;
+  estimated: boolean;
+}
+
+// The routine's exercise first, then its alternatives. An option with no history of its own gets an
+// estimated weight from the other one when the conversion is known, and its own plan after one session.
+export function planAccessoryOptions(name: string, history: Record<string, FitnessRow[]>, setcount: number): AccessoryOption[] {
+  const names = [name, ...alternativesFor(name)];
+  const own = names.map(n => {
+    const rows = datedRows(history[n] || []).filter(r => workingSets(r).length > 0);
+    return { n, plan: planAccessory(n, history[n] || [], setcount), lastDate: rows.length ? rows[rows.length - 1].workout_date : null };
+  });
+  return own.map(o => {
+    if (o.plan.lb !== null) return { plan: o.plan, lastDate: o.lastDate, estimated: false };
+    const donor = own.filter(d => d.n !== o.n && d.plan.lb !== null)
+      .sort((x, y) => (y.lastDate ?? '').localeCompare(x.lastDate ?? ''))[0];
+    const converted = donor ? convertLb(donor.n, o.n, donor.plan.lb as number) : null;
+    if (!donor || converted === null) return { plan: o.plan, lastDate: o.lastDate, estimated: false };
+    const lb = roundTo(converted, 2.5);
+    return {
+      plan: { ...o.plan, lb, note: `No history yet: estimated from ${donor.n.trim()}. Adjust to what gets you 8–12.` },
+      lastDate: o.lastDate,
+      estimated: true,
+    };
+  });
+}
+
 // --- Which day is next ---
 
 const ACCESSORY_DAY_LIFTS = [
