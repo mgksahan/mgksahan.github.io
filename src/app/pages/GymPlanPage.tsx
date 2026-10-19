@@ -56,6 +56,14 @@ function MainLiftCard({ plan }: { plan: MainLiftPlan }) {
         </div>
       </div>
 
+      <div>
+        <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block">Warm-ups</span>
+        <span className="text-[12px] font-bold text-zinc-300 tabular-nums">
+          {plan.warmups.map(w => `${!plan.isPullUp && w.lb === 45 ? 'Bar' : weightLabel(plan, w.lb).replace(' lb', '')}×${w.reps}`).join(' · ')}
+        </span>
+        <span className="text-[10px] text-zinc-500 block">Mark these as warm-up sets in Jefit.</span>
+      </div>
+
       <p className="text-[11px] text-zinc-400">
         {deload
           ? 'Deload week: keep every rep fast and easy.'
