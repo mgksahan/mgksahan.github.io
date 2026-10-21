@@ -6,7 +6,7 @@ import { apiService } from '../../apiService';
 import { useAuth } from '../context/AuthContext';
 import {
   FitnessRow, Routine, MainLiftPlan, AccessoryPlan, MAIN_LIFTS,
-  getPowerbuildingRoutine, planMainLift, planAccessoryOptions, alternativesFor, restLabel, AccessoryOption, nextDayIndex, lastAssignedDay, roundTo, toKg,
+  getPowerbuildingRoutine, planMainLift, planAccessoryOptions, accessorySets, alternativesFor, restLabel, AccessoryOption, nextDayIndex, lastAssignedDay, roundTo, toKg,
 } from '../lib/gymPlan';
 
 const shortDate = (d: string) =>
@@ -233,7 +233,7 @@ export function GymPlanPage() {
   const plans = useMemo(() => day.exercises.map(ex =>
     MAIN_LIFTS.includes(ex.name)
       ? planMainLift(ex.name, history[ex.name] || [], bodyWeightLb)
-      : planAccessoryOptions(ex.name, history, ex.setcount, ex.timer)
+      : planAccessoryOptions(ex.name, history, accessorySets(day.day_index, ex.name, ex.setcount), ex.timer)
   ), [day, history, bodyWeightLb]);
 
   const handleSync = async () => {

@@ -120,6 +120,19 @@ export function getPowerbuildingRoutine(): Routine {
   };
 }
 
+// Working sets per accessory, by day. These override the routine's set counts (which were arbitrary)
+// and aim for roughly 10 hard sets a week for delts, arms and abs and 12+ for back, on top of what the
+// main lifts already give chest, back and triceps. Main lifts ignore this: top set + back-offs.
+const ACCESSORY_SETS: Record<string, Record<string, number>> = {
+  '1': { 'Barbell Incline Bench Press': 3, 'Machine Deltoid Raise': 3, 'unilateral tricep machine extension blue machine ': 2, 'Machine Ab Crunch': 3 },
+  '2': { 'Dumbbell One-Arm Row': 3, 'Close Grip Cable Seated Row': 3, 'Machine Reverse Fly': 3, 'Machine Bicep Curls Unilateral': 3 },
+  '3': { 'Machine Deltoid Raise': 4, 'Machine Ab Crunch': 3, 'unilateral tricep machine extension blue machine ': 4, 'Machine Bicep Curls Unilateral': 3, 'Dumbbell External Rotation': 3 },
+  '4': { 'Dumbbell Incline Bench Press': 3, 'Machine Deltoid Raise': 3, 'Dumbbell Seated One-Arm Tricep Extension': 2, 'Machine Ab Crunch': 3 },
+  '5': { 'Barbell Row': 3, 'Cable Seated Row': 3, 'Dumbbell Seated Bent-Over Reverse Fly': 3, 'Dumbbell Alternating Bicep Curl': 3 },
+};
+
+export const accessorySets = (dayIndex: string, name: string, fallback: number) => ACCESSORY_SETS[dayIndex]?.[name] ?? fallback;
+
 // --- Constants ---
 
 export const PLAN_START = '2026-10-13'; // first session judged by the plan; its week (Mon 2026-10-12) is week 1
