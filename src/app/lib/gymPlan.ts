@@ -188,6 +188,7 @@ export interface MainLiftPlan {
   top: { lb: number; reps: number };
   backoff: { sets: number; reps: number; lb: number };
   warmups: { lb: number; reps: number }[];
+  rest: { warmups: string; toTop: string; toBackoff: string; backoffs: string };
   isPullUp: boolean;
   bodyWeightLb: number;
   reason: string;
@@ -195,6 +196,14 @@ export interface MainLiftPlan {
 }
 
 const BAR_LB = 45;
+
+// Pull-ups sit at the upper end: grip fatigue recovers slower than leg or press fatigue
+const REST = {
+  main: { warmups: '1–2 min', toTop: '3–4 min', toBackoff: '3–4 min', backoffs: '2–3 min' },
+  pullUp: { warmups: '1–2 min', toTop: '4–5 min', toBackoff: '4 min', backoffs: '3 min' },
+};
+
+export const restLabel = (sec: number) => (sec < 120 ? `${sec} sec` : `${Math.round(sec / 60)} min`);
 
 // Ramp to the top set: about 19 reps, so warm-ups never tire the top set. For pull-ups the ramp
 // is on the added weight and lb is the total (body + added), like every other pull-up number here.
@@ -293,7 +302,7 @@ export function planMainLift(name: string, rows: FitnessRow[], bodyWeightLb: num
   const { top, backoff } = prescribe(E, phase, step);
   const last = sessions[sessions.length - 1];
   return {
-    kind: 'main', name, phase, cycle, estMaxLb: E, top, backoff, warmups: warmupsFor(top.lb, isPullUp, bodyWeightLb), isPullUp, bodyWeightLb, reason,
+    kind: 'main', name, phase, cycle, estMaxLb: E, top, backoff, warmups: warmupsFor(top.lb, isPullUp, bodyWeightLb), rest: isPullUp ? REST.pullUp : REST.main, isPullUp, bodyWeightLb, reason,
     lastTop: { date: last.date, lb: last.top.lb, reps: last.top.reps },
   };
 }
@@ -308,15 +317,16 @@ export interface AccessoryPlan {
   repLow: number;
   repHigh: number;
   note: string;
+  restSec: number;
   last?: { date: string; sets: LoggedSet[] };
 }
 
 const REP_LOW = 8;
 const REP_HIGH = 12;
 
-export function planAccessory(name: string, rows: FitnessRow[], setcount: number): AccessoryPlan {
+export function planAccessory(name: string, rows: FitnessRow[], setcount: number, restSec = 90): AccessoryPlan {
   const sessions = datedRows(rows).map(r => ({ date: r.workout_date, sets: workingSets(r) })).filter(s => s.sets.length > 0);
-  const base = { kind: 'accessory' as const, name, sets: setcount, repLow: REP_LOW, repHigh: REP_HIGH };
+  const base = { kind: 'accessory' as const, name, sets: setcount, repLow: REP_LOW, repHigh: REP_HIGH, restSec };
   if (sessions.length === 0) {
     return { ...base, lb: null, note: `No history yet: pick a weight you can do for ${REP_LOW}–${REP_HIGH}.` };
   }
@@ -372,11 +382,11 @@ export interface AccessoryOption {
 
 // The routine's exercise first, then its alternatives. An option with no history of its own gets an
 // estimated weight from the other one when the conversion is known, and its own plan after one session.
-export function planAccessoryOptions(name: string, history: Record<string, FitnessRow[]>, setcount: number): AccessoryOption[] {
+export function planAccessoryOptions(name: string, history: Record<string, FitnessRow[]>, setcount: number, restSec = 90): AccessoryOption[] {
   const names = [name, ...alternativesFor(name)];
   const own = names.map(n => {
     const rows = datedRows(history[n] || []).filter(r => workingSets(r).length > 0);
-    return { n, plan: planAccessory(n, history[n] || [], setcount), lastDate: rows.length ? rows[rows.length - 1].workout_date : null };
+    return { n, plan: planAccessory(n, history[n] || [], setcount, restSec), lastDate: rows.length ? rows[rows.length - 1].workout_date : null };
   });
   return own.map(o => {
     if (o.plan.lb !== null) return { plan: o.plan, lastDate: o.lastDate, estimated: false };

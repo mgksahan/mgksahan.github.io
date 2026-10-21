@@ -6,7 +6,7 @@ import { apiService } from '../../apiService';
 import { useAuth } from '../context/AuthContext';
 import {
   FitnessRow, Routine, MainLiftPlan, AccessoryPlan, MAIN_LIFTS,
-  getPowerbuildingRoutine, planMainLift, planAccessoryOptions, alternativesFor, AccessoryOption, nextDayIndex, lastAssignedDay, roundTo, toKg,
+  getPowerbuildingRoutine, planMainLift, planAccessoryOptions, alternativesFor, restLabel, AccessoryOption, nextDayIndex, lastAssignedDay, roundTo, toKg,
 } from '../lib/gymPlan';
 
 const shortDate = (d: string) =>
@@ -64,6 +64,16 @@ function MainLiftCard({ plan }: { plan: MainLiftPlan }) {
         <span className="text-[10px] text-zinc-500 block">Mark these as warm-up sets in Jefit.</span>
       </div>
 
+      <div>
+        <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block">Rest</span>
+        <div className="text-[11px] text-zinc-300 tabular-nums space-y-0.5">
+          <div>Between warm-ups <span className="text-white font-bold">{plan.rest.warmups}</span></div>
+          <div>Last warm-up → top set <span className="text-white font-bold">{plan.rest.toTop}</span></div>
+          <div>Top set → first back-off <span className="text-white font-bold">{plan.rest.toBackoff}</span></div>
+          <div>Between back-offs <span className="text-white font-bold">{plan.rest.backoffs}</span></div>
+        </div>
+      </div>
+
       <p className="text-[11px] text-zinc-400">
         {deload
           ? 'Deload week: keep every rep fast and easy.'
@@ -93,6 +103,7 @@ function AccessoryCard({ plan }: { plan: AccessoryPlan }) {
         </span>
       </div>
       <p className="text-[11px] text-zinc-400">{plan.note}</p>
+      <p className="text-[10px] text-zinc-500">Rest {restLabel(plan.restSec)} between sets</p>
       {plan.last && (
         <p className="text-[10px] text-zinc-500 tabular-nums">
           Last ({shortDate(plan.last.date)}): {plan.last.sets.map(s => `${Math.round(s.lb)}×${s.reps}`).join(', ')}
@@ -145,6 +156,7 @@ function AccessoryCarousel({ options }: { options: AccessoryOption[] }) {
               </span>
             </div>
             <p className="text-[11px] text-zinc-400">{o.plan.note}</p>
+            <p className="text-[10px] text-zinc-500">Rest {restLabel(o.plan.restSec)} between sets</p>
             <p className="text-[10px] text-zinc-500 tabular-nums">
               Last done {daysAgo(o.lastDate)}
               {o.plan.last && ` · ${o.plan.last.sets.map(s => `${Math.round(s.lb)}×${s.reps}`).join(', ')}`}
@@ -221,7 +233,7 @@ export function GymPlanPage() {
   const plans = useMemo(() => day.exercises.map(ex =>
     MAIN_LIFTS.includes(ex.name)
       ? planMainLift(ex.name, history[ex.name] || [], bodyWeightLb)
-      : planAccessoryOptions(ex.name, history, ex.setcount)
+      : planAccessoryOptions(ex.name, history, ex.setcount, ex.timer)
   ), [day, history, bodyWeightLb]);
 
   const handleSync = async () => {
