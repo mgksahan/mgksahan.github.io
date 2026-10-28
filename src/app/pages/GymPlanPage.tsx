@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { apiService } from '../../apiService';
 import { useAuth } from '../context/AuthContext';
 import {
-  FitnessRow, Routine, MainLiftPlan, AccessoryPlan, MAIN_LIFTS,
+  FitnessRow, MainLiftPlan, AccessoryPlan, MAIN_LIFTS,
   getPowerbuildingRoutine, planMainLift, planAccessoryOptions, accessorySets, alternativesFor, restLabel, AccessoryOption, nextDayIndex, lastAssignedDay, roundTo, toKg,
 } from '../lib/gymPlan';
 
@@ -180,9 +180,11 @@ function AccessoryCarousel({ options }: { options: AccessoryOption[] }) {
   );
 }
 
+// The routine lives in code only (gymPlan.ts); the old tracker's saved copy is ignored
+const routine = getPowerbuildingRoutine();
+
 export function GymPlanPage() {
   const { isAdmin, isLoading: authLoading } = useAuth();
-  const [routine, setRoutine] = useState<Routine>(getPowerbuildingRoutine());
   const [history, setHistory] = useState<Record<string, FitnessRow[]>>({});
   const [bodyWeightLb, setBodyWeightLb] = useState(160);
   const [loading, setLoading] = useState(true);
@@ -192,19 +194,8 @@ export function GymPlanPage() {
   const load = async () => {
     setLoading(true);
     try {
-      let active = getPowerbuildingRoutine();
-      try {
-        const cloud = await apiService.fetchFitnessHistory('__CONFIG_ROUTINES__');
-        const latest = cloud?.find((l: FitnessRow) => l.workout_date === 'LATEST');
-        const saved = latest?.raw_logs ? (JSON.parse(latest.raw_logs) as Routine[]).find(r => r.id === 'powerbuilding') : undefined;
-        if (saved) active = saved;
-      } catch (e) {
-        console.error('Failed to load saved routine, using default:', e);
-      }
-      setRoutine(active);
-
       const names = new Set<string>([...MAIN_LIFTS, 'Body Weight']);
-      getPowerbuildingRoutine().days.concat(active.days).forEach(d => d.exercises.forEach(e => { names.add(e.name); alternativesFor(e.name).forEach(a => names.add(a)); }));
+      routine.days.forEach(d => d.exercises.forEach(e => { names.add(e.name); alternativesFor(e.name).forEach(a => names.add(a)); }));
       const entries = await Promise.all([...names].map(async name => {
         try {
           return [name, (await apiService.fetchFitnessHistory(name)) as FitnessRow[]] as const;

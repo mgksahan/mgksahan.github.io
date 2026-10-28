@@ -120,6 +120,13 @@ export function getPowerbuildingRoutine(): Routine {
   };
 }
 
+// The old tracker saves all its routines to the cloud. Powerbuilding always comes from code so there is
+// one source of truth; the other (older) routines keep their saved copies.
+export function withCodeRoutine(saved: Routine[]): Routine[] {
+  const code = getPowerbuildingRoutine();
+  return saved.some(r => r.id === code.id) ? saved.map(r => (r.id === code.id ? code : r)) : [...saved, code];
+}
+
 // Working sets per accessory, by day. These override the routine's set counts (which were arbitrary)
 // and aim for roughly 10 hard sets a week for delts, arms and abs and 12+ for back, on top of what the
 // main lifts already give chest, back and triceps. Main lifts ignore this: top set + back-offs.
