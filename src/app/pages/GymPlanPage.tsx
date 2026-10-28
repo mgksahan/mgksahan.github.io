@@ -233,7 +233,7 @@ export function GymPlanPage() {
   const plans = useMemo(() => day.exercises.map(ex =>
     MAIN_LIFTS.includes(ex.name)
       ? planMainLift(ex.name, history[ex.name] || [], bodyWeightLb)
-      : planAccessoryOptions(ex.name, history, accessorySets(day.day_index, ex.name, ex.setcount), ex.timer)
+      : planAccessoryOptions(ex.name, history, accessorySets(day.day_index, ex.name, ex.setcount), ex.timer, day.exercises.map(e => e.name))
   ), [day, history, bodyWeightLb]);
 
   const handleSync = async () => {

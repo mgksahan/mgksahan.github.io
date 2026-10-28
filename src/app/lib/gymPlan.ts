@@ -375,6 +375,9 @@ const ALTERNATIVE_PAIRS: { a: string; b: string; toB: number | null }[] = [
   { a: 'Close Grip Cable Seated Row', b: 'Cable Seated Row', toB: 1 },
   { a: 'Dumbbell One-Arm Row', b: 'Barbell Row', toB: 2.2 },
   { a: 'Machine Reverse Fly', b: 'Dumbbell Seated Bent-Over Reverse Fly', toB: null },
+  { a: 'Close Grip Cable Seated Row', b: 'Dumbbell One-Arm Row', toB: null },
+  { a: 'Cable Seated Row', b: 'Dumbbell One-Arm Row', toB: null },
+  { a: 'Machine Deltoid Raise', b: 'Dumbbell Seated Side Lateral Raise', toB: null },
 ];
 
 export function alternativesFor(name: string): string[] {
@@ -393,10 +396,11 @@ export interface AccessoryOption {
   estimated: boolean;
 }
 
-// The routine's exercise first, then its alternatives. An option with no history of its own gets an
-// estimated weight from the other one when the conversion is known, and its own plan after one session.
-export function planAccessoryOptions(name: string, history: Record<string, FitnessRow[]>, setcount: number, restSec = 90): AccessoryOption[] {
-  const names = [name, ...alternativesFor(name)];
+// The routine's exercise first, then its alternatives, minus any already in that day (`skip`). An option
+// with no history of its own gets an estimated weight from the other one when the conversion is known,
+// and its own plan after one session.
+export function planAccessoryOptions(name: string, history: Record<string, FitnessRow[]>, setcount: number, restSec = 90, skip: string[] = []): AccessoryOption[] {
+  const names = [name, ...alternativesFor(name).filter(a => !skip.includes(a))];
   const own = names.map(n => {
     const rows = datedRows(history[n] || []).filter(r => workingSets(r).length > 0);
     return { n, plan: planAccessory(n, history[n] || [], setcount, restSec), lastDate: rows.length ? rows[rows.length - 1].workout_date : null };
@@ -423,7 +427,7 @@ const ACCESSORY_DAY_LIFTS = [
   'Machine Bicep Curls Unilateral', 'Dumbbell External Rotation', 'Barbell Incline Bench Press',
   'Dumbbell One-Arm Row', 'Close Grip Cable Seated Row', 'Machine Reverse Fly', 'Dumbbell Incline Bench Press',
   'Dumbbell Seated One-Arm Tricep Extension', 'Barbell Row', 'Cable Seated Row',
-  'Dumbbell Seated Bent-Over Reverse Fly', 'Dumbbell Alternating Bicep Curl',
+  'Dumbbell Seated Bent-Over Reverse Fly', 'Dumbbell Alternating Bicep Curl', 'Dumbbell Seated Side Lateral Raise',
 ];
 
 // Same state machine as the old tracker: bench days are 1/4, squat + pull-up days 2/5, accessory-only days 3
