@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { apiService } from '../../apiService';
 import { useAuth } from '../context/AuthContext';
 import routinesData from '../data/routines.json';
-import { Routine, RoutineDay, getPowerbuildingRoutine } from '../lib/gymPlan';
+import { Routine, RoutineDay, getPowerbuildingRoutine, withCodeRoutine } from '../lib/gymPlan';
 import { 
   Play, Plus, Trash2, Check, Clock, Award, Flame, X, 
   ChevronDown, ChevronUp, Search, ArrowLeft, Dumbbell, History, 
@@ -554,7 +554,7 @@ export function GymPage() {
           const latestLog = routinesCloud.find((l: any) => l.workout_date === 'LATEST');
           if (latestLog && latestLog.raw_logs) {
             const parsed = JSON.parse(latestLog.raw_logs);
-            setRoutines(parsed);
+            setRoutines(withCodeRoutine(parsed));
             localStorage.setItem('gym_custom_routines', latestLog.raw_logs);
           } else {
             initializeDefaultRoutines();
@@ -654,7 +654,7 @@ export function GymPage() {
         const savedRoutines = localStorage.getItem('gym_custom_routines');
         if (savedRoutines) {
           try {
-            setRoutines(JSON.parse(savedRoutines));
+            setRoutines(withCodeRoutine(JSON.parse(savedRoutines)));
           } catch (err) {
             initializeDefaultRoutines();
           }
