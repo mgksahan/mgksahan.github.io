@@ -73,7 +73,7 @@ export function getPowerbuildingRoutine(): Routine {
         exercises: [
           { name: 'Weighted Pull-Up', setcount: 3, timer: 240 },
           { name: 'Barbell Squat', setcount: 5, timer: 240 },
-          { name: 'Dumbbell One-Arm Row', setcount: 4, timer: 120 },
+          { name: 'Barbell Row', setcount: 3, timer: 120 },
           { name: 'Close Grip Cable Seated Row', setcount: 4, timer: 120 },
           { name: 'Machine Reverse Fly', setcount: 4, timer: 90 },
           { name: 'Machine Bicep Curls Unilateral', setcount: 4, timer: 90 }
@@ -125,11 +125,31 @@ export function getPowerbuildingRoutine(): Routine {
 // main lifts already give chest, back and triceps. Main lifts ignore this: top set + back-offs.
 const ACCESSORY_SETS: Record<string, Record<string, number>> = {
   '1': { 'Barbell Incline Bench Press': 3, 'Machine Deltoid Raise': 3, 'unilateral tricep machine extension blue machine ': 2, 'Machine Ab Crunch': 3 },
-  '2': { 'Dumbbell One-Arm Row': 3, 'Close Grip Cable Seated Row': 3, 'Machine Reverse Fly': 3, 'Machine Bicep Curls Unilateral': 3 },
+  '2': { 'Barbell Row': 3, 'Close Grip Cable Seated Row': 3, 'Machine Reverse Fly': 3, 'Machine Bicep Curls Unilateral': 3 },
   '3': { 'Machine Deltoid Raise': 4, 'Machine Ab Crunch': 3, 'unilateral tricep machine extension blue machine ': 4, 'Machine Bicep Curls Unilateral': 3, 'Dumbbell External Rotation': 3 },
   '4': { 'Dumbbell Incline Bench Press': 3, 'Machine Deltoid Raise': 3, 'Dumbbell Seated One-Arm Tricep Extension': 2, 'Machine Ab Crunch': 3 },
   '5': { 'Barbell Row': 3, 'Cable Seated Row': 3, 'Dumbbell Seated Bent-Over Reverse Fly': 3, 'Dumbbell Alternating Bicep Curl': 3 },
 };
+
+// Changes made after the routine was saved to the cloud. Applied on load so the saved copy (which the
+// old tracker writes back) picks them up without a manual edit.
+const ROUTINE_RENAMES: { day: string; from: string; to: string }[] = [
+  { day: '2', from: 'Dumbbell One-Arm Row', to: 'Barbell Row' },
+];
+
+export function withRoutineFixes(routine: Routine): Routine {
+  if (routine.id !== 'powerbuilding') return routine;
+  return {
+    ...routine,
+    days: routine.days.map(d => ({
+      ...d,
+      exercises: d.exercises.map(e => {
+        const fix = ROUTINE_RENAMES.find(f => f.day === d.day_index && f.from === e.name);
+        return fix ? { ...e, name: fix.to } : e;
+      }),
+    })),
+  };
+}
 
 export const accessorySets = (dayIndex: string, name: string, fallback: number) => ACCESSORY_SETS[dayIndex]?.[name] ?? fallback;
 
@@ -373,7 +393,6 @@ const ALTERNATIVE_PAIRS: { a: string; b: string; toB: number | null }[] = [
   { a: 'Machine Bicep Curls Unilateral', b: 'Dumbbell Alternating Bicep Curl', toB: null },
   { a: 'unilateral tricep machine extension blue machine ', b: 'Dumbbell Seated One-Arm Tricep Extension', toB: null },
   { a: 'Close Grip Cable Seated Row', b: 'Cable Seated Row', toB: 1 },
-  { a: 'Dumbbell One-Arm Row', b: 'Barbell Row', toB: 2.2 },
   { a: 'Machine Reverse Fly', b: 'Dumbbell Seated Bent-Over Reverse Fly', toB: null },
   { a: 'Close Grip Cable Seated Row', b: 'Dumbbell One-Arm Row', toB: null },
   { a: 'Cable Seated Row', b: 'Dumbbell One-Arm Row', toB: null },
