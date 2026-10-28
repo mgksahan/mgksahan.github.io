@@ -131,26 +131,6 @@ const ACCESSORY_SETS: Record<string, Record<string, number>> = {
   '5': { 'Barbell Row': 3, 'Cable Seated Row': 3, 'Dumbbell Seated Bent-Over Reverse Fly': 3, 'Dumbbell Alternating Bicep Curl': 3 },
 };
 
-// Changes made after the routine was saved to the cloud. Applied on load so the saved copy (which the
-// old tracker writes back) picks them up without a manual edit.
-const ROUTINE_RENAMES: { day: string; from: string; to: string }[] = [
-  { day: '2', from: 'Dumbbell One-Arm Row', to: 'Barbell Row' },
-];
-
-export function withRoutineFixes(routine: Routine): Routine {
-  if (routine.id !== 'powerbuilding') return routine;
-  return {
-    ...routine,
-    days: routine.days.map(d => ({
-      ...d,
-      exercises: d.exercises.map(e => {
-        const fix = ROUTINE_RENAMES.find(f => f.day === d.day_index && f.from === e.name);
-        return fix ? { ...e, name: fix.to } : e;
-      }),
-    })),
-  };
-}
-
 export const accessorySets = (dayIndex: string, name: string, fallback: number) => ACCESSORY_SETS[dayIndex]?.[name] ?? fallback;
 
 // --- Constants ---
