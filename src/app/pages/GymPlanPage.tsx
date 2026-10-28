@@ -6,7 +6,7 @@ import { apiService } from '../../apiService';
 import { useAuth } from '../context/AuthContext';
 import {
   FitnessRow, Routine, MainLiftPlan, AccessoryPlan, MAIN_LIFTS,
-  getPowerbuildingRoutine, planMainLift, planAccessoryOptions, accessorySets, alternativesFor, restLabel, AccessoryOption, nextDayIndex, lastAssignedDay, roundTo, toKg,
+  getPowerbuildingRoutine, planMainLift, planAccessoryOptions, accessorySets, alternativesFor, restLabel, AccessoryOption, nextDayIndex, lastAssignedDay, roundTo, toKg, withRoutineFixes,
 } from '../lib/gymPlan';
 
 const shortDate = (d: string) =>
@@ -197,7 +197,7 @@ export function GymPlanPage() {
         const cloud = await apiService.fetchFitnessHistory('__CONFIG_ROUTINES__');
         const latest = cloud?.find((l: FitnessRow) => l.workout_date === 'LATEST');
         const saved = latest?.raw_logs ? (JSON.parse(latest.raw_logs) as Routine[]).find(r => r.id === 'powerbuilding') : undefined;
-        if (saved) active = saved;
+        if (saved) active = withRoutineFixes(saved);
       } catch (e) {
         console.error('Failed to load saved routine, using default:', e);
       }
