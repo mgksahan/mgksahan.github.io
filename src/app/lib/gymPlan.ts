@@ -212,6 +212,7 @@ export interface MainLiftPlan {
   bodyWeightLb: number;
   reason: string;
   lastTop?: { date: string; lb: number; reps: number };
+  projected?: boolean;
 }
 
 const BAR_LB = 45;
@@ -248,7 +249,8 @@ function prescribe(E: number, phase: Phase, step: number) {
   };
 }
 
-export function planMainLift(name: string, rows: FitnessRow[], bodyWeightLb: number): MainLiftPlan | null {
+// projectNextWeek: plan the week after the current one, assuming every remaining top set this week is hit
+export function planMainLift(name: string, rows: FitnessRow[], bodyWeightLb: number, projectNextWeek = false): MainLiftPlan | null {
   const isPullUp = name === 'Weighted Pull-Up';
   const step = 5;
   const sessions = datedRows(rows).map(r => {
@@ -272,6 +274,28 @@ export function planMainLift(name: string, rows: FitnessRow[], bodyWeightLb: num
   // A plan week is SESSIONS_PER_WEEK sessions of this lift, counted in order rather than by calendar,
   // so the phase advances as soon as the second session is logged. Sessions earlier in week 1 of the
   // plan (before PLAN_START) fill their slot but aren't judged.
+  const closeWeek = () => {
+    if (phase === 'deload') {
+      phase = 1;
+      cycle += 1;
+      reason = 'Deload done: new cycle.';
+    } else if (misses >= 2) {
+      phase = 'deload';
+      misses = 0;
+      reason = 'Two misses in a row: deload week.';
+    } else if (phase === 4) {
+      if (cycle % 4 === 0) {
+        phase = 'deload';
+        reason = `Finished cycle ${cycle}: planned deload.`;
+      } else {
+        phase = 1;
+        cycle += 1;
+        reason = `Finished cycle ${cycle - 1}: new cycle.`;
+      }
+    } else {
+      phase = (phase + 1) as Phase;
+    }
+  };
   const planWeekStart = mondayOf(PLAN_START);
   const slots = sessions.filter(s => s.date >= planWeekStart);
 
@@ -296,26 +320,19 @@ export function planMainLift(name: string, rows: FitnessRow[], bodyWeightLb: num
     }
     // The week isn't finished: keep its phase for the rest of it
     if (block.length < SESSIONS_PER_WEEK) break;
-    if (phase === 'deload') {
-      phase = 1;
-      cycle += 1;
-      reason = 'Deload done: new cycle.';
-    } else if (misses >= 2) {
-      phase = 'deload';
-      misses = 0;
-      reason = 'Two misses in a row: deload week.';
-    } else if (phase === 4) {
-      if (cycle % 4 === 0) {
-        phase = 'deload';
-        reason = `Finished cycle ${cycle}: planned deload.`;
-      } else {
-        phase = 1;
-        cycle += 1;
-        reason = `Finished cycle ${cycle - 1}: new cycle.`;
+    closeWeek();
+  }
+
+  if (projectNextWeek) {
+    if (phase !== 'deload') {
+      for (let k = slots.length % SESSIONS_PER_WEEK; k < SESSIONS_PER_WEEK; k++) {
+        const { top } = prescribe(E, phase, step);
+        E = Math.max(E + BUMP_LB[name], epley(top.lb, top.reps));
       }
-    } else {
-      phase = (phase + 1) as Phase;
+      misses = 0;
     }
+    closeWeek();
+    reason = 'Projected: assumes every top set this week is hit.';
   }
 
   const { top, backoff } = prescribe(E, phase, step);
@@ -323,6 +340,7 @@ export function planMainLift(name: string, rows: FitnessRow[], bodyWeightLb: num
   return {
     kind: 'main', name, phase, cycle, estMaxLb: E, top, backoff, warmups: warmupsFor(top.lb, isPullUp, bodyWeightLb), rest: isPullUp ? REST.pullUp : REST.main, isPullUp, bodyWeightLb, reason,
     lastTop: { date: last.date, lb: last.top.lb, reps: last.top.reps },
+    projected: projectNextWeek,
   };
 }
 

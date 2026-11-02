@@ -31,7 +31,7 @@ function MainLiftCard({ plan }: { plan: MainLiftPlan }) {
         <span className={`shrink-0 text-[9px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider border ${
           deload ? 'bg-sky-500/10 text-sky-300 border-sky-500/30' : 'bg-rose-500/10 text-rose-300 border-rose-500/30'
         }`}>
-          {deload ? `Deload · Cycle ${plan.cycle}` : `Week ${plan.phase} of 4 · Cycle ${plan.cycle}`}
+          {plan.projected ? 'Projected · ' : ''}{deload ? `Deload · Cycle ${plan.cycle}` : `Week ${plan.phase} of 4 · Cycle ${plan.cycle}`}
         </span>
       </div>
 
@@ -190,6 +190,7 @@ export function GymPlanPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [nextWeek, setNextWeek] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -223,9 +224,9 @@ export function GymPlanPage() {
 
   const plans = useMemo(() => day.exercises.map(ex =>
     MAIN_LIFTS.includes(ex.name)
-      ? planMainLift(ex.name, history[ex.name] || [], bodyWeightLb)
+      ? planMainLift(ex.name, history[ex.name] || [], bodyWeightLb, nextWeek)
       : planAccessoryOptions(ex.name, history, accessorySets(day.day_index, ex.name, ex.setcount), ex.timer, day.exercises.map(e => e.name))
-  ), [day, history, bodyWeightLb]);
+  ), [day, history, bodyWeightLb, nextWeek]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -315,6 +316,25 @@ export function GymPlanPage() {
             );
           })}
         </div>
+
+        <div className="flex gap-1 rounded-xl border border-zinc-900 p-1 w-fit">
+          {[false, true].map(next => (
+            <button
+              key={String(next)}
+              onClick={() => setNextWeek(next)}
+              className={`rounded-lg px-3 py-1 text-[10px] font-bold uppercase tracking-widest cursor-pointer ${
+                nextWeek === next ? 'bg-rose-500/10 text-rose-300' : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              {next ? 'Next week' : 'This week'}
+            </button>
+          ))}
+        </div>
+        {nextWeek && (
+          <p className="text-[11px] text-zinc-500">
+            Main lifts assume every remaining top set this week is hit. Accessories are unchanged: they progress on what you log.
+          </p>
+        )}
 
         {loading ? (
           <p className="text-sm text-zinc-500">Loading your history…</p>
