@@ -439,8 +439,13 @@ export function GymPlanPage() {
     routine.days.forEach(d => d.exercises.forEach(e => { all.add(e.name.trim()); alternativesFor(e.name).forEach(a => all.add(a.trim())); }));
     return [...all].filter(n => !n.startsWith('__')).sort();
   }, []);
+  // "Resume" only when today's session has at least one ticked set; an opened-but-empty one is just a fresh start
+  const [, bumpSession] = useState(0);
   const hasActiveSession = (() => {
-    try { const a = JSON.parse(localStorage.getItem('peak_active_session') || 'null'); return !!a && a.date === localToday(); } catch { return false; }
+    try {
+      const a = JSON.parse(localStorage.getItem('peak_active_session') || 'null');
+      return !!a && a.v === 2 && a.date === localToday() && Object.values<any>(a.drafts || {}).some(d => d.sets?.some((x: any) => x.done));
+    } catch { return false; }
   })();
   const canLog = isAdmin && weekOffset === 0 && !loading;
 
@@ -518,6 +523,14 @@ export function GymPlanPage() {
                 className="mt-4 w-full lg:w-auto flex items-center justify-center gap-2 rounded-lg bg-cyan-400 px-5 py-2.5 text-sm font-semibold cursor-pointer hover:bg-cyan-300"
               >
                 <Play size={15} /> {hasActiveSession ? 'Resume workout' : 'Start workout'}
+              </button>
+            )}
+            {canLog && !logging && hasActiveSession && (
+              <button
+                onClick={() => { if (window.confirm('Discard the unfinished workout on this phone? Sets you already ticked stay saved.')) { try { localStorage.removeItem('peak_active_session'); } catch { /* ignore */ } bumpSession(n => n + 1); } }}
+                className="mt-2 text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer"
+              >
+                Discard unfinished workout
               </button>
             )}
           </div>
