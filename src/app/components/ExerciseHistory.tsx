@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { FitnessRow, parseSets, toKg } from '../lib/gymPlan';
+import { displayName } from '../lib/exerciseMedia';
+import { STANDARDS, TIERS, TIER_BAR, TIER_TEXT, rankOf } from '../lib/strengthStandards';
 
 type Metric = 'oneRm' | 'volume' | 'multiplier';
 type Range = '1M' | '3M' | '6M' | '1Y' | 'ALL' | 'CUSTOM';
@@ -34,7 +36,7 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
   onClose: () => void;
 }) {
   const [metric, setMetric] = useState<Metric>('oneRm');
-  const [range, setRange] = useState<Range>('ALL');
+  const [range, setRange] = useState<Range>('1M');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
@@ -75,6 +77,14 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
     return points.filter(p => p.t >= cutoff);
   }, [points, range, from, to]);
 
+  // Strength rank uses the latest session overall (not just the visible range)
+  const bwLatest = [...bodyWeightRows].filter(r => isDate(r.workout_date) && Number(r.one_rep_max_lbs) > 0)
+    .sort((a, b) => a.workout_date.localeCompare(b.workout_date)).pop();
+  const bwNow = bwLatest ? Number(bwLatest.one_rep_max_lbs) : 0;
+  let estNow = points.length ? points[points.length - 1].oneRm : 0;
+  if (name === 'Weighted Pull-Up' && bwNow > 0 && estNow < bwNow * 0.6) estNow += bwNow; // older rows logged added weight only
+  const rank = STANDARDS[name] && bwNow > 0 && estNow > 0 ? rankOf(name, estNow / bwNow) : null;
+
   const values = visible.map(p => p[metric]);
   const latest = values[values.length - 1];
   const first = values[0];
@@ -84,7 +94,7 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
   const lastT = points[points.length - 1]?.t;
 
   const pill = (active: boolean) =>
-    `px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
+    `px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer transition-colors ${
       active ? 'bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-400/40' : 'text-zinc-400 hover:text-zinc-200'
     }`;
 
@@ -94,14 +104,14 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
       <div
         role="region"
         key={name}
-        aria-label={`${name.trim()} history`}
-        className="panel-in fixed inset-x-0 bottom-0 z-40 max-h-[88vh] overflow-y-auto rounded-t-3xl border border-white/15 bg-[#0a0f1c] p-5 space-y-4
-                   xl:static xl:z-auto xl:max-h-none xl:overflow-visible xl:rounded-3xl xl:bg-white/[0.04] xl:sticky xl:top-24 xl:self-start"
+        aria-label={`${displayName(name)} history`}
+        className="panel-in fixed inset-x-0 bottom-0 z-40 max-h-[88vh] overflow-y-auto rounded-t-2xl border border-white/15 bg-[#141518] p-5 space-y-4
+                   xl:static xl:z-auto xl:max-h-none xl:overflow-visible xl:rounded-xl xl:border-white/[0.08] xl:sticky xl:top-24 xl:self-start"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <span className="text-[10px] font-extrabold uppercase tracking-widest text-cyan-300">History</span>
-            <h2 style={{ margin: 0 }} className="text-lg font-extrabold text-white leading-tight">{name.trim()}</h2>
+            <span className="text-xs font-medium text-cyan-300">History</span>
+            <h2 style={{ margin: 0 }} className="text-lg font-semibold text-white leading-tight">{displayName(name)}</h2>
           </div>
           <button onClick={onClose} aria-label="Close history" className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer">
             <X size={18} />
@@ -124,12 +134,35 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
                 { label: 'Best', value: values.length ? fmtValue(metric, best) : '–' },
                 { label: 'Change', value: change === null ? '–' : `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`, tone: change === null ? '' : change >= 0 ? 'text-emerald-300' : 'text-amber-300' },
               ].map(s => (
-                <div key={s.label} className="rounded-2xl bg-black/30 border border-white/10 px-3 py-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 block">{s.label}</span>
-                  <span className={`text-[15px] font-black tabular-nums ${s.tone || 'text-white'}`}>{s.value}</span>
+                <div key={s.label} className="rounded-lg bg-black/25 border border-white/[0.08] px-3 py-2">
+                  <span className="text-xs text-zinc-500 block">{s.label}</span>
+                  <span className={`font-mono text-[15px] font-semibold tabular-nums ${s.tone || 'text-white'}`}>{s.value}</span>
                 </div>
               ))}
             </div>
+
+            {rank && (
+              <div className="rounded-lg border border-white/[0.08] p-3 space-y-2">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xs text-zinc-400">Strength rank</span>
+                  <span className={`text-sm font-semibold ${rank.tier >= 0 ? TIER_TEXT[rank.tier] : 'text-zinc-400'}`}>{rank.name}</span>
+                </div>
+                <div className="grid grid-cols-5 gap-1">
+                  {TIERS.map((t, i) => (
+                    <div key={t} title={`${t}: ${STANDARDS[name][i]}× bodyweight`}>
+                      <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
+                        <div className={`h-full ${TIER_BAR[i]}`} style={{ width: i < rank.tier ? '100%' : i === rank.tier ? `${Math.round(rank.progress * 100)}%` : '0%' }} />
+                      </div>
+                      <div className={`text-[10px] mt-1 truncate ${i === rank.tier ? TIER_TEXT[i] : 'text-zinc-600'}`}>{t}</div>
+                    </div>
+                  ))}
+                </div>
+                <p className="font-mono text-xs text-zinc-400 tabular-nums">
+                  {rank.ratio.toFixed(2)}× bodyweight
+                  {rank.next && ` · +${Math.max(1, Math.ceil(rank.next.ratio * bwNow - estNow))} lb to ${rank.next.name}`}
+                </p>
+              </div>
+            )}
 
             <div className="h-56 -mx-2">
               {visible.length < 2 ? (
@@ -141,8 +174,8 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
                   <AreaChart data={visible} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
                     <defs>
                       <linearGradient id="hist-fill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.45} />
-                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.02} />
+                        <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.22} />
+                        <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
