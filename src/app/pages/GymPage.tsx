@@ -1851,7 +1851,7 @@ export function GymPage() {
           <div className="flex flex-col gap-2">
             <button
               onClick={handleRecoverSession}
-              className="w-full h-12 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors"
+              className="w-full h-12 bg-cyan-500 hover:bg-cyan-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors"
             >
               <RotateCcw size={16} /> Resume Session
             </button>
@@ -1930,13 +1930,13 @@ export function GymPage() {
                 localStorage.removeItem('gym_active_session');
               }
             }}
-            className="text-xs font-bold text-rose-500 px-3 py-2 rounded-xl hover:bg-rose-500/10 cursor-pointer transition-colors"
+            className="text-xs font-bold text-cyan-500 px-3 py-2 rounded-xl hover:bg-cyan-500/10 cursor-pointer transition-colors"
           >
             Cancel
           </button>
 
           <div className="text-xl font-black tabular-nums tracking-tight text-white flex items-center gap-1.5">
-            <Clock size={16} className="text-rose-500 animate-pulse" />
+            <Clock size={16} className="text-cyan-500 animate-pulse" />
             {formatTime(workoutElapsedTime)}
           </div>
 
@@ -1983,7 +1983,7 @@ export function GymPage() {
                   setRestTimeLeft(0);
                   setIsRestTimerActive(false);
                 }}
-                className="px-2.5 py-1 bg-rose-500/80 hover:bg-rose-500 text-white text-[10px] font-bold rounded-lg active:scale-95"
+                className="px-2.5 py-1 bg-cyan-500/80 hover:bg-cyan-500 text-white text-[10px] font-bold rounded-lg active:scale-95"
               >
                 Skip
               </button>
@@ -1998,10 +1998,10 @@ export function GymPage() {
           <div className="space-y-2">
             <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex justify-between items-center select-none">
               <span className="flex items-center gap-1.5 truncate max-w-[65%]">
-                <Dumbbell size={11} className="text-rose-500 flex-shrink-0" />
+                <Dumbbell size={11} className="text-cyan-500 flex-shrink-0" />
                 {selectedDay ? `${selectedRoutine?.name} › ${selectedDay.name}` : 'Custom Workout Session'}
               </span>
-              <span className="font-black text-rose-450 tabular-nums flex-shrink-0">
+              <span className="font-black text-cyan-300 tabular-nums flex-shrink-0">
                 Exercise {activeExerciseIndex + 1} of {activeExercises.length}
               </span>
             </div>
@@ -2014,7 +2014,7 @@ export function GymPage() {
                   onClick={() => setActiveExerciseIndex(idx)}
                   className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
                     idx === activeExerciseIndex 
-                      ? 'w-8 bg-rose-500' 
+                      ? 'w-8 bg-cyan-500' 
                       : 'w-2 bg-zinc-800 hover:bg-zinc-700'
                   }`}
                   title={ex.name}
@@ -2060,7 +2060,7 @@ export function GymPage() {
                             e.stopPropagation();
                             handleRemoveExercise(exIdx);
                           }}
-                          className="p-2 text-zinc-500 hover:text-rose-500 rounded-lg hover:bg-rose-500/10 cursor-pointer"
+                          className="p-2 text-zinc-500 hover:text-cyan-500 rounded-lg hover:bg-cyan-500/10 cursor-pointer"
                           title="Remove exercise"
                         >
                           <Trash2 size={13} />
@@ -2078,16 +2078,16 @@ export function GymPage() {
                           return (
                             <div className="space-y-3">
                               <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-rose-500 uppercase tracking-wider">
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-cyan-500 uppercase tracking-wider">
                                   <TrendingUp size={12} /> AI Progression Coach
                                 </div>
                                 <div className="text-[9px] font-bold text-zinc-400 bg-zinc-900/40 px-2 py-1 rounded border border-zinc-900/60">
-                                  Calculated Week: <span className="text-rose-450 font-black">Week {coach.week}</span>
+                                  Calculated Week: <span className="text-cyan-300 font-black">Week {coach.week}</span>
                                 </div>
                               </div>
 
                               <div className="text-[10px] leading-relaxed text-zinc-300 bg-zinc-900/40 p-2.5 rounded-xl border border-zinc-900/60">
-                                <span className="font-bold text-rose-400 block mb-1">Coaching Log Analysis:</span>
+                                <span className="font-bold text-cyan-400 block mb-1">Coaching Log Analysis:</span>
                                 {coach.message}
                                 <span className="block mt-1.5 font-extrabold text-white text-[11px] border-t border-zinc-900/50 pt-1 flex justify-between items-center">
                                   <span>Suggested Sets & Reps:</span>
@@ -2105,7 +2105,7 @@ export function GymPage() {
                                       type="number"
                                       value={pbBodyWeight}
                                       onChange={(e) => handleBodyWeightChange(Number(e.target.value))}
-                                      className="w-12 h-6 bg-zinc-950 border border-zinc-800 rounded text-center font-bold text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                                      className="w-12 h-6 bg-zinc-950 border border-zinc-800 rounded text-center font-bold text-white focus:outline-none focus:ring-1 focus:ring-cyan-500"
                                     />
                                     <span className="text-zinc-500 font-bold">kg</span>
                                   </div>
@@ -2117,7 +2117,7 @@ export function GymPage() {
                                     type="number"
                                     value={override1RMs[ex.name] !== undefined ? override1RMs[ex.name] : Math.round(coach.est1RM * 10) / 10}
                                     onChange={(e) => handleOverride1RM(ex.name, Number(e.target.value))}
-                                    className="w-14 h-6 bg-zinc-950 border border-zinc-800 rounded text-center font-bold text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                                    className="w-14 h-6 bg-zinc-950 border border-zinc-800 rounded text-center font-bold text-white focus:outline-none focus:ring-1 focus:ring-cyan-500"
                                   />
                                   <span className="text-zinc-500 font-bold">kg</span>
                                 </div>
@@ -2139,7 +2139,7 @@ export function GymPage() {
                           const val = Number(e.target.value);
                           setActiveExercises(prev => prev.map((item, i) => i === exIdx ? { ...item, timer: val } : item));
                         }}
-                        className="bg-zinc-950 border border-zinc-850 text-[10px] font-bold rounded-lg px-2 py-1 text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                        className="bg-zinc-950 border border-zinc-850 text-[10px] font-bold rounded-lg px-2 py-1 text-white focus:outline-none focus:ring-1 focus:ring-cyan-500"
                       >
                         <option value={0}>Off / None</option>
                         <option value={10}>10 seconds</option>
@@ -2199,7 +2199,7 @@ export function GymPage() {
                                     placeholder="0"
                                     value={set.weight}
                                     onChange={(e) => handleUpdateSet(exIdx, setIdx, 'weight', e.target.value)}
-                                    className="w-16 h-8 bg-zinc-950 border border-zinc-850 rounded-lg text-center font-extrabold text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500 focus:border-rose-500"
+                                    className="w-16 h-8 bg-zinc-950 border border-zinc-850 rounded-lg text-center font-extrabold text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
                                   />
                                 </td>
                                 <td className="py-2.5 text-center">
@@ -2208,7 +2208,7 @@ export function GymPage() {
                                     placeholder="0"
                                     value={set.reps}
                                     onChange={(e) => handleUpdateSet(exIdx, setIdx, 'reps', e.target.value)}
-                                    className="w-12 h-8 bg-zinc-950 border border-zinc-850 rounded-lg text-center font-extrabold text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                                    className="w-12 h-8 bg-zinc-950 border border-zinc-850 rounded-lg text-center font-extrabold text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500"
                                   />
                                 </td>
                                 <td className="py-2.5 pr-1 text-center">
@@ -2241,7 +2241,7 @@ export function GymPage() {
                       {ex.sets.length > 1 && (
                         <button
                           onClick={() => handleRemoveSet(exIdx)}
-                          className="h-9 px-3 border border-zinc-850 hover:bg-rose-500/5 text-rose-450 text-[11px] font-bold rounded-xl flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                          className="h-9 px-3 border border-zinc-850 hover:bg-cyan-500/5 text-cyan-300 text-[11px] font-bold rounded-xl flex items-center justify-center gap-1 transition-colors cursor-pointer"
                         >
                           <Trash2 size={12} /> Remove
                         </button>
@@ -2276,7 +2276,7 @@ export function GymPage() {
             })()
           ) : (
             <div className="py-12 border border-zinc-900 border-dashed rounded-3xl text-center bg-zinc-950 p-6 space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center mx-auto">
                 <Dumbbell size={24} />
               </div>
               <div className="space-y-1">
@@ -2313,7 +2313,7 @@ export function GymPage() {
             {activeExerciseIndex < activeExercises.length - 1 ? (
               <button
                 onClick={() => setActiveExerciseIndex(prev => prev + 1)}
-                className="flex-1 h-12 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-[0.98]"
+                className="flex-1 h-12 bg-cyan-500 hover:bg-cyan-600 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-[0.98]"
               >
                 Next <ChevronRight size={16} />
               </button>
@@ -2353,7 +2353,7 @@ export function GymPage() {
                   placeholder="Bench press, curls, squats..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full h-11 pl-9 pr-4 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-rose-500 focus:border-rose-500"
+                  className="w-full h-11 pl-9 pr-4 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
                   autoFocus
                 />
               </div>
@@ -2376,7 +2376,7 @@ export function GymPage() {
                   <p className="text-xs text-zinc-500">No exercise found matching "{searchQuery}"</p>
                   <button
                     onClick={handleCreateCustomExercise}
-                    className="h-9 px-4 bg-rose-500 text-white rounded-lg text-[10px] font-bold hover:bg-rose-600 transition-colors"
+                    className="h-9 px-4 bg-cyan-500 text-white rounded-lg text-[10px] font-bold hover:bg-cyan-600 transition-colors"
                   >
                     Create Custom "{searchQuery}"
                   </button>
@@ -2395,7 +2395,7 @@ export function GymPage() {
       {/* App Header */}
       <div className="sticky top-0 z-30 bg-zinc-950 border-b border-zinc-900 px-5 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Dumbbell size={22} className="text-rose-500 animate-pulse" />
+          <Dumbbell size={22} className="text-cyan-500 animate-pulse" />
           <h1 className="text-lg font-black tracking-tight text-white font-outfit uppercase">Gym Dashboard</h1>
         </div>
         
@@ -2436,7 +2436,7 @@ export function GymPage() {
           <div className="border border-zinc-900 bg-zinc-900/20 rounded-2xl p-4 flex items-center justify-between backdrop-blur-sm animate-fade-in">
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
-                <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest flex items-center gap-1 leading-none">
+                <span className="text-[9px] font-bold text-cyan-500 uppercase tracking-widest flex items-center gap-1 leading-none">
                   <Flame size={10} /> Last session completed
                 </span>
                 <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase ${
@@ -2488,7 +2488,7 @@ export function GymPage() {
         {/* Global Cycle Week Card */}
         <div className="border border-zinc-900 bg-zinc-900/20 rounded-2xl p-4 flex items-center justify-between backdrop-blur-sm">
           <div className="space-y-1">
-            <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest flex items-center gap-1 leading-none">
+            <span className="text-[9px] font-bold text-cyan-500 uppercase tracking-widest flex items-center gap-1 leading-none">
               <Clock size={10} /> Powerbuilding Training Cycle
             </span>
             <div className="flex items-center gap-1.5">
@@ -2524,7 +2524,7 @@ export function GymPage() {
         <div className="space-y-2">
           <button
             onClick={handleStartEmptyWorkout}
-            className="w-full h-12 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-2xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-xs shadow-md active:scale-[0.99]"
+            className="w-full h-12 bg-cyan-500 hover:bg-cyan-600 text-white font-bold rounded-2xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-xs shadow-md active:scale-[0.99]"
           >
             <Play size={14} fill="currentColor" /> Start Empty Workout
           </button>
@@ -2534,13 +2534,13 @@ export function GymPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs font-bold text-zinc-500 uppercase tracking-widest">
             <div className="flex items-center gap-1">
-              <TrendingUp size={12} className="text-rose-500" />
+              <TrendingUp size={12} className="text-cyan-500" />
               Your Routines
             </div>
             <div className="flex gap-2">
               <button
                 onClick={handleCreateRoutine}
-                className="px-2.5 py-1 bg-zinc-900 border border-zinc-800 text-[10px] font-bold rounded-lg text-rose-400 active:scale-95 cursor-pointer transition-all hover:bg-zinc-850"
+                className="px-2.5 py-1 bg-zinc-900 border border-zinc-800 text-[10px] font-bold rounded-lg text-cyan-400 active:scale-95 cursor-pointer transition-all hover:bg-zinc-850"
               >
                 + Create Custom
               </button>
@@ -2575,7 +2575,7 @@ export function GymPage() {
                       {routine.description && (
                         <p className="text-[10px] text-zinc-500 font-semibold line-clamp-1">{routine.description}</p>
                       )}
-                      <span className="text-[9px] font-bold text-rose-500/80 uppercase tracking-widest block">
+                      <span className="text-[9px] font-bold text-cyan-500/80 uppercase tracking-widest block">
                         {routine.days.length} Workout Days
                       </span>
                     </div>
@@ -2599,7 +2599,7 @@ export function GymPage() {
                         {routine.id !== 'powerbuilding' && (
                           <button
                             onClick={() => handleDeleteRoutine(routine.id)}
-                            className="px-3 h-9 border border-zinc-850 hover:bg-rose-500/5 text-rose-450 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                            className="px-3 h-9 border border-zinc-850 hover:bg-cyan-500/5 text-cyan-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                             title="Delete Routine"
                           >
                             <Trash2 size={12} />
@@ -2621,7 +2621,7 @@ export function GymPage() {
                                 <div className="flex items-center gap-2">
                                   <span className="font-bold text-xs text-zinc-200 block leading-snug">{day.name}</span>
                                   {isRecommended && (
-                                    <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 uppercase tracking-wider animate-pulse">
+                                    <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 uppercase tracking-wider animate-pulse">
                                       Next Up
                                     </span>
                                   )}
