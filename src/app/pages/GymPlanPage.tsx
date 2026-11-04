@@ -25,11 +25,11 @@ function weightLabel(plan: MainLiftPlan, lb: number) {
 function MainLiftCard({ plan }: { plan: MainLiftPlan }) {
   const deload = plan.phase === 'deload';
   return (
-    <div className="border border-zinc-900 bg-zinc-900/30 rounded-2xl p-4 space-y-3">
+    <div className="border border-white/10 bg-white/[0.045] backdrop-blur rounded-2xl p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <h3 className="font-extrabold text-sm text-white leading-snug">{plan.name}</h3>
         <span className={`shrink-0 text-[9px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider border ${
-          deload ? 'bg-sky-500/10 text-sky-300 border-sky-500/30' : 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+          deload ? 'bg-violet-500/10 text-violet-300 border-violet-500/30' : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
         }`}>
           {plan.projected ? 'Projected · ' : ''}{deload ? `Deload · Cycle ${plan.cycle}` : `Week ${plan.phase} of 4 · Cycle ${plan.cycle}`}
         </span>
@@ -38,7 +38,7 @@ function MainLiftCard({ plan }: { plan: MainLiftPlan }) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block">Top set</span>
-          <span className="text-2xl font-black text-white tabular-nums">
+          <span className="text-3xl font-black tabular-nums bg-gradient-to-r from-white to-cyan-200 bg-clip-text text-transparent">
             {weightLabel(plan, plan.top.lb)} <span className="text-zinc-400">× {plan.top.reps}</span>
           </span>
           {!plan.isPullUp && (
@@ -80,7 +80,7 @@ function MainLiftCard({ plan }: { plan: MainLiftPlan }) {
           : `Leave about 1 rep in the tank. Miss the top set? Do ${plan.backoff.sets - 1} back-offs instead of ${plan.backoff.sets}.`}
       </p>
 
-      <div className="text-[10px] text-zinc-500 border-t border-zinc-900 pt-2 space-y-0.5">
+      <div className="text-[10px] text-zinc-500 border-t border-white/10 pt-2 space-y-0.5">
         <div className="tabular-nums">
           Est. max {Math.round(plan.estMaxLb)} lb
           {plan.isPullUp && ` (incl. ${Math.round(plan.bodyWeightLb)} lb bodyweight)`}
@@ -94,7 +94,7 @@ function MainLiftCard({ plan }: { plan: MainLiftPlan }) {
 
 function AccessoryCard({ plan }: { plan: AccessoryPlan }) {
   return (
-    <div className="border border-zinc-900 bg-zinc-900/20 rounded-2xl px-4 py-3 space-y-1.5">
+    <div className="border border-white/10 bg-white/[0.035] backdrop-blur rounded-2xl px-4 py-3 space-y-1.5">
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="font-bold text-[13px] text-zinc-100 leading-snug">{plan.name.trim()}</h3>
         <span className="shrink-0 text-base font-extrabold text-white tabular-nums">
@@ -136,7 +136,7 @@ function AccessoryCarousel({ options }: { options: AccessoryOption[] }) {
   }, [start]);
 
   return (
-    <div className="border border-zinc-900 bg-zinc-900/20 rounded-2xl overflow-hidden">
+    <div className="border border-white/10 bg-white/[0.035] backdrop-blur rounded-2xl overflow-hidden">
       <div
         ref={track}
         onScroll={e => {
@@ -164,12 +164,12 @@ function AccessoryCarousel({ options }: { options: AccessoryOption[] }) {
           </div>
         ))}
       </div>
-      <div className="flex items-center justify-between border-t border-zinc-900 px-2 py-1">
+      <div className="flex items-center justify-between border-t border-white/10 px-2 py-1">
         <button aria-label="Previous option" disabled={index === 0} onClick={() => goTo(index - 1)}
           className="p-1.5 text-zinc-400 disabled:opacity-20"><ChevronLeft size={16} /></button>
         <span className="flex items-center gap-1.5">
           {options.map((o, i) => (
-            <span key={o.plan.name} className={`h-1.5 rounded-full ${i === index ? 'w-4 bg-rose-400' : 'w-1.5 bg-zinc-700'}`} />
+            <span key={o.plan.name} className={`h-1.5 rounded-full ${i === index ? 'w-4 bg-cyan-400' : 'w-1.5 bg-zinc-700'}`} />
           ))}
           <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Swap · {index + 1}/{options.length}</span>
         </span>
@@ -242,32 +242,33 @@ export function GymPlanPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-zinc-950 text-white pb-8 animate-fade-in">
-      <div className="sticky top-0 z-30 bg-zinc-950 border-b border-zinc-900 px-5 py-4 flex items-center justify-between gap-3">
+    <div className="flex-1 flex flex-col text-white pb-8 animate-fade-in bg-[#060912] bg-[radial-gradient(60rem_30rem_at_85%_-10%,rgba(34,211,238,0.14),transparent),radial-gradient(50rem_30rem_at_-10%_30%,rgba(139,92,246,0.14),transparent)]">
+      <div className="sticky top-0 z-30 bg-[#060912]/70 backdrop-blur-xl border-b border-white/10 px-5 lg:px-10 py-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Dumbbell size={22} className="text-rose-500" />
-          <h1 className="text-lg font-black tracking-tight text-white font-outfit uppercase">Today's Plan</h1>
+          <Dumbbell size={22} className="text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.7)]" />
+          <h1 style={{ fontSize: '1.25rem', lineHeight: 1.2 }} className="font-black tracking-tight font-outfit uppercase bg-gradient-to-r from-cyan-300 to-violet-400 bg-clip-text text-transparent">Today's Plan</h1>
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest border border-zinc-800 rounded-xl px-3 py-1.5 hover:bg-zinc-900/40 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest border border-white/15 rounded-xl px-3 py-1.5 hover:bg-white/[0.07] flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
               <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} /> Sync Jefit
             </button>
           )}
           <Link
             to="/gym/tracker"
-            className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest border border-zinc-800 rounded-xl px-3 py-1.5 hover:bg-zinc-900/40"
+            className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest border border-white/15 rounded-xl px-3 py-1.5 hover:bg-white/[0.07]"
           >
             Old tracker
           </Link>
         </div>
       </div>
 
-      <div className="flex-1 px-5 py-5 space-y-5 max-w-2xl w-full mx-auto">
+      <div className="flex-1 px-5 lg:px-10 py-5 lg:py-8 w-full max-w-6xl mx-auto flex flex-col lg:grid lg:grid-cols-[17rem_1fr] gap-5 lg:gap-10 lg:items-start">
+        <aside className="space-y-5 lg:sticky lg:top-24">
         {!authLoading && !isAdmin && (
           <a
             href="/login?next=/gym"
@@ -282,10 +283,10 @@ export function GymPlanPage() {
         )}
 
         <div className="space-y-1">
-          <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest block">
+          <span className="text-[9px] font-bold text-cyan-500 uppercase tracking-widest block">
             {dayIndex === nextDay ? 'Next up' : 'Viewing'}
           </span>
-          <h2 className="text-xl font-black text-white leading-tight">
+          <h2 className="text-2xl lg:text-3xl font-black text-white leading-tight">
             Day {day.day_index}: {shortDayName(day.name)}
           </h2>
           {lastDay.date && (
@@ -295,7 +296,7 @@ export function GymPlanPage() {
           )}
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
           {routine.days.map(d => {
             const idx = Number(d.day_index);
             const active = idx === dayIndex;
@@ -303,13 +304,13 @@ export function GymPlanPage() {
               <button
                 key={d.id}
                 onClick={() => setSelectedDay(idx)}
-                className={`shrink-0 rounded-xl border px-3 py-2 text-left cursor-pointer transition-colors ${
-                  active ? 'border-rose-500/60 bg-rose-500/10' : 'border-zinc-900 hover:bg-zinc-900/40'
+                className={`shrink-0 rounded-xl border px-3 py-2 text-left cursor-pointer transition-all ${
+                  active ? 'border-cyan-400/60 bg-cyan-400/10 shadow-[0_0_20px_-4px_rgba(34,211,238,0.5)]' : 'border-white/10 hover:bg-white/[0.07]'
                 }`}
               >
                 <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-1">
                   Day {d.day_index}
-                  {idx === nextDay && <span className="w-1.5 h-1.5 rounded-full bg-rose-500" aria-label="Next up" />}
+                  {idx === nextDay && <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" aria-label="Next up" />}
                 </span>
                 <span className="text-[11px] font-bold text-zinc-200 whitespace-nowrap">{shortDayName(d.name)}</span>
               </button>
@@ -317,13 +318,13 @@ export function GymPlanPage() {
           })}
         </div>
 
-        <div className="flex gap-1 rounded-xl border border-zinc-900 p-1 w-fit">
+        <div className="flex gap-1 rounded-xl border border-white/10 p-1 w-fit">
           {[false, true].map(next => (
             <button
               key={String(next)}
               onClick={() => setNextWeek(next)}
               className={`rounded-lg px-3 py-1 text-[10px] font-bold uppercase tracking-widest cursor-pointer ${
-                nextWeek === next ? 'bg-rose-500/10 text-rose-300' : 'text-zinc-500 hover:text-zinc-300'
+                nextWeek === next ? 'bg-cyan-500/10 text-cyan-300' : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
               {next ? 'Next week' : 'This week'}
@@ -336,13 +337,16 @@ export function GymPlanPage() {
           </p>
         )}
 
+        </aside>
+
+        <div className="space-y-5 min-w-0">
         {loading ? (
           <p className="text-sm text-zinc-500">Loading your history…</p>
         ) : (
-          <div className="space-y-3">
+          <div className="grid gap-3 lg:grid-cols-2 [&>*:first-child]:lg:col-span-2">
             {plans.map((p, i) =>
               p === null ? (
-                <div key={i} className="border border-zinc-900 rounded-2xl px-4 py-3 text-[12px] text-zinc-400">
+                <div key={i} className="border border-white/10 rounded-2xl px-4 py-3 text-[12px] text-zinc-400">
                   <span className="font-bold text-zinc-200">{day.exercises[i].name}</span>: no history yet. Log a session in Jefit and sync.
                 </div>
               ) : Array.isArray(p) ? (
@@ -356,10 +360,11 @@ export function GymPlanPage() {
 
         <Link
           to="/fitness"
-          className="flex items-center justify-between text-[11px] font-bold text-zinc-500 uppercase tracking-widest border border-zinc-900 rounded-2xl px-4 py-3 hover:bg-zinc-900/40"
+          className="flex items-center justify-between text-[11px] font-bold text-zinc-500 uppercase tracking-widest border border-white/10 rounded-2xl px-4 py-3 hover:bg-white/[0.07]"
         >
           Progress charts <ChevronRight size={14} />
         </Link>
+        </div>
       </div>
     </div>
   );
