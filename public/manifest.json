@@ -18,8 +18,8 @@
   ],
   "start_url": "/gym/",
   "scope": "/gym/",
-  "background_color": "#09090b",
-  "theme_color": "#f43f5e",
+  "background_color": "#060912",
+  "theme_color": "#060912",
   "display": "standalone",
   "orientation": "portrait"
 }
