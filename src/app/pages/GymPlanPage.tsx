@@ -1,13 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Dumbbell, RefreshCw, AlertTriangle, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Dumbbell, RefreshCw, AlertTriangle, ChevronDown, Check, BarChart3, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiService } from '../../apiService';
 import { useAuth } from '../context/AuthContext';
+import { mediaFor } from '../lib/exerciseMedia';
 import {
-  FitnessRow, MainLiftPlan, AccessoryPlan, MAIN_LIFTS,
-  getPowerbuildingRoutine, planMainLift, planAccessoryOptions, accessorySets, alternativesFor, restLabel, AccessoryOption, nextDayIndex, lastAssignedDay, roundTo, toKg,
+  FitnessRow, MainLiftPlan, AccessoryOption, MAIN_LIFTS,
+  getPowerbuildingRoutine, planMainLift, planAccessoryOptions, accessorySets, alternativesFor, restLabel, nextDayIndex, lastAssignedDay, roundTo, toKg,
 } from '../lib/gymPlan';
+
+// Layout rule for this page: one big thing per block. Left column = where you are in the week;
+// right column = the session in order. Each exercise shows its picture, its name, and ONE big
+// number (what to lift); everything else is smaller or folded away.
 
 const shortDate = (d: string) =>
   new Date(d + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -15,103 +20,7 @@ const shortDate = (d: string) =>
 // "Day 2: Powerbuilding Pull + Squats A (Squat & Pull-Up Focus)" -> "Pull + Squats A"
 const shortDayName = (name: string) =>
   name.replace(/^Day \d+:\s*/, '').replace(/^Powerbuilding\s+/, '').replace(/\s*\(.*\)\s*$/, '');
-
-function weightLabel(plan: MainLiftPlan, lb: number) {
-  if (!plan.isPullUp) return `${lb} lb`;
-  const added = roundTo(lb - plan.bodyWeightLb, 5);
-  return added <= 0 ? 'Bodyweight' : `+${added} lb`;
-}
-
-function MainLiftCard({ plan }: { plan: MainLiftPlan }) {
-  const deload = plan.phase === 'deload';
-  return (
-    <div className="border border-white/10 bg-white/[0.045] backdrop-blur rounded-2xl p-4 space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="font-extrabold text-sm text-white leading-snug">{plan.name}</h3>
-        <span className={`shrink-0 text-[9px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider border ${
-          deload ? 'bg-violet-500/10 text-violet-300 border-violet-500/30' : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
-        }`}>
-          {plan.projected ? 'Projected · ' : ''}{deload ? `Deload · Cycle ${plan.cycle}` : `Week ${plan.phase} of 4 · Cycle ${plan.cycle}`}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block">Top set</span>
-          <span className="text-3xl font-black tabular-nums bg-gradient-to-r from-white to-cyan-200 bg-clip-text text-transparent">
-            {weightLabel(plan, plan.top.lb)} <span className="text-zinc-400">× {plan.top.reps}</span>
-          </span>
-          {!plan.isPullUp && (
-            <span className="text-[10px] text-zinc-500 tabular-nums block">{toKg(plan.top.lb).toFixed(1)} kg</span>
-          )}
-        </div>
-        <div>
-          <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block">Back-offs</span>
-          <span className="text-lg font-extrabold text-zinc-200 tabular-nums">
-            {plan.backoff.sets} × {plan.backoff.reps} <span className="text-zinc-400">@ {weightLabel(plan, plan.backoff.lb)}</span>
-          </span>
-          {!plan.isPullUp && (
-            <span className="text-[10px] text-zinc-500 tabular-nums block">{toKg(plan.backoff.lb).toFixed(1)} kg</span>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block">Warm-ups</span>
-        <span className="text-[12px] font-bold text-zinc-300 tabular-nums">
-          {plan.warmups.map(w => `${!plan.isPullUp && w.lb === 45 ? 'Bar' : weightLabel(plan, w.lb).replace(' lb', '')}×${w.reps}`).join(' · ')}
-        </span>
-        <span className="text-[10px] text-zinc-500 block">Mark these as warm-up sets in Jefit.</span>
-      </div>
-
-      <div>
-        <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block">Rest</span>
-        <div className="text-[11px] text-zinc-300 tabular-nums space-y-0.5">
-          <div>Between warm-ups <span className="text-white font-bold">{plan.rest.warmups}</span></div>
-          <div>Last warm-up → top set <span className="text-white font-bold">{plan.rest.toTop}</span></div>
-          <div>Top set → first back-off <span className="text-white font-bold">{plan.rest.toBackoff}</span></div>
-          <div>Between back-offs <span className="text-white font-bold">{plan.rest.backoffs}</span></div>
-        </div>
-      </div>
-
-      <p className="text-[11px] text-zinc-400">
-        {deload
-          ? 'Deload week: keep every rep fast and easy.'
-          : `Leave about 1 rep in the tank. Miss the top set? Do ${plan.backoff.sets - 1} back-offs instead of ${plan.backoff.sets}.`}
-      </p>
-
-      <div className="text-[10px] text-zinc-500 border-t border-white/10 pt-2 space-y-0.5">
-        <div className="tabular-nums">
-          Est. max {Math.round(plan.estMaxLb)} lb
-          {plan.isPullUp && ` (incl. ${Math.round(plan.bodyWeightLb)} lb bodyweight)`}
-          {plan.lastTop && ` · Last top set ${Math.round(plan.lastTop.lb)}×${plan.lastTop.reps} (${shortDate(plan.lastTop.date)})`}
-        </div>
-        <div>{plan.reason}</div>
-      </div>
-    </div>
-  );
-}
-
-function AccessoryCard({ plan }: { plan: AccessoryPlan }) {
-  return (
-    <div className="border border-white/10 bg-white/[0.035] backdrop-blur rounded-2xl px-4 py-3 space-y-1.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="font-bold text-[13px] text-zinc-100 leading-snug">{plan.name.trim()}</h3>
-        <span className="shrink-0 text-base font-extrabold text-white tabular-nums">
-          {plan.lb !== null ? `${plan.lb} lb` : '—'}
-          <span className="text-zinc-400 font-bold text-sm"> · {plan.sets} × {plan.repLow}–{plan.repHigh}</span>
-        </span>
-      </div>
-      <p className="text-[11px] text-zinc-400">{plan.note}</p>
-      <p className="text-[10px] text-zinc-500">Rest {restLabel(plan.restSec)} between sets</p>
-      {plan.last && (
-        <p className="text-[10px] text-zinc-500 tabular-nums">
-          Last ({shortDate(plan.last.date)}): {plan.last.sets.map(s => `${Math.round(s.lb)}×${s.reps}`).join(', ')}
-        </p>
-      )}
-    </div>
-  );
-}
+const focusOf = (name: string) => name.match(/\(([^)]+)\)/)?.[1] ?? '';
 
 const daysAgo = (d: string | null) => {
   if (!d) return 'never logged';
@@ -119,64 +28,178 @@ const daysAgo = (d: string | null) => {
   return n <= 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`;
 };
 
-// One pane per either/or exercise: swipe or tap the arrows to switch. Opens on the one done most recently.
-function AccessoryCarousel({ options }: { options: AccessoryOption[] }) {
+function weightLabel(plan: MainLiftPlan, lb: number) {
+  if (!plan.isPullUp) return `${lb} lb`;
+  const added = roundTo(lb - plan.bodyWeightLb, 5);
+  return added <= 0 ? 'Bodyweight' : `+${added} lb`;
+}
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// Two frames of the movement, cross-faded. Falls back to a dumbbell icon when there is no picture.
+function Thumb({ name, size }: { name: string; size: number }) {
+  const m = mediaFor(name);
+  const box = { width: size, height: size };
+  if (!m) {
+    return (
+      <div style={box} className="shrink-0 rounded-xl bg-white/5 ring-1 ring-white/10 flex items-center justify-center text-cyan-300/70">
+        <Dumbbell size={size / 2.5} />
+      </div>
+    );
+  }
+  return (
+    <div style={box} className="relative shrink-0 rounded-xl overflow-hidden bg-white ring-1 ring-white/20">
+      <img src={`/exercises/${m.dir}/0.jpg`} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+      <img src={`/exercises/${m.dir}/1.jpg`} alt={`${name.trim()} movement`} loading="lazy" className="ex-flip absolute inset-0 w-full h-full object-cover" />
+    </div>
+  );
+}
+
+function StepBadge({ n }: { n: number }) {
+  return (
+    <span className="shrink-0 w-6 h-6 rounded-full border border-cyan-400/50 text-cyan-300 text-[11px] font-black flex items-center justify-center tabular-nums">
+      {n}
+    </span>
+  );
+}
+
+function Details({ children }: { children: React.ReactNode }) {
+  return (
+    <details className="group border-t border-white/10 pt-2">
+      <summary className="list-none cursor-pointer flex items-center gap-1 text-[11px] font-bold text-zinc-400 hover:text-zinc-200 select-none">
+        <ChevronDown size={14} className="transition-transform group-open:rotate-180" /> Rest times and history
+      </summary>
+      <div className="mt-2 space-y-1 text-[12px] text-zinc-400">{children}</div>
+    </details>
+  );
+}
+
+function MainLiftRow({ n, plan }: { n: number; plan: MainLiftPlan }) {
+  const deload = plan.phase === 'deload';
+  const warmups = plan.warmups.map(w => `${!plan.isPullUp && w.lb === 45 ? 'Bar' : weightLabel(plan, w.lb).replace(' lb', '')}×${w.reps}`);
+  const mm = mediaFor(plan.name);
+  return (
+    <li className="rounded-3xl border border-cyan-400/25 bg-gradient-to-b from-cyan-400/[0.07] to-white/[0.03] p-4 sm:p-5 space-y-4 shadow-[0_0_40px_-12px_rgba(34,211,238,0.35)]">
+      <div className="flex items-center gap-3">
+        <Thumb name={plan.name} size={88} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <StepBadge n={n} />
+            <span className="text-[10px] font-extrabold uppercase tracking-widest text-cyan-300">Main lift</span>
+          </div>
+          <h3 className="text-lg font-extrabold text-white leading-tight">{plan.name}</h3>
+          <p className="text-[11px] text-zinc-400 mt-0.5">
+            {mm ? `${cap(mm.muscle)} · ` : ''}
+            {plan.projected ? 'Projected · ' : ''}
+            {deload ? `Deload · cycle ${plan.cycle}` : `Week ${plan.phase} of 4 · cycle ${plan.cycle}`}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-2xl bg-black/30 border border-white/10 p-3">
+          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Top set</span>
+          <div className="text-3xl sm:text-4xl font-black tabular-nums text-white leading-none mt-1">
+            {weightLabel(plan, plan.top.lb)} <span className="text-cyan-300">× {plan.top.reps}</span>
+          </div>
+          {!plan.isPullUp && <span className="text-[11px] text-zinc-500 tabular-nums">{toKg(plan.top.lb).toFixed(1)} kg</span>}
+        </div>
+        <div className="rounded-2xl bg-black/20 border border-white/10 p-3">
+          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Then back-offs</span>
+          <div className="text-xl sm:text-2xl font-extrabold tabular-nums text-zinc-100 leading-none mt-1.5">
+            {plan.backoff.sets} × {plan.backoff.reps}
+            <span className="text-zinc-400 text-base"> @ {weightLabel(plan, plan.backoff.lb)}</span>
+          </div>
+          {!plan.isPullUp && <span className="text-[11px] text-zinc-500 tabular-nums">{toKg(plan.backoff.lb).toFixed(1)} kg</span>}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Warm up first</span>
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
+          {warmups.map((w, i) => (
+            <span key={i} className="px-2.5 py-1 rounded-lg bg-white/[0.06] text-[12px] font-bold text-zinc-200 tabular-nums">{w}</span>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-[12px] text-zinc-300">
+        {deload
+          ? 'Deload week: keep every rep fast and easy.'
+          : `Leave about 1 rep in the tank. Miss the top set? Do ${plan.backoff.sets - 1} back-offs instead of ${plan.backoff.sets}.`}
+      </p>
+
+      <Details>
+        <div>Between warm-ups <b className="text-zinc-200">{plan.rest.warmups}</b></div>
+        <div>Last warm-up → top set <b className="text-zinc-200">{plan.rest.toTop}</b></div>
+        <div>Top set → first back-off <b className="text-zinc-200">{plan.rest.toBackoff}</b></div>
+        <div>Between back-offs <b className="text-zinc-200">{plan.rest.backoffs}</b></div>
+        <div className="pt-1 tabular-nums">
+          Est. max {Math.round(plan.estMaxLb)} lb
+          {plan.isPullUp && ` (incl. ${Math.round(plan.bodyWeightLb)} lb bodyweight)`}
+          {plan.lastTop && ` · last top set ${Math.round(plan.lastTop.lb)}×${plan.lastTop.reps} (${shortDate(plan.lastTop.date)})`}
+        </div>
+        <div>{plan.reason}</div>
+        <div className="text-zinc-500">Mark warm-ups as warm-up sets in Jefit.</div>
+      </Details>
+    </li>
+  );
+}
+
+function AccessoryRow({ n, options }: { n: number; options: AccessoryOption[] }) {
+  // Opens on the option done most recently; tap another to swap
   const start = options.reduce((best, o, i) => ((o.lastDate ?? '') > (options[best].lastDate ?? '') ? i : best), 0);
   const [index, setIndex] = useState(start);
-  const track = useRef<HTMLDivElement>(null);
-
-  const goTo = (i: number) => {
-    const el = track.current;
-    if (el) el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
-    setIndex(i);
-  };
-  useEffect(() => {
-    const el = track.current;
-    if (el) el.scrollTo({ left: start * el.clientWidth });
-  }, [start]);
-
+  const o = options[Math.min(index, options.length - 1)];
+  const p = o.plan;
+  const mm = mediaFor(p.name);
   return (
-    <div className="border border-white/10 bg-white/[0.035] backdrop-blur rounded-2xl overflow-hidden">
-      <div
-        ref={track}
-        onScroll={e => {
-          const el = e.currentTarget;
-          const i = Math.round(el.scrollLeft / el.clientWidth);
-          if (i !== index) setIndex(i);
-        }}
-        className="flex overflow-x-auto snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {options.map(o => (
-          <div key={o.plan.name} className="snap-center shrink-0 w-full px-4 py-3 space-y-1.5">
-            <div className="flex items-baseline justify-between gap-3">
-              <h3 className="font-bold text-[13px] text-zinc-100 leading-snug">{o.plan.name.trim()}</h3>
-              <span className="shrink-0 text-base font-extrabold text-white tabular-nums">
-                {o.plan.lb !== null ? `${o.estimated ? '~' : ''}${o.plan.lb} lb` : '—'}
-                <span className="text-zinc-400 font-bold text-sm"> · {o.plan.sets} × {o.plan.repLow}–{o.plan.repHigh}</span>
-              </span>
-            </div>
-            <p className="text-[11px] text-zinc-400">{o.plan.note}</p>
-            <p className="text-[10px] text-zinc-500">Rest {restLabel(o.plan.restSec)} between sets</p>
-            <p className="text-[10px] text-zinc-500 tabular-nums">
-              Last done {daysAgo(o.lastDate)}
-              {o.plan.last && ` · ${o.plan.last.sets.map(s => `${Math.round(s.lb)}×${s.reps}`).join(', ')}`}
-            </p>
+    <li className="rounded-3xl border border-white/10 bg-white/[0.04] p-4 space-y-3">
+      <div className="flex items-center gap-3">
+        <Thumb name={p.name} size={72} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <StepBadge n={n} />
+            {mm && <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{cap(mm.muscle)}</span>}
           </div>
-        ))}
+          <h3 className="text-[15px] font-bold text-white leading-snug">{p.name.trim()}</h3>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-2xl font-black tabular-nums text-white leading-none">
+            {p.lb !== null ? `${o.estimated ? '~' : ''}${p.lb}` : '—'}
+            <span className="text-xs font-bold text-zinc-400"> lb</span>
+          </div>
+          <div className="text-[13px] font-bold text-cyan-300 tabular-nums mt-1">{p.sets} × {p.repLow}–{p.repHigh}</div>
+        </div>
       </div>
-      <div className="flex items-center justify-between border-t border-white/10 px-2 py-1">
-        <button aria-label="Previous option" disabled={index === 0} onClick={() => goTo(index - 1)}
-          className="p-1.5 text-zinc-400 disabled:opacity-20"><ChevronLeft size={16} /></button>
-        <span className="flex items-center gap-1.5">
-          {options.map((o, i) => (
-            <span key={o.plan.name} className={`h-1.5 rounded-full ${i === index ? 'w-4 bg-cyan-400' : 'w-1.5 bg-zinc-700'}`} />
+
+      <p className="text-[12px] text-zinc-300">{p.note}</p>
+
+      {options.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mr-1">Swap</span>
+          {options.map((opt, i) => (
+            <button
+              key={opt.plan.name}
+              onClick={() => setIndex(i)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer transition-colors ${
+                i === index ? 'border-cyan-400/60 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              {opt.plan.name.trim().replace(/^unilateral tricep machine extension blue machine$/, 'Tricep machine')}
+            </button>
           ))}
-          <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Swap · {index + 1}/{options.length}</span>
-        </span>
-        <button aria-label="Next option" disabled={index === options.length - 1} onClick={() => goTo(index + 1)}
-          className="p-1.5 text-zinc-400 disabled:opacity-20"><ChevronRight size={16} /></button>
-      </div>
-    </div>
+        </div>
+      )}
+
+      <Details>
+        <div>Rest <b className="text-zinc-200">{restLabel(p.restSec)}</b> between sets</div>
+        <div className="tabular-nums">
+          Last done {daysAgo(o.lastDate)}
+          {p.last && ` · ${p.last.sets.map(s => `${Math.round(s.lb)}×${s.reps}`).join(', ')}`}
+        </div>
+      </Details>
+    </li>
   );
 }
 
@@ -228,6 +251,11 @@ export function GymPlanPage() {
       : planAccessoryOptions(ex.name, history, accessorySets(day.day_index, ex.name, ex.setcount), ex.timer, day.exercises.map(e => e.name))
   ), [day, history, bodyWeightLb, nextWeek]);
 
+  const totalSets = plans.reduce((sum, p) => {
+    if (p === null) return sum;
+    return sum + (Array.isArray(p) ? p[0].plan.sets : 1 + p.backoff.sets);
+  }, 0);
+
   const handleSync = async () => {
     setSyncing(true);
     try {
@@ -241,130 +269,130 @@ export function GymPlanPage() {
     }
   };
 
+  const ghost = 'text-[11px] font-bold text-zinc-300 border border-white/15 rounded-xl px-3 py-1.5 hover:bg-white/[0.07] flex items-center gap-1.5 cursor-pointer';
+
   return (
-    <div className="flex-1 flex flex-col text-white pb-8 animate-fade-in bg-[#060912] bg-[radial-gradient(60rem_30rem_at_85%_-10%,rgba(34,211,238,0.14),transparent),radial-gradient(50rem_30rem_at_-10%_30%,rgba(139,92,246,0.14),transparent)]">
-      <div className="sticky top-0 z-30 bg-[#060912]/70 backdrop-blur-xl border-b border-white/10 px-5 lg:px-10 py-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Dumbbell size={22} className="text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.7)]" />
-          <h1 style={{ fontSize: '1.25rem', lineHeight: 1.2 }} className="font-black tracking-tight font-outfit uppercase bg-gradient-to-r from-cyan-300 to-violet-400 bg-clip-text text-transparent">Today's Plan</h1>
+    <div className="flex-1 flex flex-col text-white pb-10 animate-fade-in bg-[#060912] bg-[radial-gradient(60rem_30rem_at_85%_-10%,rgba(34,211,238,0.12),transparent),radial-gradient(50rem_30rem_at_-10%_30%,rgba(139,92,246,0.12),transparent)]">
+      <style>{`
+        @keyframes exflip { 0%, 35% { opacity: 0 } 50%, 85% { opacity: 1 } 100% { opacity: 0 } }
+        .ex-flip { animation: exflip 2s ease-in-out infinite }
+        @media (prefers-reduced-motion: reduce) { .ex-flip { animation: none; opacity: 0 } }
+        details > summary::-webkit-details-marker { display: none }
+      `}</style>
+
+      <header className="sticky top-0 z-30 bg-[#060912]/75 backdrop-blur-xl border-b border-white/10 px-5 lg:px-10 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-extrabold tracking-wide">
+          <Dumbbell size={18} className="text-cyan-400" /> Training
         </div>
-        <div className="flex items-center gap-2">
+        <nav className="flex items-center gap-2">
           {isAdmin && (
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest border border-white/15 rounded-xl px-3 py-1.5 hover:bg-white/[0.07] flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-            >
-              <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} /> Sync Jefit
+            <button onClick={handleSync} disabled={syncing} className={`${ghost} disabled:opacity-50`}>
+              <RefreshCw size={13} className={syncing ? 'animate-spin' : ''} /> Sync
             </button>
           )}
-          <Link
-            to="/gym/tracker"
-            className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest border border-white/15 rounded-xl px-3 py-1.5 hover:bg-white/[0.07]"
-          >
-            Old tracker
-          </Link>
-        </div>
-      </div>
+          <Link to="/fitness" className={ghost}><BarChart3 size={13} /> Charts</Link>
+          <Link to="/gym/tracker" className={ghost}><History size={13} /> Old tracker</Link>
+        </nav>
+      </header>
 
-      <div className="flex-1 px-5 lg:px-10 py-5 lg:py-8 w-full max-w-6xl mx-auto flex flex-col lg:grid lg:grid-cols-[17rem_1fr] gap-5 lg:gap-10 lg:items-start">
-        <aside className="space-y-5 lg:sticky lg:top-24">
-        {!authLoading && !isAdmin && (
-          <a
-            href="/login?next=/gym"
-            className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
-          >
-            <span className="flex items-center gap-2">
-              <AlertTriangle size={16} className="shrink-0" />
-              Log in to sync from Jefit.
+      <div className="px-5 lg:px-10 py-6 lg:py-10 w-full max-w-6xl mx-auto flex flex-col lg:grid lg:grid-cols-[19rem_1fr] gap-6 lg:gap-12 lg:items-start">
+        {/* LEFT: where am I */}
+        <aside className="space-y-6 lg:sticky lg:top-24">
+          <div>
+            <span className="text-[11px] font-extrabold text-cyan-300 uppercase tracking-widest">
+              {dayIndex === nextDay ? 'Up next' : 'Viewing'} · Day {day.day_index} of {routine.days.length}
             </span>
-            <span className="font-bold uppercase text-xs tracking-wider">Log in</span>
-          </a>
-        )}
-
-        <div className="space-y-1">
-          <span className="text-[9px] font-bold text-cyan-500 uppercase tracking-widest block">
-            {dayIndex === nextDay ? 'Next up' : 'Viewing'}
-          </span>
-          <h2 className="text-2xl lg:text-3xl font-black text-white leading-tight">
-            Day {day.day_index}: {shortDayName(day.name)}
-          </h2>
-          {lastDay.date && (
-            <p className="text-[11px] text-zinc-500">
-              Last workout: {shortDate(lastDay.date)} (Day {lastDay.day})
-            </p>
-          )}
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
-          {routine.days.map(d => {
-            const idx = Number(d.day_index);
-            const active = idx === dayIndex;
-            return (
-              <button
-                key={d.id}
-                onClick={() => setSelectedDay(idx)}
-                className={`shrink-0 rounded-xl border px-3 py-2 text-left cursor-pointer transition-all ${
-                  active ? 'border-cyan-400/60 bg-cyan-400/10 shadow-[0_0_20px_-4px_rgba(34,211,238,0.5)]' : 'border-white/10 hover:bg-white/[0.07]'
-                }`}
-              >
-                <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-1">
-                  Day {d.day_index}
-                  {idx === nextDay && <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" aria-label="Next up" />}
-                </span>
-                <span className="text-[11px] font-bold text-zinc-200 whitespace-nowrap">{shortDayName(d.name)}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex gap-1 rounded-xl border border-white/10 p-1 w-fit">
-          {[false, true].map(next => (
-            <button
-              key={String(next)}
-              onClick={() => setNextWeek(next)}
-              className={`rounded-lg px-3 py-1 text-[10px] font-bold uppercase tracking-widest cursor-pointer ${
-                nextWeek === next ? 'bg-cyan-500/10 text-cyan-300' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              {next ? 'Next week' : 'This week'}
-            </button>
-          ))}
-        </div>
-        {nextWeek && (
-          <p className="text-[11px] text-zinc-500">
-            Main lifts assume every remaining top set this week is hit. Accessories are unchanged: they progress on what you log.
-          </p>
-        )}
-
-        </aside>
-
-        <div className="space-y-5 min-w-0">
-        {loading ? (
-          <p className="text-sm text-zinc-500">Loading your history…</p>
-        ) : (
-          <div className="grid gap-3 lg:grid-cols-2 [&>*:first-child]:lg:col-span-2">
-            {plans.map((p, i) =>
-              p === null ? (
-                <div key={i} className="border border-white/10 rounded-2xl px-4 py-3 text-[12px] text-zinc-400">
-                  <span className="font-bold text-zinc-200">{day.exercises[i].name}</span>: no history yet. Log a session in Jefit and sync.
-                </div>
-              ) : Array.isArray(p) ? (
-                p.length === 1 ? <AccessoryCard key={i} plan={p[0].plan} /> : <AccessoryCarousel key={`${day.id}-${i}`} options={p} />
-              ) : (
-                <MainLiftCard key={i} plan={p} />
-              )
+            <h1 className="text-3xl lg:text-4xl font-black leading-[1.1] mt-2 text-white">{shortDayName(day.name)}</h1>
+            <p className="text-sm text-zinc-300 mt-2">{focusOf(day.name)}</p>
+            {!loading && (
+              <p className="text-[13px] text-zinc-400 mt-3 tabular-nums">
+                {day.exercises.length} exercises · {totalSets} working sets
+              </p>
+            )}
+            {lastDay.date && (
+              <p className="text-[12px] text-zinc-500 mt-1">Last workout {shortDate(lastDay.date)} (Day {lastDay.day})</p>
             )}
           </div>
-        )}
 
-        <Link
-          to="/fitness"
-          className="flex items-center justify-between text-[11px] font-bold text-zinc-500 uppercase tracking-widest border border-white/10 rounded-2xl px-4 py-3 hover:bg-white/[0.07]"
-        >
-          Progress charts <ChevronRight size={14} />
-        </Link>
-        </div>
+          <div>
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Your week</span>
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
+              {routine.days.map(d => {
+                const idx = Number(d.day_index);
+                const active = idx === dayIndex;
+                const done = idx < nextDay;
+                const isNext = idx === nextDay;
+                return (
+                  <button
+                    key={d.id}
+                    onClick={() => setSelectedDay(idx)}
+                    className={`shrink-0 flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left cursor-pointer transition-all ${
+                      active ? 'border-cyan-400/60 bg-cyan-400/10' : 'border-white/10 hover:bg-white/[0.07]'
+                    }`}
+                  >
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${
+                      done ? 'bg-emerald-400/15 text-emerald-300' : isNext ? 'bg-cyan-400 text-slate-900' : 'bg-white/[0.07] text-zinc-400'
+                    }`}>
+                      {done ? <Check size={14} /> : d.day_index}
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block text-[13px] font-bold whitespace-nowrap ${active ? 'text-white' : 'text-zinc-200'}`}>{shortDayName(d.name)}</span>
+                      <span className="block text-[10px] uppercase tracking-widest text-zinc-500">{done ? 'Done' : isNext ? 'Next' : 'Later'}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div className="inline-flex gap-1 rounded-xl border border-white/10 p-1">
+              {[false, true].map(next => (
+                <button
+                  key={String(next)}
+                  onClick={() => setNextWeek(next)}
+                  className={`rounded-lg px-3 py-1.5 text-[11px] font-bold cursor-pointer ${
+                    nextWeek === next ? 'bg-cyan-400/15 text-cyan-200' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {next ? 'Next week' : 'This week'}
+                </button>
+              ))}
+            </div>
+            {nextWeek && (
+              <p className="text-[11px] text-zinc-500 mt-2">
+                Main lifts assume every remaining top set this week is hit. Accessories are unchanged: they progress on what you log.
+              </p>
+            )}
+          </div>
+
+          {!authLoading && !isAdmin && (
+            <a href="/login?next=/gym" className="flex items-center gap-2 text-[12px] text-amber-200/90 hover:text-amber-100">
+              <AlertTriangle size={14} className="shrink-0" /> Log in to sync from Jefit
+            </a>
+          )}
+        </aside>
+
+        {/* RIGHT: what to do, in order */}
+        <main className="min-w-0">
+          {loading ? (
+            <p className="text-sm text-zinc-500">Loading your history…</p>
+          ) : (
+            <ol className="space-y-4">
+              {plans.map((p, i) =>
+                p === null ? (
+                  <li key={i} className="rounded-3xl border border-white/10 px-4 py-3 text-[13px] text-zinc-400">
+                    <span className="font-bold text-zinc-200">{i + 1}. {day.exercises[i].name}</span>: no history yet. Log a session in Jefit and sync.
+                  </li>
+                ) : Array.isArray(p) ? (
+                  <AccessoryRow key={`${day.id}-${i}`} n={i + 1} options={p} />
+                ) : (
+                  <MainLiftRow key={`${day.id}-${i}`} n={i + 1} plan={p} />
+                )
+              )}
+            </ol>
+          )}
+        </main>
       </div>
     </div>
   );
