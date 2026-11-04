@@ -77,21 +77,30 @@ export interface DraftSet { lb: number; reps: number; type: SetType; done: boole
 
 export const lbToKg = (lb: number) => Math.round((lb / LB_PER_KG) * 100) / 100;
 
-// Pull-ups: the app shows ADDED weight; Jefit and the cloud store total load (body + added)
-export function buildPayload(exercise: string, date: string, sets: DraftSet[], opts: { isPullUp: boolean; bodyWeightLb: number }): LogPayload | null {
-  const done = sets.filter(s => s.done && s.reps > 0);
-  if (!done.length) return null;
+// Pull-ups: the app shows ADDED weight; Jefit and the cloud store total load (body + added).
+// `base` = sets already in the cloud row for this exercise today (from an earlier session): they are
+// kept exactly as stored (baseRaw/baseTypes) and this session's sets are added after them.
+export function buildPayload(
+  exercise: string, date: string, sets: DraftSet[],
+  opts: { isPullUp: boolean; bodyWeightLb: number; base?: DraftSet[]; baseRaw?: string; baseTypes?: string },
+): LogPayload | null {
+  const mine = sets.filter(s => s.done && s.reps > 0);
+  if (!mine.length) return null;
+  const base = opts.base ?? [];
+  const all = [...base, ...mine];
   const total = (s: DraftSet) => (opts.isPullUp ? s.lb + opts.bodyWeightLb : s.lb);
-  const best = Math.max(0, ...done.filter(s => s.type !== 'warm-up' && s.reps <= 10).map(s => lbToKg(total(s)) * (1 + s.reps / 30)));
+  const best = Math.max(0, ...all.filter(s => s.type !== 'warm-up' && s.reps <= 10).map(s => lbToKg(total(s)) * (1 + s.reps / 30)));
   const r2 = (n: number) => Math.round(n * 100) / 100;
+  const raw = [opts.baseRaw, ...mine.map(s => `${lbToKg(total(s))}x${s.reps}`)].filter(Boolean).join(',');
+  const types = [opts.baseTypes || base.map(s => s.type).join(','), ...mine.map(s => s.type)].filter(Boolean).join(',');
   return {
     exercise_name: exercise,
     workout_date: date,
-    raw_logs: done.map(s => `${lbToKg(total(s))}x${s.reps}`).join(','),
-    set_types: done.map(s => s.type).join(','),
+    raw_logs: raw,
+    set_types: types,
     one_rep_max_kg: r2(best),
     one_rep_max_lbs: r2(best * LB_PER_KG),
-    total_volume_lbs: r2(done.reduce((sum, s) => sum + total(s) * s.reps, 0)),
+    total_volume_lbs: r2(all.reduce((sum, s) => sum + total(s) * s.reps, 0)),
     source: 'peak',
   };
 }

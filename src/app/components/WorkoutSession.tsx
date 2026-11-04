@@ -21,7 +21,8 @@ interface Block {
   rest: (sets: DraftSet[], i: number) => number;
   hint: string;
 }
-interface Draft { name: string; sets: DraftSet[] }
+// base = sets for this exercise already logged today by another session (kept, never shown as ticked)
+interface Draft { name: string; sets: DraftSet[]; base: DraftSet[]; baseRaw?: string; baseTypes?: string }
 type Drafts = Record<string, Draft>;
 
 const SESSION_KEY = 'peak_active_session';
@@ -70,7 +71,7 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
   const saved = useMemo(() => {
     try {
       const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-      return s && s.date === today && s.dayId === dayId ? s : null;
+      return s && s.v === 2 && s.date === today && s.dayId === dayId ? s : null;
     } catch { return null; }
   }, [today, dayId]);
 
@@ -123,8 +124,6 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
   };
 
   const initial = (b: Block, name: string): DraftSet[] => {
-    const todayRow = (history[name] || []).find(r => r.workout_date.slice(0, 10) === today);
-    if (todayRow) return fromRow(todayRow, b.isPullUp); // already logged today: don't overwrite it
     const mk = (lb: number, reps: number, type: SetType): DraftSet => ({ lb, reps, type, done: false });
     const idx = plans.findIndex((_, i) => String(i) === b.key);
     const p = idx >= 0 ? plans[idx] : null;
@@ -146,6 +145,16 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
       .map(s => mk(Math.round(s.lb * 10) / 10, s.reps, 'default'));
   };
 
+  // Sets logged earlier today (by an earlier session) for the same exercise
+  const baseFor = (b: Block, name: string): DraftSet[] => {
+    const row = (history[name] || []).find(r => r.workout_date.slice(0, 10) === today);
+    return row ? fromRow(row, b.isPullUp) : [];
+  };
+  const makeDraft = (b: Block, name: string): Draft => {
+    const row = (history[name] || []).find(r => r.workout_date.slice(0, 10) === today);
+    return { name, sets: initial(b, name), base: baseFor(b, name), baseRaw: row?.raw_logs, baseTypes: row?.set_types };
+  };
+
   const defaultName = (b: Block) => {
     if (!b.options) return b.names[0];
     // opens on the option done most recently, like the plan page
@@ -158,16 +167,16 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
     blocks.forEach(b => {
       const sv: Draft | undefined = saved?.drafts?.[b.key];
       const name = sv && b.names.includes(sv.name) ? sv.name : defaultName(b);
-      d[b.key] = sv && b.names.includes(sv.name) ? sv : { name, sets: initial(b, name) };
+      d[b.key] = sv && b.names.includes(sv.name) ? { ...sv, base: sv.base ?? [] } : makeDraft(b, name);
     });
     return d;
   });
 
   // Blocks added later (extra exercises) get drafts on first render
-  const draftOf = (b: Block): Draft => drafts[b.key] ?? { name: defaultName(b), sets: initial(b, defaultName(b)) };
+  const draftOf = (b: Block): Draft => drafts[b.key] ?? makeDraft(b, defaultName(b));
 
   const patch = (b: Block, fn: (d: Draft) => Draft) =>
-    setDrafts(cur => ({ ...cur, [b.key]: fn(cur[b.key] ?? { name: defaultName(b), sets: initial(b, defaultName(b)) }) }));
+    setDrafts(cur => ({ ...cur, [b.key]: fn(cur[b.key] ?? makeDraft(b, defaultName(b))) }));
 
   // --- rest timer + session clock ---
   const [now, setNow] = useState(Date.now());
@@ -194,11 +203,11 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
   const lastSent = useRef<Record<string, string>>({});
   useEffect(() => {
     const t = setTimeout(() => {
-      try { localStorage.setItem(SESSION_KEY, JSON.stringify({ date: today, dayId, startedAt, extras, drafts })); } catch { /* ignore */ }
+      try { localStorage.setItem(SESSION_KEY, JSON.stringify({ v: 2, date: today, dayId, startedAt, extras, drafts })); } catch { /* ignore */ }
       blocks.forEach(b => {
         const d = drafts[b.key];
-        if (!d) return;
-        const payload = buildPayload(d.name, today, d.sets, { isPullUp: b.isPullUp, bodyWeightLb });
+        if (!d || !d.sets.some(x => x.done)) return; // nothing ticked in THIS session: leave earlier rows alone
+        const payload = buildPayload(d.name, today, d.sets, { isPullUp: b.isPullUp, bodyWeightLb, base: d.base, baseRaw: d.baseRaw, baseTypes: d.baseTypes });
         if (!payload) return;
         const sig = JSON.stringify(payload);
         if (lastSent.current[b.key + d.name] === sig) return;
@@ -235,7 +244,7 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
     const d = draftOf(b);
     if (d.name === name) return;
     if (d.sets.some(s => s.done) && !window.confirm('Switching exercise clears the sets you ticked for this one. Continue?')) return;
-    patch(b, () => ({ name, sets: initial(b, name) }));
+    patch(b, () => makeDraft(b, name));
   };
 
   const prevFor = (name: string, isPullUp: boolean) => {
@@ -293,6 +302,9 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
                 <div className="min-w-0 flex-1">
                   <h3 className="text-[15px] font-semibold text-white leading-snug" style={{ margin: 0 }}>{displayName(d.name)}</h3>
                   <div className="text-xs text-zinc-500">{b.hint}</div>
+                  {d.base.length > 0 && (
+                    <div className="text-xs text-zinc-500 font-mono tabular-nums">Earlier today: {d.base.map(x => `${x.lb}×${x.reps}`).join(', ')}</div>
+                  )}
                 </div>
               </div>
 
