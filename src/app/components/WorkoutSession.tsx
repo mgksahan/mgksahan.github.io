@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Plus, Trash2, X, Cloud, CloudOff, Loader2, Minus, SkipForward } from 'lucide-react';
+import { Check, Plus, Trash2, X, Cloud, CloudOff, Loader2, Minus, SkipForward, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { mediaFor, displayName } from '../lib/exerciseMedia';
 import { FitnessRow, MainLiftPlan, AccessoryOption, LoggedSet, parseSets, localToday } from '../lib/gymPlan';
@@ -254,6 +254,24 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
     return { warm: sets.filter(s => s.type === 'warm-up'), work: sets.filter(s => s.type !== 'warm-up') };
   };
 
+  // --- swipe between exercises: native scroll-snap, one exercise per screen ---
+  const track = useRef<HTMLDivElement>(null);
+  const [page, setPage] = useState(0);
+  const goTo = (i: number) => {
+    const el = track.current;
+    const n = Math.max(0, Math.min(blocks.length - 1, i));
+    if (el) el.scrollTo({ left: n * el.clientWidth, behavior: 'smooth' });
+    setPage(n);
+  };
+  const isComplete = (b: Block) => { const d = draftOf(b); return d.sets.length > 0 && d.sets.every(x => x.done); };
+  // open on the first exercise that still has sets to do (e.g. after a refresh mid-workout)
+  useEffect(() => {
+    const first = blocks.findIndex(b => !isComplete(b));
+    const el = track.current;
+    if (el && first > 0) { el.scrollTo({ left: first * el.clientWidth }); setPage(first); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const totalDone = blocks.reduce((n, b) => n + draftOf(b).sets.filter(s => s.done).length, 0);
 
   const finish = async () => {
@@ -287,14 +305,40 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
         </div>
       </div>
 
-      <ol className="space-y-3 mt-3">
-        {blocks.map(b => {
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <button onClick={() => goTo(page - 1)} disabled={page === 0} aria-label="Previous exercise"
+          className="p-2 rounded-lg border border-white/10 text-zinc-300 disabled:opacity-30 cursor-pointer disabled:cursor-default"><ChevronLeft size={16} /></button>
+        <div className="min-w-0 text-center">
+          <div className="text-xs text-zinc-500">Exercise {Math.min(page + 1, blocks.length)} of {blocks.length} · swipe</div>
+          <div className="flex items-center justify-center gap-1.5 mt-1.5">
+            {blocks.map((b, i) => (
+              <button key={b.key} onClick={() => goTo(i)} aria-label={`Go to exercise ${i + 1}`} aria-current={i === page}
+                className={`h-2 rounded-full cursor-pointer transition-all ${i === page ? 'w-5 bg-cyan-400' : isComplete(b) ? 'w-2 bg-emerald-400' : 'w-2 bg-white/20'}`} />
+            ))}
+          </div>
+        </div>
+        <button onClick={() => goTo(page + 1)} disabled={page >= blocks.length - 1} aria-label="Next exercise"
+          className="p-2 rounded-lg border border-white/10 text-zinc-300 disabled:opacity-30 cursor-pointer disabled:cursor-default"><ChevronRight size={16} /></button>
+      </div>
+
+      <div
+        ref={track}
+        role="list"
+        onScroll={e => {
+          const el = e.currentTarget;
+          const i = Math.round(el.scrollLeft / el.clientWidth);
+          if (i !== page) setPage(i);
+        }}
+        className="mt-3 flex items-start overflow-x-auto snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {blocks.map((b, bi) => {
           const d = draftOf(b);
           const mm = mediaFor(d.name);
           const prev = prevFor(d.name, b.isPullUp);
           let w = 0, k = 0;
           return (
-            <li key={b.key} className="rounded-xl border border-white/[0.08] bg-[#141518] p-3 space-y-2">
+            <div key={b.key} role="listitem" className="snap-center snap-always shrink-0 w-full pr-3">
+            <div className="rounded-xl border border-white/[0.08] bg-[#141518] p-3 space-y-2">
               <div className="flex items-center gap-3">
                 {mm?.dir ? (
                   <img src={`/exercises/${mm.dir}/0.jpg`} alt="" className="w-11 h-11 rounded-md object-cover bg-white shrink-0 saturate-[.8]" />
@@ -353,15 +397,26 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
               <button onClick={() => addSet(b)} className="w-full py-2 rounded-md border border-dashed border-white/15 text-xs text-zinc-400 hover:text-white hover:border-white/30 flex items-center justify-center gap-1 cursor-pointer">
                 <Plus size={14} /> Add set
               </button>
-            </li>
+
+              <button
+                onClick={() => (bi >= blocks.length - 1 ? finish() : goTo(bi + 1))}
+                style={isComplete(b) ? { color: '#0f172a' } : undefined}
+                className={`w-full py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-1 cursor-pointer ${
+                  isComplete(b) ? 'bg-cyan-400' : 'bg-white/[0.06] text-zinc-300 hover:bg-white/10'
+                }`}
+              >
+                {bi >= blocks.length - 1 ? 'Finish workout' : <>Next exercise <ChevronRight size={16} /></>}
+              </button>
+            </div>
+            </div>
           );
         })}
-      </ol>
+      </div>
 
       {addable.length > 0 && (
         <div className="mt-4">
           <label className="text-xs text-zinc-500 block mb-1.5">Add an exercise to this workout</label>
-          <select value="" onChange={e => { if (e.target.value) setExtras(x => [...x, e.target.value]); }}
+          <select value="" onChange={e => { if (e.target.value) { setExtras(x => [...x, e.target.value]); setTimeout(() => goTo(blocks.length), 50); } }}
             className="w-full rounded-lg bg-[#141518] border border-white/10 px-3 py-2.5 text-sm text-zinc-200 [color-scheme:dark]">
             <option value="">Choose…</option>
             {addable.map(n => <option key={n} value={n}>{displayName(n)}</option>)}
