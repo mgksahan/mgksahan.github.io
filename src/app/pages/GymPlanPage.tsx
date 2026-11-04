@@ -465,7 +465,7 @@ export function GymPlanPage() {
   const ghost = 'text-xs text-zinc-300 border border-white/10 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-white/[0.06] flex items-center gap-1.5 cursor-pointer whitespace-nowrap';
 
   return (
-    <div className="flex-1 flex flex-col text-white pb-10 animate-fade-in bg-[#0d0e10]">
+    <div className={`flex-1 flex flex-col text-white animate-fade-in bg-[#0d0e10] ${canLog && !logging ? 'pb-32' : 'pb-10'}`}>
       <style>{`
         @keyframes exflip { 0%, 35% { opacity: 0 } 50%, 85% { opacity: 1 } 100% { opacity: 0 } }
         .ex-flip { animation: exflip 2s ease-in-out infinite }
@@ -515,23 +515,6 @@ export function GymPlanPage() {
             )}
             {lastDay.date && weekOffset === 0 && (
               <p className="text-xs text-zinc-500 mt-1">Last workout {shortDate(lastDay.date)} (Day {lastDay.day})</p>
-            )}
-            {canLog && !logging && (
-              <button
-                onClick={() => { setSelected(null); setLogging(true); }}
-                style={{ color: '#0f172a' }}
-                className="mt-4 w-full lg:w-auto flex items-center justify-center gap-2 rounded-lg bg-cyan-400 px-5 py-2.5 text-sm font-semibold cursor-pointer hover:bg-cyan-300"
-              >
-                <Play size={15} /> {hasActiveSession ? 'Resume workout' : 'Start workout'}
-              </button>
-            )}
-            {canLog && !logging && hasActiveSession && (
-              <button
-                onClick={() => { if (window.confirm('Discard the unfinished workout on this phone? Sets you already ticked stay saved.')) { try { localStorage.removeItem('peak_active_session'); } catch { /* ignore */ } bumpSession(n => n + 1); } }}
-                className="mt-2 text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer"
-              >
-                Discard unfinished workout
-              </button>
             )}
           </div>
 
@@ -627,6 +610,27 @@ export function GymPlanPage() {
           />
         )}
       </div>
+      {canLog && !logging && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08] bg-[#0d0e10]/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="mx-auto max-w-md flex flex-col items-stretch gap-1.5">
+            <button
+              onClick={() => { setSelected(null); setLogging(true); }}
+              style={{ color: '#0f172a' }}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-cyan-400 py-3.5 text-base font-semibold cursor-pointer hover:bg-cyan-300"
+            >
+              <Play size={17} /> {hasActiveSession ? 'Resume workout' : 'Start workout'} · {shortDayName(day.name)}
+            </button>
+            {hasActiveSession && (
+              <button
+                onClick={() => { if (window.confirm('Discard the unfinished workout on this phone? Sets you already ticked stay saved.')) { try { localStorage.removeItem('peak_active_session'); } catch { /* ignore */ } bumpSession(n => n + 1); } }}
+                className="text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer py-1"
+              >
+                Discard unfinished workout
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
