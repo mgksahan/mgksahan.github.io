@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Dumbbell, RefreshCw, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Check, TrendingUp, History, LineChart } from 'lucide-react';
+import { Play, Dumbbell, RefreshCw, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Check, TrendingUp, History, LineChart } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiService } from '../../apiService';
 import { useAuth } from '../context/AuthContext';
-import { mediaFor, displayName } from '../lib/exerciseMedia';
+import { mediaFor, displayName, EXERCISE_MEDIA } from '../lib/exerciseMedia';
 import { ExerciseHistory } from '../components/ExerciseHistory';
+import { WorkoutSession, SyncPill } from '../components/WorkoutSession';
 import { SHORT_NAME, STANDARDS, TIER_BAR, TIER_TEXT, overallRank, rankOf } from '../lib/strengthStandards';
 import {
   FitnessRow, MainLiftPlan, AccessoryOption, LoggedSet, MAIN_LIFTS, PLAN_START,
@@ -351,6 +352,7 @@ export function GymPlanPage() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
+  const [logging, setLogging] = useState(false);
   const toggleSelected = (name: string) => setSelected(cur => (cur === name ? null : name));
 
   const load = async () => {
@@ -358,13 +360,20 @@ export function GymPlanPage() {
     try {
       const names = new Set<string>([...MAIN_LIFTS, ...RANK_LIFTS, 'Body Weight']);
       routine.days.forEach(d => d.exercises.forEach(e => { names.add(e.name); alternativesFor(e.name).forEach(a => names.add(a)); }));
+      // Last good copy of each exercise's history, so the plan still opens with no signal
+      let cache: Record<string, FitnessRow[]> = {};
+      try { cache = JSON.parse(localStorage.getItem('peak_history_cache') || '{}'); } catch { /* ignore */ }
+      const fresh: Record<string, FitnessRow[]> = {};
       const entries = await Promise.all([...names].map(async name => {
         try {
-          return [name, (await apiService.fetchFitnessHistory(name)) as FitnessRow[]] as const;
+          const rows = (await apiService.fetchFitnessHistory(name)) as FitnessRow[];
+          fresh[name] = rows;
+          return [name, rows] as const;
         } catch {
-          return [name, [] as FitnessRow[]] as const;
+          return [name, cache[name] ?? ([] as FitnessRow[])] as const;
         }
       }));
+      try { localStorage.setItem('peak_history_cache', JSON.stringify({ ...cache, ...fresh })); } catch { /* storage full */ }
       const map = Object.fromEntries(entries);
       const weights = (map['Body Weight'] || []).filter(r => /^\d{4}-/.test(r.workout_date))
         .sort((a, b) => a.workout_date.localeCompare(b.workout_date));
@@ -424,6 +433,17 @@ export function GymPlanPage() {
     : plans.reduce((sum, p) => (p === null ? sum : sum + (Array.isArray(p) ? p[0].plan.sets : 1 + p.backoff.sets)), 0);
   const doneCount = logged.filter(Boolean).length;
 
+  // Everything you could add to a workout on top of the plan
+  const extraNames = useMemo(() => {
+    const all = new Set<string>(Object.keys(EXERCISE_MEDIA));
+    routine.days.forEach(d => d.exercises.forEach(e => { all.add(e.name.trim()); alternativesFor(e.name).forEach(a => all.add(a.trim())); }));
+    return [...all].filter(n => !n.startsWith('__')).sort();
+  }, []);
+  const hasActiveSession = (() => {
+    try { const a = JSON.parse(localStorage.getItem('peak_active_session') || 'null'); return !!a && a.date === localToday(); } catch { return false; }
+  })();
+  const canLog = isAdmin && weekOffset === 0 && !loading;
+
   const handleSync = async () => {
     setSyncing(true);
     try {
@@ -437,7 +457,7 @@ export function GymPlanPage() {
     }
   };
 
-  const ghost = 'text-xs text-zinc-300 border border-white/10 rounded-lg px-3 py-1.5 hover:bg-white/[0.06] flex items-center gap-1.5 cursor-pointer';
+  const ghost = 'text-xs text-zinc-300 border border-white/10 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-white/[0.06] flex items-center gap-1.5 cursor-pointer whitespace-nowrap';
 
   return (
     <div className="flex-1 flex flex-col text-white pb-10 animate-fade-in bg-[#0d0e10]">
@@ -459,13 +479,14 @@ export function GymPlanPage() {
           <span className="hidden sm:inline text-xs text-zinc-500">Powerbuilding plan</span>
         </div>
         <nav className="flex items-center gap-2">
+          {isAdmin && !logging && <span className="hidden sm:block"><SyncPill /></span>}
           {isAdmin && (
             <button onClick={handleSync} disabled={syncing} className={`${ghost} disabled:opacity-50`}>
-              <RefreshCw size={13} className={syncing ? 'animate-spin' : ''} /> Sync Jefit
+              <RefreshCw size={13} className={syncing ? 'animate-spin' : ''} /> <span className="hidden sm:inline">Sync Jefit</span>
             </button>
           )}
-          <Link to="/fitness" className={ghost}><TrendingUp size={13} /> Progress</Link>
-          <Link to="/gym/tracker" className={ghost}><History size={13} /> Classic tracker</Link>
+          <Link to="/fitness" className={ghost}><TrendingUp size={13} /> <span className="hidden sm:inline">Progress</span></Link>
+          <Link to="/gym/tracker" className={ghost}><History size={13} /> <span className="hidden sm:inline">Classic tracker</span></Link>
         </nav>
       </header>
 
@@ -473,7 +494,7 @@ export function GymPlanPage() {
         selected ? 'max-w-6xl xl:max-w-[96rem] xl:grid-cols-[17rem_minmax(0,1fr)_27rem] xl:gap-8' : 'max-w-6xl'
       }`}>
         {/* LEFT: where am I */}
-        <aside className="space-y-6 lg:sticky lg:top-20">
+        <aside className={`space-y-6 lg:sticky lg:top-20 ${logging ? 'hidden lg:block' : ''}`}>
           <div>
             <span className="text-xs font-medium text-cyan-300">
               {reviewing ? 'Looking back' : dayIndex === nextDay && weekOffset === 0 ? 'Up next' : 'Viewing'} · Day {day.day_index} of {routine.days.length}
@@ -489,6 +510,15 @@ export function GymPlanPage() {
             )}
             {lastDay.date && weekOffset === 0 && (
               <p className="text-xs text-zinc-500 mt-1">Last workout {shortDate(lastDay.date)} (Day {lastDay.day})</p>
+            )}
+            {canLog && !logging && (
+              <button
+                onClick={() => { setSelected(null); setLogging(true); }}
+                style={{ color: '#0f172a' }}
+                className="mt-4 w-full lg:w-auto flex items-center justify-center gap-2 rounded-lg bg-cyan-400 px-5 py-2.5 text-sm font-semibold cursor-pointer hover:bg-cyan-300"
+              >
+                <Play size={15} /> {hasActiveSession ? 'Resume workout' : 'Start workout'}
+              </button>
             )}
           </div>
 
@@ -538,6 +568,18 @@ export function GymPlanPage() {
         <main className="min-w-0">
           {loading ? (
             <p className="text-sm text-zinc-500">Loading your history…</p>
+          ) : logging && canLog ? (
+            <WorkoutSession
+              key={day.id}
+              dayId={day.id}
+              dayName={shortDayName(day.name)}
+              plans={plans}
+              extraNames={extraNames}
+              history={history}
+              bodyWeightLb={bodyWeightLb}
+              onExit={() => setLogging(false)}
+              onFinished={() => { void load(); }}
+            />
           ) : reviewing ? (
             <ol className="space-y-3">
               {day.exercises.map((ex, i) => (
@@ -563,7 +605,7 @@ export function GymPlanPage() {
 
         {!loading && <div className="lg:hidden"><RankCard ranks={rankInputs} bodyWeightLb={bodyWeightLb} /></div>}
 
-        {selected && (
+        {selected && !logging && (
           <ExerciseHistory
             name={selected}
             rows={history[selected] || []}
