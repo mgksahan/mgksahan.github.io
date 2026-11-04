@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Dumbbell, RefreshCw, AlertTriangle, ChevronDown, Check, BarChart3, History } from 'lucide-react';
+import { Dumbbell, RefreshCw, AlertTriangle, ChevronDown, Check, BarChart3, History, LineChart } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiService } from '../../apiService';
 import { useAuth } from '../context/AuthContext';
 import { mediaFor } from '../lib/exerciseMedia';
+import { ExerciseHistory } from '../components/ExerciseHistory';
 import {
   FitnessRow, MainLiftPlan, AccessoryOption, MAIN_LIFTS,
   getPowerbuildingRoutine, planMainLift, planAccessoryOptions, accessorySets, alternativesFor, restLabel, nextDayIndex, lastAssignedDay, roundTo, toKg,
@@ -55,6 +56,22 @@ function Thumb({ name, size }: { name: string; size: number }) {
   );
 }
 
+// Whole header area is the click target that opens the history panel
+function Clickable({ onClick, label, className, children }: { onClick: () => void; label: string; className?: string; children: React.ReactNode }) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      onClick={onClick}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      className={`cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 rounded-2xl ${className ?? ''}`}
+    >
+      {children}
+    </div>
+  );
+}
+
 function StepBadge({ n }: { n: number }) {
   return (
     <span className="shrink-0 w-6 h-6 rounded-full border border-cyan-400/50 text-cyan-300 text-[11px] font-black flex items-center justify-center tabular-nums">
@@ -74,13 +91,13 @@ function Details({ children }: { children: React.ReactNode }) {
   );
 }
 
-function MainLiftRow({ n, plan }: { n: number; plan: MainLiftPlan }) {
+function MainLiftRow({ n, plan, selected, onSelect }: { n: number; plan: MainLiftPlan; selected: string | null; onSelect: (name: string) => void }) {
   const deload = plan.phase === 'deload';
   const warmups = plan.warmups.map(w => `${!plan.isPullUp && w.lb === 45 ? 'Bar' : weightLabel(plan, w.lb).replace(' lb', '')}×${w.reps}`);
   const mm = mediaFor(plan.name);
   return (
-    <li className="rounded-3xl border border-cyan-400/25 bg-gradient-to-b from-cyan-400/[0.07] to-white/[0.03] p-4 sm:p-5 space-y-4 shadow-[0_0_40px_-12px_rgba(34,211,238,0.35)]">
-      <div className="flex items-center gap-3">
+    <li className={`rounded-3xl border bg-gradient-to-b from-cyan-400/[0.07] to-white/[0.03] p-4 sm:p-5 space-y-4 shadow-[0_0_40px_-12px_rgba(34,211,238,0.35)] transition-colors ${selected === plan.name ? 'border-cyan-300/70' : 'border-cyan-400/25'}`}>
+      <Clickable onClick={() => onSelect(plan.name)} label={`Show ${plan.name} history`} className="flex items-center gap-3">
         <Thumb name={plan.name} size={88} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1">
@@ -94,7 +111,8 @@ function MainLiftRow({ n, plan }: { n: number; plan: MainLiftPlan }) {
             {deload ? `Deload · cycle ${plan.cycle}` : `Week ${plan.phase} of 4 · cycle ${plan.cycle}`}
           </p>
         </div>
-      </div>
+        <LineChart size={18} className={`shrink-0 ${selected === plan.name ? 'text-cyan-300' : 'text-zinc-500'}`} aria-hidden />
+      </Clickable>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl bg-black/30 border border-white/10 p-3">
@@ -146,16 +164,17 @@ function MainLiftRow({ n, plan }: { n: number; plan: MainLiftPlan }) {
   );
 }
 
-function AccessoryRow({ n, options }: { n: number; options: AccessoryOption[] }) {
+function AccessoryRow({ n, options, selected, onSelect }: { n: number; options: AccessoryOption[]; selected: string | null; onSelect: (name: string) => void }) {
   // Opens on the option done most recently; tap another to swap
   const start = options.reduce((best, o, i) => ((o.lastDate ?? '') > (options[best].lastDate ?? '') ? i : best), 0);
   const [index, setIndex] = useState(start);
   const o = options[Math.min(index, options.length - 1)];
   const p = o.plan;
   const mm = mediaFor(p.name);
+  const active = selected !== null && options.some(x => x.plan.name === selected);
   return (
-    <li className="rounded-3xl border border-white/10 bg-white/[0.04] p-4 space-y-3">
-      <div className="flex items-center gap-3">
+    <li className={`rounded-3xl border bg-white/[0.04] p-4 space-y-3 transition-colors ${active ? 'border-cyan-300/60' : 'border-white/10'}`}>
+      <Clickable onClick={() => onSelect(p.name)} label={`Show ${p.name.trim()} history`} className="flex items-center gap-3">
         <Thumb name={p.name} size={72} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1">
@@ -171,7 +190,7 @@ function AccessoryRow({ n, options }: { n: number; options: AccessoryOption[] })
           </div>
           <div className="text-[13px] font-bold text-cyan-300 tabular-nums mt-1">{p.sets} × {p.repLow}–{p.repHigh}</div>
         </div>
-      </div>
+      </Clickable>
 
       <p className="text-[12px] text-zinc-300">{p.note}</p>
 
@@ -181,7 +200,7 @@ function AccessoryRow({ n, options }: { n: number; options: AccessoryOption[] })
           {options.map((opt, i) => (
             <button
               key={opt.plan.name}
-              onClick={() => setIndex(i)}
+              onClick={() => { setIndex(i); if (active) onSelect(opt.plan.name); }}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer transition-colors ${
                 i === index ? 'border-cyan-400/60 bg-cyan-400/15 text-cyan-200' : 'border-white/10 text-zinc-400 hover:text-zinc-200'
               }`}
@@ -214,6 +233,8 @@ export function GymPlanPage() {
   const [syncing, setSyncing] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [nextWeek, setNextWeek] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const toggleSelected = (name: string) => setSelected(cur => (cur === name ? null : name));
 
   const load = async () => {
     setLoading(true);
@@ -278,6 +299,11 @@ export function GymPlanPage() {
         .ex-flip { animation: exflip 2s ease-in-out infinite }
         @media (prefers-reduced-motion: reduce) { .ex-flip { animation: none; opacity: 0 } }
         details > summary::-webkit-details-marker { display: none }
+        @keyframes panelIn { from { opacity: 0; transform: translateX(28px) } to { opacity: 1; transform: none } }
+        @keyframes sheetIn { from { opacity: 0; transform: translateY(40px) } to { opacity: 1; transform: none } }
+        .panel-in { animation: sheetIn 260ms cubic-bezier(.2,.8,.2,1) }
+        @media (min-width: 1280px) { .panel-in { animation: panelIn 320ms cubic-bezier(.2,.8,.2,1) } }
+        @media (prefers-reduced-motion: reduce) { .panel-in { animation: none } }
       `}</style>
 
       <header className="sticky top-0 z-30 bg-[#060912]/75 backdrop-blur-xl border-b border-white/10 px-5 lg:px-10 py-3 flex items-center justify-between gap-3">
@@ -295,7 +321,9 @@ export function GymPlanPage() {
         </nav>
       </header>
 
-      <div className="px-5 lg:px-10 py-6 lg:py-10 w-full max-w-6xl mx-auto flex flex-col lg:grid lg:grid-cols-[19rem_1fr] gap-6 lg:gap-12 lg:items-start">
+      <div className={`px-5 lg:px-10 py-6 lg:py-10 w-full mx-auto flex flex-col lg:grid lg:grid-cols-[19rem_1fr] gap-6 lg:gap-12 lg:items-start transition-[max-width] duration-300 ${
+        selected ? 'max-w-6xl xl:max-w-[96rem] xl:grid-cols-[17rem_minmax(0,1fr)_27rem] xl:gap-8' : 'max-w-6xl'
+      }`}>
         {/* LEFT: where am I */}
         <aside className="space-y-6 lg:sticky lg:top-24">
           <div>
@@ -325,7 +353,7 @@ export function GymPlanPage() {
                 return (
                   <button
                     key={d.id}
-                    onClick={() => setSelectedDay(idx)}
+                    onClick={() => { setSelectedDay(idx); setSelected(null); }}
                     className={`shrink-0 flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left cursor-pointer transition-all ${
                       active ? 'border-cyan-400/60 bg-cyan-400/10' : 'border-white/10 hover:bg-white/[0.07]'
                     }`}
@@ -385,14 +413,23 @@ export function GymPlanPage() {
                     <span className="font-bold text-zinc-200">{i + 1}. {day.exercises[i].name}</span>: no history yet. Log a session in Jefit and sync.
                   </li>
                 ) : Array.isArray(p) ? (
-                  <AccessoryRow key={`${day.id}-${i}`} n={i + 1} options={p} />
+                  <AccessoryRow key={`${day.id}-${i}`} n={i + 1} options={p} selected={selected} onSelect={toggleSelected} />
                 ) : (
-                  <MainLiftRow key={`${day.id}-${i}`} n={i + 1} plan={p} />
+                  <MainLiftRow key={`${day.id}-${i}`} n={i + 1} plan={p} selected={selected} onSelect={toggleSelected} />
                 )
               )}
             </ol>
           )}
         </main>
+
+        {selected && (
+          <ExerciseHistory
+            name={selected}
+            rows={history[selected] || []}
+            bodyWeightRows={history['Body Weight'] || []}
+            onClose={() => setSelected(null)}
+          />
+        )}
       </div>
     </div>
   );

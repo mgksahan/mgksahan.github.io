@@ -40,6 +40,7 @@ export interface FitnessRow {
   raw_logs?: string;
   set_types?: string;
   one_rep_max_lbs?: number;
+  total_volume_lbs?: number;
 }
 
 export interface LoggedSet {
