@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { Play, Dumbbell, RefreshCw, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Check, TrendingUp, History, LineChart } from 'lucide-react';
+import { Play, Dumbbell, RefreshCw, AlertTriangle, ChevronDown, Check, TrendingUp, History, LineChart } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiService } from '../../apiService';
 import { useAuth } from '../context/AuthContext';
@@ -51,6 +51,15 @@ const mondayOf = (iso: string) => {
 };
 const addDays = (d: Date, n: number) => new Date(d.getTime() + n * DAY_MS);
 const MAX_OFFSET = 1; // one week ahead is projected; further out isn't predicted
+
+function weekOf(monday: Date) {
+  const planMonday = mondayOf(PLAN_START);
+  const end = addDays(monday, 6);
+  const range = monday.getMonth() === end.getMonth()
+    ? `${shortDate(isoOf(monday))} – ${end.getDate()}`
+    : `${shortDate(isoOf(monday))} – ${shortDate(isoOf(end))}`;
+  return { num: Math.round((monday.getTime() - planMonday.getTime()) / (7 * DAY_MS)) + 1, range };
+}
 
 function weekInfo(offset: number) {
   const thisMonday = mondayOf(localToday());
@@ -275,31 +284,6 @@ function ReviewRow({ exercise, entry, selected, onSelect }: {
   );
 }
 
-function WeekNav({ offset, setOffset }: { offset: number; setOffset: (n: number) => void }) {
-  const w = weekInfo(offset);
-  const btn = 'p-2 rounded-lg border border-white/10 text-zinc-300 hover:bg-white/[0.06] disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-default';
-  const tag = offset < 0 ? 'Looking back' : offset > 0 ? 'Projected' : 'This week';
-  return (
-    <div>
-      <span className="text-xs text-zinc-500">Week</span>
-      <div className="mt-1.5 flex items-center gap-2">
-        <button aria-label="Previous week" className={btn} disabled={offset <= w.minOffset} onClick={() => setOffset(offset - 1)}><ChevronLeft size={16} /></button>
-        <div className="flex-1 min-w-0 text-center">
-          <div className="text-sm font-semibold text-white tabular-nums">Week {w.num} · {w.range}</div>
-          <div className={`text-xs ${offset === 0 ? 'text-cyan-300' : 'text-zinc-400'}`}>{tag}</div>
-        </div>
-        <button aria-label="Next week" className={btn} disabled={offset >= MAX_OFFSET} onClick={() => setOffset(offset + 1)}><ChevronRight size={16} /></button>
-      </div>
-      {offset !== 0 && (
-        <button onClick={() => setOffset(0)} className="mt-2 text-xs text-cyan-300 hover:text-cyan-200 cursor-pointer">Back to this week</button>
-      )}
-      {offset > 0 && (
-        <p className="text-xs text-zinc-500 mt-2">Main lifts assume every remaining top set this week is hit. Accessories progress on what you log.</p>
-      )}
-    </div>
-  );
-}
-
 const RANK_LIFTS = Object.keys(STANDARDS);
 
 function RankCard({ ranks, bodyWeightLb }: { ranks: { name: string; est: number | null }[]; bodyWeightLb: number }) {
@@ -340,6 +324,76 @@ function RankCard({ ranks, bodyWeightLb }: { ranks: { name: string; est: number 
   );
 }
 
+// One perpetual timeline instead of a week toggle + day list: every session you have done (with its date),
+// then what is coming. Pick any card to see what you did, or the plan for it.
+interface StripItem { key: string; kind: 'done' | 'upcoming'; day: number; date?: string; offset: 0 | 1; k: number; weekNum: number; weekRange: string }
+
+function SessionStrip({ items, selectedKey, onSelect }: { items: StripItem[]; selectedKey: string; onSelect: (key: string) => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const centre = (key: string, smooth: boolean) => {
+    const c = box.current;
+    const el = c?.querySelector<HTMLElement>(`[data-key="${key}"]`);
+    if (c && el) c.scrollTo({ left: el.offsetLeft - c.clientWidth / 2 + el.clientWidth / 2, behavior: smooth ? 'smooth' : 'auto' });
+  };
+  // open centred on what is next
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current && items.length) { first.current = false; centre(selectedKey, false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length]);
+
+  const thisWeekNum = weekInfo(0).num;
+  const today = localToday();
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-zinc-500">Your sessions · swipe through time</span>
+        {selectedKey !== 'f:0' && (
+          <button onClick={() => { onSelect('f:0'); centre('f:0', true); }} className="text-xs text-cyan-300 hover:text-cyan-200 cursor-pointer">Jump to next up</button>
+        )}
+      </div>
+      <div ref={box} className="flex items-stretch gap-2 overflow-x-auto pb-2 snap-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {items.map((it, i) => {
+          const newWeek = i === 0 || items[i - 1].weekNum !== it.weekNum;
+          const done = it.kind === 'done';
+          const isNext = it.kind === 'upcoming' && it.k === 0;
+          const active = it.key === selectedKey;
+          const label = done ? (it.date === today ? 'Today' : weekday(it.date!)) : isNext ? 'Up next' : it.offset > 0 ? 'Next week' : 'Later this week';
+          const projected = it.kind === 'upcoming' && it.offset > 0;
+          const day = routine.days.find(d => Number(d.day_index) === it.day)!;
+          return (
+            <div key={it.key} className="contents">
+              {newWeek && (
+                <div className="shrink-0 flex flex-col justify-center pl-2 pr-1 text-[11px] text-zinc-500 whitespace-nowrap">
+                  <span className={`font-medium ${it.weekNum === thisWeekNum ? 'text-cyan-300' : 'text-zinc-300'}`}>Week {it.weekNum}</span>
+                  <span>{it.weekRange}</span>
+                  {it.weekNum === thisWeekNum && <span className="text-cyan-300/80">this week</span>}
+                </div>
+              )}
+              <button
+                data-key={it.key}
+                onClick={() => { onSelect(it.key); centre(it.key, true); }}
+                aria-current={active}
+                className={`snap-center shrink-0 w-[8.25rem] rounded-xl border p-3 text-left cursor-pointer transition-colors ${
+                  active ? 'border-cyan-400/60 bg-cyan-400/[0.08]' : 'border-white/[0.08] bg-[#141518] hover:bg-white/[0.04]'
+                } ${projected ? 'border-dashed' : ''}`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className={`text-[11px] whitespace-nowrap ${isNext ? 'text-cyan-300 font-medium' : 'text-zinc-500'}`}>{label}</span>
+                  {done && <Check size={13} className="text-emerald-300 shrink-0" />}
+                  {isNext && <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" aria-hidden />}
+                </div>
+                <div className="mt-1.5 text-[13px] font-semibold text-white leading-tight">{shortDayName(day.name)}</div>
+                <div className="mt-1 text-[11px] text-zinc-500">Day {it.day}{projected ? ' · projected' : ''}</div>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // The routine lives in code only (gymPlan.ts); the old tracker's saved copy is ignored
 const routine = getPowerbuildingRoutine();
 
@@ -349,9 +403,7 @@ export function GymPlanPage() {
   const [bodyWeightLb, setBodyWeightLb] = useState(160);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [mode, setMode] = useState<'done' | 'plan' | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [logging, setLogging] = useState(false);
   const toggleSelected = (name: string) => setSelected(cur => (cur === name ? null : name));
@@ -390,26 +442,37 @@ export function GymPlanPage() {
 
   const nextDay = useMemo(() => nextDayIndex(history), [history]);
   const lastDay = useMemo(() => lastAssignedDay(history), [history]);
-  const dayIndex = selectedDay ?? nextDay;
-  const day = routine.days.find(d => d.day_index === String(dayIndex)) ?? routine.days[0];
-  // The current round = the run of sessions since Day 1 last came up. A day done in this round shows what
-  // you actually lifted (even after the round wraps and Day 1 is "next"), with a switch to next time's plan.
-  const sessions = useMemo(() => assignedSessions(history), [history]);
-  const round = useMemo(() => {
-    const out: { date: string; day: number }[] = [];
-    for (let i = sessions.length - 1; i >= 0; i--) {
-      if (out.length && sessions[i].day >= out[0].day) break;
-      out.unshift(sessions[i]);
-    }
-    return out;
-  }, [sessions]);
-  const roundSession = (idx: number) => round.find(s => s.day === idx) ?? null;
-  const doneSession = weekOffset === 0 && dayIndex !== nextDay ? roundSession(dayIndex) : null;
-  const showDone = !!doneSession && (mode ?? 'done') === 'done';
+  const sessions = useMemo(() => {
+    const planStart = isoOf(mondayOf(PLAN_START));
+    return assignedSessions(history).filter(x => x.date >= planStart);
+  }, [history]);
 
-  const week = weekInfo(weekOffset);
-  const reviewing = weekOffset < 0 || showDone;
-  const range = weekOffset < 0 ? { start: week.start, end: week.end } : showDone && doneSession ? { start: doneSession.date, end: doneSession.date } : { start: '', end: '' };
+  // The timeline: sessions done so far (by date), then the next ones. Sessions still due this calendar week use
+  // this week's numbers; the ones after that use next week's projection.
+  const thisWeek = weekInfo(0);
+  const strip = useMemo<StripItem[]>(() => {
+    const items: StripItem[] = sessions.map(x => {
+      const w = weekOf(mondayOf(x.date));
+      return { key: `p:${x.date}:${x.day}`, kind: 'done', day: x.day, date: x.date, offset: 0, k: -1, weekNum: w.num, weekRange: w.range };
+    });
+    const doneThisWeek = sessions.filter(x => x.date >= thisWeek.start && x.date <= thisWeek.end).length;
+    const remaining = Math.max(0, routine.days.length - doneThisWeek);
+    for (let k = 0; k < remaining + routine.days.length; k++) {
+      const offset: 0 | 1 = k < remaining ? 0 : 1;
+      const w = weekInfo(offset);
+      items.push({ key: `f:${k}`, kind: 'upcoming', day: ((nextDay - 1 + k) % routine.days.length) + 1, offset, k, weekNum: w.num, weekRange: w.range });
+    }
+    return items;
+  }, [sessions, nextDay, thisWeek.start, thisWeek.end]);
+
+  const cur = strip.find(x => x.key === selectedKey) ?? strip.find(x => x.key === 'f:0')!;
+  const dayIndex = cur.day;
+  const weekOffset = cur.kind === 'upcoming' ? cur.offset : 0;
+  const day = routine.days.find(d => d.day_index === String(dayIndex)) ?? routine.days[0];
+  const doneSession = cur.kind === 'done' ? { date: cur.date!, day: cur.day } : null;
+  const showDone = !!doneSession;
+  const reviewing = showDone;
+  const range = doneSession ? { start: doneSession.date, end: doneSession.date } : { start: '', end: '' };
 
   const plans = useMemo(() => reviewing ? [] : day.exercises.map(ex =>
     MAIN_LIFTS.includes(ex.name)
@@ -464,7 +527,7 @@ export function GymPlanPage() {
       return !!a && a.v === 2 && a.date === localToday() && Object.values<any>(a.drafts || {}).some(d => d.sets?.some((x: any) => x.done));
     } catch { return false; }
   })();
-  const canLog = isAdmin && weekOffset === 0 && !loading && !showDone;
+  const canLog = isAdmin && cur.kind === 'upcoming' && (cur.k === 0 || cur.offset === 0) && !loading;
 
   const handleSync = async () => {
     setSyncing(true);
@@ -515,11 +578,17 @@ export function GymPlanPage() {
       <div className={`px-5 lg:px-10 py-6 lg:py-10 w-full mx-auto flex flex-col lg:grid lg:grid-cols-[19rem_1fr] gap-6 lg:gap-12 lg:items-start transition-[max-width] duration-300 ${
         selected ? 'max-w-6xl xl:max-w-[96rem] xl:grid-cols-[17rem_minmax(0,1fr)_27rem] xl:gap-8' : 'max-w-6xl'
       }`}>
+        {!loading && !logging && (
+          <div className="lg:col-span-full min-w-0">
+            <SessionStrip items={strip} selectedKey={cur.key} onSelect={key => { setSelectedKey(key); setSelected(null); }} />
+          </div>
+        )}
+
         {/* LEFT: where am I */}
         <aside className={`space-y-6 lg:sticky lg:top-20 ${logging ? 'hidden lg:block' : ''}`}>
           <div>
             <span className="text-xs font-medium text-cyan-300">
-              {showDone && doneSession ? `Done ${daysAgo(doneSession.date)}` : reviewing ? 'Looking back' : dayIndex === nextDay && weekOffset === 0 ? 'Up next' : 'Viewing'} · Day {day.day_index} of {routine.days.length}
+              {showDone && doneSession ? `Done ${daysAgo(doneSession.date)}` : cur.k === 0 ? 'Up next' : cur.offset > 0 ? 'Next week · projected' : 'Coming up'} · Day {day.day_index} of {routine.days.length}
             </span>
             <h1 className="text-3xl lg:text-4xl font-semibold tracking-tight leading-[1.1] text-white" style={{ margin: '0.5rem 0 0' }}>{shortDayName(day.name)}</h1>
             <p className="text-sm text-zinc-300 mt-2">{focusOf(day.name)}</p>
@@ -530,43 +599,9 @@ export function GymPlanPage() {
                   : `${day.exercises.length} exercises · ${totalSets} working sets`}
               </p>
             )}
-            {lastDay.date && weekOffset === 0 && (
+            {lastDay.date && !showDone && cur.k === 0 && (
               <p className="text-xs text-zinc-500 mt-1">Last workout {shortDate(lastDay.date)} (Day {lastDay.day})</p>
             )}
-          </div>
-
-          <WeekNav offset={weekOffset} setOffset={n => { setWeekOffset(n); setSelected(null); setMode(null); }} />
-
-          <div>
-            <span className="text-xs text-zinc-500">Training days</span>
-            <div className="mt-1.5 flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
-              {routine.days.map(d => {
-                const idx = Number(d.day_index);
-                const active = idx === dayIndex;
-                const isNext = weekOffset === 0 && idx === nextDay;
-                const rs = weekOffset === 0 && !isNext ? roundSession(idx) : null;
-                const done = !!rs;
-                return (
-                  <button
-                    key={d.id}
-                    onClick={() => { setSelectedDay(idx); setSelected(null); setMode(null); }}
-                    className={`shrink-0 flex items-center gap-3 rounded-lg border px-3 py-2 text-left cursor-pointer transition-colors ${
-                      active ? 'border-cyan-400/50 bg-cyan-400/[0.07]' : 'border-white/[0.08] hover:bg-white/[0.04]'
-                    }`}
-                  >
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-[11px] shrink-0 ${
-                      done ? 'bg-emerald-400/15 text-emerald-300' : isNext ? 'bg-cyan-400 text-slate-900 font-semibold' : 'bg-white/[0.06] text-zinc-400'
-                    }`}>
-                      {done ? <Check size={13} /> : d.day_index}
-                    </span>
-                    <span className="min-w-0">
-                      <span className={`block text-[13px] font-medium whitespace-nowrap ${active ? 'text-white' : 'text-zinc-200'}`}>{shortDayName(d.name)}</span>
-                      {weekOffset === 0 && <span className="block text-[11px] text-zinc-500">{done && rs ? `Done ${daysAgo(rs.date)}` : isNext ? 'Next up' : 'Later'}</span>}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
           </div>
 
           {!loading && <div className="hidden lg:block"><RankCard ranks={rankInputs} bodyWeightLb={bodyWeightLb} /></div>}
@@ -580,16 +615,6 @@ export function GymPlanPage() {
 
         {/* RIGHT: what to do (or what you did), in order */}
         <main className="min-w-0">
-          {doneSession && weekOffset === 0 && (
-            <div className="mb-3 inline-flex gap-1 rounded-lg border border-white/10 p-1">
-              {([['done', 'What you did'], ['plan', "Next time's plan"]] as const).map(([m, label]) => (
-                <button key={m} onClick={() => setMode(m)}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer ${(mode ?? 'done') === m ? 'bg-cyan-400/15 text-cyan-200' : 'text-zinc-400 hover:text-zinc-200'}`}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
           {loading ? (
             <p className="text-sm text-zinc-500">Loading your history…</p>
           ) : logging && canLog ? (
@@ -609,7 +634,7 @@ export function GymPlanPage() {
           ) : reviewing ? (
             <ol className="space-y-3">
               {day.exercises.map((ex, i) => (
-                <ReviewRow key={`${day.id}-${week.start}-${i}`} exercise={ex.name} entry={logged[i]} selected={selected} onSelect={toggleSelected} />
+                <ReviewRow key={`${day.id}-${range.start}-${i}`} exercise={ex.name} entry={logged[i]} selected={selected} onSelect={toggleSelected} />
               ))}
             </ol>
           ) : (
