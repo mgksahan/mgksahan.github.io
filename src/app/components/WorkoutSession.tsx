@@ -26,9 +26,8 @@ interface Block {
 interface Draft { name: string; sets: DraftSet[]; base: DraftSet[]; baseRaw?: string; baseTypes?: string; note: string; baseNote?: string }
 type Drafts = Record<string, Draft>;
 
-// Notes are saved by the backend (POST /fitness `notes`). Keep this false until my-aws-environment#21 is applied,
-// otherwise typed notes would not be stored.
-const NOTES_ENABLED = false;
+// Notes are saved by the backend (POST /fitness `notes`, applied in my-aws-environment#21).
+const NOTES_ENABLED = true;
 const SESSION_KEY = 'peak_active_session';
 const TYPE_ORDER: SetType[] = ['warm-up', 'default', 'drop', 'failure'];
 const PLATES = [45, 35, 25, 10, 5, 2.5];
