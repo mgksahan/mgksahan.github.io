@@ -13,6 +13,7 @@ export interface LogPayload {
   one_rep_max_kg: number;
   one_rep_max_lbs: number;
   total_volume_lbs: number;
+  notes?: string;
   source: 'peak';
 }
 
@@ -82,7 +83,7 @@ export const lbToKg = (lb: number) => Math.round((lb / LB_PER_KG) * 100) / 100;
 // kept exactly as stored (baseRaw/baseTypes) and this session's sets are added after them.
 export function buildPayload(
   exercise: string, date: string, sets: DraftSet[],
-  opts: { isPullUp: boolean; bodyWeightLb: number; base?: DraftSet[]; baseRaw?: string; baseTypes?: string },
+  opts: { isPullUp: boolean; bodyWeightLb: number; base?: DraftSet[]; baseRaw?: string; baseTypes?: string; notes?: string },
 ): LogPayload | null {
   const mine = sets.filter(s => s.done && s.reps > 0);
   if (!mine.length) return null;
@@ -101,6 +102,7 @@ export function buildPayload(
     one_rep_max_kg: r2(best),
     one_rep_max_lbs: r2(best * LB_PER_KG),
     total_volume_lbs: r2(all.reduce((sum, s) => sum + total(s) * s.reps, 0)),
+    ...(opts.notes && opts.notes.trim() ? { notes: opts.notes.trim() } : {}),
     source: 'peak',
   };
 }

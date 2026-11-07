@@ -41,6 +41,7 @@ export interface FitnessRow {
   set_types?: string;
   one_rep_max_lbs?: number;
   total_volume_lbs?: number;
+  notes?: string;
 }
 
 export interface LoggedSet {
@@ -372,7 +373,9 @@ export function planAccessory(name: string, rows: FitnessRow[], setcount: number
   const W = Math.max(...last.sets.map(s => s.lb));
   const atW = last.sets.filter(s => s.lb >= W - 0.5);
   const step = W < 30 ? 2.5 : 5;
-  const shown = (lb: number) => roundTo(lb, 0.5);
+  // Barbell loads snap to what the plates can make (5 lb steps); a logged 51.75 kg / 114.1 lb shows as 115
+  const barbell = /barbell/i.test(name);
+  const shown = (lb: number) => (barbell ? roundTo(lb, 5) : roundTo(lb, 0.5));
 
   if (atW.every(s => s.reps >= REP_HIGH)) {
     return { ...base, lb: shown(W + step), note: `Hit ${REP_HIGH}+ on every set last time: +${step} lb.`, last };

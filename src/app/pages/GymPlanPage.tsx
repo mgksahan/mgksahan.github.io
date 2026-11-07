@@ -575,6 +575,8 @@ export function GymPlanPage() {
               bodyWeightLb={bodyWeightLb}
               onExit={() => setLogging(false)}
               onFinished={() => { void load(); }}
+              historyOpen={selected}
+              onHistory={setSelected}
             />
           ) : reviewing ? (
             <ol className="space-y-3">
@@ -601,7 +603,7 @@ export function GymPlanPage() {
 
         {!loading && <div className="lg:hidden"><RankCard ranks={rankInputs} bodyWeightLb={bodyWeightLb} /></div>}
 
-        {selected && !logging && (
+        {selected && (
           <ExerciseHistory
             name={selected}
             rows={history[selected] || []}

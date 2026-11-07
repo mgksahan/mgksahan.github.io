@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Plus, Trash2, X, Cloud, CloudOff, Loader2, Minus, SkipForward, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LineChart, StickyNote, Check, Plus, Trash2, X, Cloud, CloudOff, Loader2, Minus, SkipForward, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { mediaFor, displayName } from '../lib/exerciseMedia';
 import { FitnessRow, MainLiftPlan, AccessoryOption, LoggedSet, parseSets, localToday } from '../lib/gymPlan';
+import { NoteHistory, pastNotes } from './ExerciseNotes';
 import { DraftSet, SetType, buildPayload, flushLogs, getSyncStatus, queueLog, subscribeSync } from '../lib/offlineLog';
 
 // Jefit-style logging: every set (warm-ups, top set, back-offs, accessories) is a row you can edit.
@@ -22,9 +23,12 @@ interface Block {
   hint: string;
 }
 // base = sets for this exercise already logged today by another session (kept, never shown as ticked)
-interface Draft { name: string; sets: DraftSet[]; base: DraftSet[]; baseRaw?: string; baseTypes?: string }
+interface Draft { name: string; sets: DraftSet[]; base: DraftSet[]; baseRaw?: string; baseTypes?: string; note: string; baseNote?: string }
 type Drafts = Record<string, Draft>;
 
+// Notes are saved by the backend (POST /fitness `notes`). Keep this false until my-aws-environment#21 is applied,
+// otherwise typed notes would not be stored.
+const NOTES_ENABLED = false;
 const SESSION_KEY = 'peak_active_session';
 const TYPE_ORDER: SetType[] = ['warm-up', 'default', 'drop', 'failure'];
 const PLATES = [45, 35, 25, 10, 5, 2.5];
@@ -38,12 +42,15 @@ const restSecs = (label: string) => {
 const clock = (sec: number) => `${Math.floor(Math.max(0, sec) / 60)}:${String(Math.max(0, Math.floor(sec) % 60)).padStart(2, '0')}`;
 const num = (v: string) => { const n = parseFloat(v); return Number.isFinite(n) && n >= 0 ? n : 0; };
 
+// 45 lb bar + pairs of plates (smallest 2.5 lb, so totals go in 5 lb steps). A weight the plates can't
+// make (e.g. 114) is shown as the closest loadable weight (115) instead of silently dropping the remainder.
 function platesPerSide(lb: number) {
-  let left = (lb - 45) / 2;
+  const loadable = Math.round(lb / 5) * 5;
+  let left = (loadable - 45) / 2;
   if (left <= 0) return 'bar only';
   const out: number[] = [];
   for (const p of PLATES) while (left >= p - 0.001) { out.push(p); left -= p; }
-  return out.join(' · ') + ' /side';
+  return `${loadable === lb ? '' : `${loadable} lb: `}${out.join(' · ')} /side`;
 }
 
 function SyncPill() {
@@ -56,7 +63,7 @@ function SyncPill() {
 }
 export { SyncPill };
 
-export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bodyWeightLb, onExit, onFinished }: {
+export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bodyWeightLb, onExit, onFinished, historyOpen, onHistory }: {
   dayId: string;
   dayName: string;
   plans: PlanItem[];
@@ -65,6 +72,8 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
   bodyWeightLb: number;
   onExit: () => void;
   onFinished: () => void;
+  historyOpen: string | null; // exercise whose graph is open, if any
+  onHistory: (name: string | null) => void;
 }) {
   const today = localToday();
 
@@ -152,7 +161,7 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
   };
   const makeDraft = (b: Block, name: string): Draft => {
     const row = (history[name] || []).find(r => r.workout_date.slice(0, 10) === today);
-    return { name, sets: initial(b, name), base: baseFor(b, name), baseRaw: row?.raw_logs, baseTypes: row?.set_types };
+    return { name, sets: initial(b, name), base: baseFor(b, name), baseRaw: row?.raw_logs, baseTypes: row?.set_types, note: '', baseNote: row?.notes };
   };
 
   const defaultName = (b: Block) => {
@@ -167,7 +176,7 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
     blocks.forEach(b => {
       const sv: Draft | undefined = saved?.drafts?.[b.key];
       const name = sv && b.names.includes(sv.name) ? sv.name : defaultName(b);
-      d[b.key] = sv && b.names.includes(sv.name) ? { ...sv, base: sv.base ?? [] } : makeDraft(b, name);
+      d[b.key] = sv && b.names.includes(sv.name) ? { ...sv, base: sv.base ?? [], note: sv.note ?? '' } : makeDraft(b, name);
     });
     return d;
   });
@@ -180,7 +189,8 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
 
   // --- rest timer + session clock ---
   const [now, setNow] = useState(Date.now());
-  const [rest, setRest] = useState<{ end: number; total: number } | null>(null);
+  const [rest, setRest] = useState<{ start: number; end: number; total: number } | null>(null);
+  const [openNotes, setOpenNotes] = useState<Record<string, boolean>>({});
   const buzzed = useRef(false);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(t); }, []);
   const restLeft = rest ? Math.ceil((rest.end - now) / 1000) : 0;
@@ -190,7 +200,7 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
       try { navigator.vibrate?.([250, 120, 250]); } catch { /* not supported */ }
     }
   }, [rest, restLeft]);
-  const startRest = (sec: number) => { buzzed.current = false; setRest({ end: Date.now() + sec * 1000, total: sec }); };
+  const startRest = (sec: number) => { buzzed.current = false; const t = Date.now(); setRest({ start: t, end: t + sec * 1000, total: sec }); };
 
   // keep the screen on while logging
   useEffect(() => {
@@ -207,7 +217,7 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
       blocks.forEach(b => {
         const d = drafts[b.key];
         if (!d || !d.sets.some(x => x.done)) return; // nothing ticked in THIS session: leave earlier rows alone
-        const payload = buildPayload(d.name, today, d.sets, { isPullUp: b.isPullUp, bodyWeightLb, base: d.base, baseRaw: d.baseRaw, baseTypes: d.baseTypes });
+        const payload = buildPayload(d.name, today, d.sets, { isPullUp: b.isPullUp, bodyWeightLb, base: d.base, baseRaw: d.baseRaw, baseTypes: d.baseTypes, notes: NOTES_ENABLED ? [d.baseNote, d.note].filter(x => x && x.trim()).join('\n') : undefined });
         if (!payload) return;
         const sig = JSON.stringify(payload);
         if (lastSent.current[b.key + d.name] === sig) return;
@@ -245,6 +255,7 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
     if (d.name === name) return;
     if (d.sets.some(s => s.done) && !window.confirm('Switching exercise clears the sets you ticked for this one. Continue?')) return;
     patch(b, () => makeDraft(b, name));
+    if (historyOpen && b.names.includes(historyOpen)) onHistory(name);
   };
 
   const prevFor = (name: string, isPullUp: boolean) => {
@@ -272,10 +283,19 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // keep an open graph on the exercise you are looking at
+  useEffect(() => {
+    const b = blocks[page];
+    if (historyOpen && b) onHistory(draftOf(b).name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
   const totalDone = blocks.reduce((n, b) => n + draftOf(b).sets.filter(s => s.done).length, 0);
 
   const finish = async () => {
     if (!totalDone && !window.confirm('No sets are ticked. Leave without saving anything?')) return;
+    const orphan = blocks.filter(b => { const d = draftOf(b); return d.note.trim() && !d.sets.some(x => x.done); }).length;
+    if (orphan && !window.confirm(`${orphan} note${orphan > 1 ? 's' : ''} won't be saved: notes save with a ticked set for that exercise. Finish anyway?`)) return;
     await flushLogs();
     const left = getSyncStatus().pending;
     try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
@@ -350,6 +370,13 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
                     <div className="text-xs text-zinc-500 font-mono tabular-nums">Earlier today: {d.base.map(x => `${x.lb}×${x.reps}`).join(', ')}</div>
                   )}
                 </div>
+                <button
+                  onClick={() => onHistory(historyOpen === d.name ? null : d.name)}
+                  aria-label={`Show ${displayName(d.name)} history`}
+                  className={`shrink-0 p-2 rounded-lg border cursor-pointer ${historyOpen === d.name ? 'border-cyan-400/60 text-cyan-300 bg-cyan-400/10' : 'border-white/10 text-zinc-400 hover:text-white'}`}
+                >
+                  <LineChart size={18} />
+                </button>
               </div>
 
               {b.options && b.options.length > 1 && (
@@ -398,6 +425,35 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
                 <Plus size={14} /> Add set
               </button>
 
+              {NOTES_ENABLED && (() => {
+                const past = pastNotes(history[d.name] || []);
+                const open = !!openNotes[b.key];
+                return (
+                  <div className="border-t border-white/[0.08] pt-2 space-y-2">
+                    <button onClick={() => setOpenNotes(o => ({ ...o, [b.key]: !o[b.key] }))}
+                      className="w-full flex items-center gap-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">
+                      <StickyNote size={14} className={d.note.trim() ? 'text-cyan-300' : ''} />
+                      <span>Notes{past.length ? ` · ${past.length} earlier` : ''}{d.note.trim() ? ' · written today' : ''}</span>
+                      {!open && past[0] && <span className="ml-auto min-w-0 truncate text-zinc-600 max-w-[50%]">{past[0].text.replace(/\s+/g, ' ')}</span>}
+                    </button>
+                    {open && (
+                      <div className="space-y-2">
+                        <textarea
+                          value={d.note}
+                          onChange={e => patch(b, x => ({ ...x, note: e.target.value }))}
+                          rows={3}
+                          placeholder="How did it feel? Setup, cues, pain, what to change next time…"
+                          className="w-full rounded-md bg-black/30 border border-white/10 px-3 py-2 text-[13px] text-white outline-none focus:border-cyan-400/70 resize-y"
+                        />
+                        {d.note.trim() && !d.sets.some(x => x.done) && <p className="text-[11px] text-amber-300/80">Saves with your first ticked set.</p>}
+                        <div className="text-[11px] text-zinc-500">All notes for this exercise</div>
+                        <NoteHistory notes={past} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               <button
                 onClick={() => (bi >= blocks.length - 1 ? finish() : goTo(bi + 1))}
                 style={isComplete(b) ? { color: '#0f172a' } : undefined}
@@ -428,14 +484,15 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
         <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-4 pt-2 pointer-events-none">
           <div className={`pointer-events-auto mx-auto max-w-md rounded-2xl border p-3 flex items-center gap-3 shadow-xl bg-[#0d0e10] ${restLeft <= 0 ? 'border-emerald-400/60' : 'border-white/15'}`}>
             <div className="flex-1 min-w-0">
-              <div className="text-xs text-zinc-400">{restLeft <= 0 ? 'Rest over. Next set.' : 'Rest'}</div>
-              <div className={`font-mono text-3xl font-semibold tabular-nums leading-none ${restLeft <= 0 ? 'text-emerald-300' : 'text-white'}`}>{clock(restLeft)}</div>
+              <div className="text-xs text-zinc-400">{restLeft <= 0 ? 'Rest over. Next set.' : 'Rest'} · target {clock((rest.end - rest.start) / 1000)}</div>
+              <div className={`font-mono text-3xl font-semibold tabular-nums leading-none ${restLeft <= 0 ? 'text-emerald-300' : 'text-white'}`}>{restLeft <= 0 ? `+${clock(-restLeft)}` : clock(restLeft)}</div>
+              <div className="font-mono text-xs text-zinc-300 tabular-nums mt-1">Rested {clock((now - rest.start) / 1000)} so far</div>
               <div className="h-1 rounded-full bg-white/10 mt-2 overflow-hidden">
                 <div className="h-full bg-cyan-400 transition-[width] duration-500" style={{ width: `${Math.max(0, Math.min(100, (restLeft / rest.total) * 100))}%` }} />
               </div>
             </div>
             <button onClick={() => setRest(r => (r ? { ...r, end: r.end - 15000 } : r))} aria-label="15 seconds less" className="p-2.5 rounded-lg bg-white/[0.07] text-zinc-200 cursor-pointer"><Minus size={16} /></button>
-            <button onClick={() => setRest(r => (r ? { end: Math.max(r.end, Date.now()) + 15000, total: r.total + 15 } : r))} aria-label="15 seconds more" className="p-2.5 rounded-lg bg-white/[0.07] text-zinc-200 cursor-pointer"><Plus size={16} /></button>
+            <button onClick={() => setRest(r => (r ? { ...r, end: Math.max(r.end, Date.now()) + 15000, total: r.total + 15 } : r))} aria-label="15 seconds more" className="p-2.5 rounded-lg bg-white/[0.07] text-zinc-200 cursor-pointer"><Plus size={16} /></button>
             <button onClick={() => setRest(null)} aria-label="Skip rest" className="p-2.5 rounded-lg bg-white/[0.07] text-zinc-200 cursor-pointer"><SkipForward size={16} /></button>
           </div>
         </div>

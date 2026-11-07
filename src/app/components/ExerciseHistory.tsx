@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { localToday } from '../lib/gymPlan';
 import { X } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { FitnessRow, parseSets, toKg } from '../lib/gymPlan';
@@ -27,6 +28,56 @@ const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
 function fmtValue(metric: Metric, v: number) {
   if (metric === 'multiplier') return `${v.toFixed(2)}×`;
   return `${Math.round(v).toLocaleString()} lb`;
+}
+
+const sessionDate = (d: string) => {
+  const dt = new Date(d.slice(0, 10) + 'T12:00:00');
+  return dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: dt.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+};
+
+// Every logged session for this exercise, newest first: sets, est. 1RM, volume and any note
+function SessionList({ rows }: { rows: FitnessRow[] }) {
+  const [shown, setShown] = useState(8);
+  const sessions = useMemo(() => rows.filter(r => isDate(r.workout_date) && r.raw_logs)
+    .sort((a, b) => b.workout_date.localeCompare(a.workout_date)), [rows]);
+  if (!sessions.length) return null;
+  const today = localToday();
+  return (
+    <div className="space-y-2">
+      <span className="text-xs text-zinc-400">Sessions · {sessions.length}</span>
+      <ul className="space-y-2">
+        {sessions.slice(0, shown).map(r => {
+          const types = r.set_types ? r.set_types.split(',') : [];
+          const sets = parseSets(r).map((s, i) => ({ ...s, warm: types[i] === 'warm-up' }));
+          const vol = Number(r.total_volume_lbs) || sets.reduce((n, s) => n + s.lb * s.reps, 0);
+          return (
+            <li key={r.workout_date} className="rounded-lg border border-white/[0.08] bg-black/20 px-3 py-2.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[13px] font-medium text-zinc-200">{r.workout_date.slice(0, 10) === today ? 'Today' : sessionDate(r.workout_date)}</span>
+                <span className="font-mono text-[11px] text-zinc-500 tabular-nums">
+                  {Number(r.one_rep_max_lbs) > 0 ? `1RM ${Math.round(Number(r.one_rep_max_lbs))} lb · ` : ''}vol {Math.round(vol).toLocaleString()}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {sets.map((s, i) => (
+                  <span key={i} className={`px-2 py-0.5 rounded-md font-mono text-xs tabular-nums ${s.warm ? 'bg-amber-400/10 text-amber-200/80' : 'bg-white/[0.06] text-zinc-100'}`}>
+                    {Math.round(s.lb * 10) / 10}×{s.reps}
+                  </span>
+                ))}
+              </div>
+              {r.notes && r.notes.trim() && <p className="mt-2 text-[12px] text-zinc-400 whitespace-pre-wrap break-words">{r.notes.trim()}</p>}
+            </li>
+          );
+        })}
+      </ul>
+      {sessions.length > shown && (
+        <button onClick={() => setShown(n => n + 10)} className="w-full py-2 rounded-lg border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.06] cursor-pointer">
+          Show older sessions ({sessions.length - shown} more)
+        </button>
+      )}
+      <p className="text-[11px] text-zinc-600">Amber sets are warm-ups.</p>
+    </div>
+  );
 }
 
 export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
@@ -100,13 +151,13 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
 
   return (
     <>
-      <div className="xl:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
+      <div className="xl:hidden fixed inset-0 z-[45] bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div
         role="region"
         key={name}
         aria-label={`${displayName(name)} history`}
-        className="panel-in fixed inset-x-0 bottom-0 z-40 max-h-[88vh] overflow-y-auto rounded-t-2xl border border-white/15 bg-[#141518] p-5 space-y-4
-                   xl:static xl:z-auto xl:max-h-none xl:overflow-visible xl:rounded-xl xl:border-white/[0.08] xl:sticky xl:top-24 xl:self-start"
+        className="panel-in fixed inset-x-0 bottom-0 z-50 max-h-[88vh] overflow-y-auto rounded-t-2xl border border-white/15 bg-[#141518] p-5 space-y-4
+                   xl:static xl:z-auto xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto xl:rounded-xl xl:border-white/[0.08] xl:sticky xl:top-24 xl:self-start"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -232,6 +283,8 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
               )}
               <p className="text-[11px] text-zinc-500">{visible.length} session{visible.length === 1 ? '' : 's'} shown</p>
             </div>
+
+            <SessionList rows={rows} />
           </>
         )}
       </div>
