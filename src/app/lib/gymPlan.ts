@@ -458,7 +458,8 @@ const ACCESSORY_DAY_LIFTS = [
 ];
 
 // Same state machine as the old tracker: bench days are 1/4, squat + pull-up days 2/5, accessory-only days 3
-export function lastAssignedDay(history: Record<string, FitnessRow[]>): { day: number; date: string | null } {
+// Every logged session, in date order, with the program day it counts as
+export function assignedSessions(history: Record<string, FitnessRow[]>): { date: string; day: number }[] {
   const dates: Record<string, { bench: boolean; squatPull: boolean; acc: boolean }> = {};
   const mark = (name: string, key: 'bench' | 'acc') => (history[name] || []).forEach(r => {
     if (!isDate(r.workout_date)) return;
@@ -475,7 +476,7 @@ export function lastAssignedDay(history: Record<string, FitnessRow[]>): { day: n
   });
 
   let last = 0;
-  let lastDate: string | null = null;
+  const out: { date: string; day: number }[] = [];
   for (const date of Object.keys(dates).sort()) {
     const d = dates[date];
     let assigned = 0;
@@ -484,10 +485,16 @@ export function lastAssignedDay(history: Record<string, FitnessRow[]>): { day: n
     else if (d.acc) assigned = 3;
     if (assigned) {
       last = assigned;
-      lastDate = date;
+      out.push({ date, day: assigned });
     }
   }
-  return { day: last, date: lastDate };
+  return out;
+}
+
+export function lastAssignedDay(history: Record<string, FitnessRow[]>): { day: number; date: string | null } {
+  const all = assignedSessions(history);
+  const l = all[all.length - 1];
+  return { day: l?.day ?? 0, date: l?.date ?? null };
 }
 
 export function nextDayIndex(history: Record<string, FitnessRow[]>): number {

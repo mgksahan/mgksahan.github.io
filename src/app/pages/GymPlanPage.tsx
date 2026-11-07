@@ -11,7 +11,7 @@ import { SHORT_NAME, STANDARDS, TIER_BAR, TIER_TEXT, overallRank, rankOf } from 
 import {
   FitnessRow, MainLiftPlan, AccessoryOption, LoggedSet, MAIN_LIFTS, PLAN_START,
   getPowerbuildingRoutine, planMainLift, planAccessoryOptions, accessorySets, alternativesFor, restLabel,
-  nextDayIndex, lastAssignedDay, roundTo, toKg, localToday, workingSets,
+  nextDayIndex, lastAssignedDay, assignedSessions, roundTo, toKg, localToday, workingSets,
 } from '../lib/gymPlan';
 
 // Layout rule: left column = where you are (day, week, rank); right column = the session, in order.
@@ -351,6 +351,7 @@ export function GymPlanPage() {
   const [syncing, setSyncing] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [mode, setMode] = useState<'done' | 'plan' | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [logging, setLogging] = useState(false);
   const toggleSelected = (name: string) => setSelected(cur => (cur === name ? null : name));
@@ -391,8 +392,24 @@ export function GymPlanPage() {
   const lastDay = useMemo(() => lastAssignedDay(history), [history]);
   const dayIndex = selectedDay ?? nextDay;
   const day = routine.days.find(d => d.day_index === String(dayIndex)) ?? routine.days[0];
+  // The current round = the run of sessions since Day 1 last came up. A day done in this round shows what
+  // you actually lifted (even after the round wraps and Day 1 is "next"), with a switch to next time's plan.
+  const sessions = useMemo(() => assignedSessions(history), [history]);
+  const round = useMemo(() => {
+    const out: { date: string; day: number }[] = [];
+    for (let i = sessions.length - 1; i >= 0; i--) {
+      if (out.length && sessions[i].day >= out[0].day) break;
+      out.unshift(sessions[i]);
+    }
+    return out;
+  }, [sessions]);
+  const roundSession = (idx: number) => round.find(s => s.day === idx) ?? null;
+  const doneSession = weekOffset === 0 && dayIndex !== nextDay ? roundSession(dayIndex) : null;
+  const showDone = !!doneSession && (mode ?? 'done') === 'done';
+
   const week = weekInfo(weekOffset);
-  const reviewing = weekOffset < 0;
+  const reviewing = weekOffset < 0 || showDone;
+  const range = weekOffset < 0 ? { start: week.start, end: week.end } : showDone && doneSession ? { start: doneSession.date, end: doneSession.date } : { start: '', end: '' };
 
   const plans = useMemo(() => reviewing ? [] : day.exercises.map(ex =>
     MAIN_LIFTS.includes(ex.name)
@@ -406,14 +423,14 @@ export function GymPlanPage() {
     [ex.name, ...alternativesFor(ex.name)].forEach(n => {
       (history[n] || []).forEach(r => {
         const d = r.workout_date.slice(0, 10);
-        if (d >= week.start && d <= week.end) {
+        if (d >= range.start && d <= range.end) {
           const sets = workingSets(r);
           if (sets.length) found.push({ name: n, date: d, sets });
         }
       });
     });
     return found.sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
-  }), [day, history, week.start, week.end, reviewing]);
+  }), [day, history, range.start, range.end, reviewing]);
 
   const rankInputs = useMemo(() => RANK_LIFTS.map(name => {
     const rows = history[name] || [];
@@ -447,7 +464,7 @@ export function GymPlanPage() {
       return !!a && a.v === 2 && a.date === localToday() && Object.values<any>(a.drafts || {}).some(d => d.sets?.some((x: any) => x.done));
     } catch { return false; }
   })();
-  const canLog = isAdmin && weekOffset === 0 && !loading;
+  const canLog = isAdmin && weekOffset === 0 && !loading && !showDone;
 
   const handleSync = async () => {
     setSyncing(true);
@@ -502,7 +519,7 @@ export function GymPlanPage() {
         <aside className={`space-y-6 lg:sticky lg:top-20 ${logging ? 'hidden lg:block' : ''}`}>
           <div>
             <span className="text-xs font-medium text-cyan-300">
-              {reviewing ? 'Looking back' : dayIndex === nextDay && weekOffset === 0 ? 'Up next' : 'Viewing'} · Day {day.day_index} of {routine.days.length}
+              {showDone && doneSession ? `Done ${daysAgo(doneSession.date)}` : reviewing ? 'Looking back' : dayIndex === nextDay && weekOffset === 0 ? 'Up next' : 'Viewing'} · Day {day.day_index} of {routine.days.length}
             </span>
             <h1 className="text-3xl lg:text-4xl font-semibold tracking-tight leading-[1.1] text-white" style={{ margin: '0.5rem 0 0' }}>{shortDayName(day.name)}</h1>
             <p className="text-sm text-zinc-300 mt-2">{focusOf(day.name)}</p>
@@ -518,7 +535,7 @@ export function GymPlanPage() {
             )}
           </div>
 
-          <WeekNav offset={weekOffset} setOffset={n => { setWeekOffset(n); setSelected(null); }} />
+          <WeekNav offset={weekOffset} setOffset={n => { setWeekOffset(n); setSelected(null); setMode(null); }} />
 
           <div>
             <span className="text-xs text-zinc-500">Training days</span>
@@ -526,12 +543,13 @@ export function GymPlanPage() {
               {routine.days.map(d => {
                 const idx = Number(d.day_index);
                 const active = idx === dayIndex;
-                const done = weekOffset === 0 && idx < nextDay;
                 const isNext = weekOffset === 0 && idx === nextDay;
+                const rs = weekOffset === 0 && !isNext ? roundSession(idx) : null;
+                const done = !!rs;
                 return (
                   <button
                     key={d.id}
-                    onClick={() => { setSelectedDay(idx); setSelected(null); }}
+                    onClick={() => { setSelectedDay(idx); setSelected(null); setMode(null); }}
                     className={`shrink-0 flex items-center gap-3 rounded-lg border px-3 py-2 text-left cursor-pointer transition-colors ${
                       active ? 'border-cyan-400/50 bg-cyan-400/[0.07]' : 'border-white/[0.08] hover:bg-white/[0.04]'
                     }`}
@@ -543,7 +561,7 @@ export function GymPlanPage() {
                     </span>
                     <span className="min-w-0">
                       <span className={`block text-[13px] font-medium whitespace-nowrap ${active ? 'text-white' : 'text-zinc-200'}`}>{shortDayName(d.name)}</span>
-                      {weekOffset === 0 && <span className="block text-[11px] text-zinc-500">{done ? 'Done' : isNext ? 'Next up' : 'Later'}</span>}
+                      {weekOffset === 0 && <span className="block text-[11px] text-zinc-500">{done && rs ? `Done ${daysAgo(rs.date)}` : isNext ? 'Next up' : 'Later'}</span>}
                     </span>
                   </button>
                 );
@@ -562,6 +580,16 @@ export function GymPlanPage() {
 
         {/* RIGHT: what to do (or what you did), in order */}
         <main className="min-w-0">
+          {doneSession && weekOffset === 0 && (
+            <div className="mb-3 inline-flex gap-1 rounded-lg border border-white/10 p-1">
+              {([['done', 'What you did'], ['plan', "Next time's plan"]] as const).map(([m, label]) => (
+                <button key={m} onClick={() => setMode(m)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer ${(mode ?? 'done') === m ? 'bg-cyan-400/15 text-cyan-200' : 'text-zinc-400 hover:text-zinc-200'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {loading ? (
             <p className="text-sm text-zinc-500">Loading your history…</p>
           ) : logging && canLog ? (
