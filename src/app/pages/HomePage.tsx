@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import sahanPhoto from '../../assets/sahan.webp';
 import { apiService } from '../../apiService';
+import { certifications } from '../data/certifications';
 
 type RailPost = {
   slug?: string;
@@ -97,6 +98,41 @@ function PostsRail() {
   );
 }
 
+function Achievements() {
+  const earned = certifications.filter((c) => c.progress === undefined).length;
+  const sorted = [...certifications].sort((a, b) => Number(b.progress !== undefined) - Number(a.progress !== undefined));
+  return (
+    <div className="achievements">
+      <h3>Achievements <span>{earned}/{certifications.length} unlocked</span></h3>
+      <ul className="badges">
+        {sorted.map((c) => {
+          const pending = c.progress !== undefined;
+          const status = pending ? `In progress, ${c.progress}%` : c.expired ? `Expired ${c.expired}` : c.issued ? `Issued ${c.issued}` : 'Completed';
+          return (
+            <li key={c.name} className={`badge${pending ? ' locked' : ''}${c.expired ? ' expired' : ''}`} tabIndex={0} aria-label={`${c.name}, ${c.issuer}. ${status}`}>
+              <div className="medal" aria-hidden="true">
+                {pending && (
+                  <svg viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="16" className="ring-bg" />
+                    <circle cx="18" cy="18" r="16" className="ring" strokeDasharray={`${(c.progress! / 100) * 100.5} 100.5`} />
+                  </svg>
+                )}
+                {c.logo ? <img className={`logo${c.logo.endsWith('.png') ? ' tile' : ''}`} src={`${import.meta.env.BASE_URL}certs/${c.logo}`} alt="" /> : <span className="glyph">{c.icon}</span>}
+                {pending && <b className="pct">{c.progress}%</b>}
+              </div>
+              <div className="tip" role="presentation">
+                <strong>{c.name}</strong>
+                <span>{c.issuer}</span>
+                <em>{status}</em>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export function HomePage() {
   useEffect(() => {
     document.documentElement.classList.add('js');
@@ -175,7 +211,7 @@ export function HomePage() {
       revealSeq();
     }
 
-    const els = document.querySelectorAll('section h2, .proj, .about p, .timeline li, .contact a, .contact p');
+    const els = document.querySelectorAll('section h2, .proj, .about p, .timeline li, .badge, .contact a, .contact p');
     els.forEach((e: Element) => {
       e.classList.add('reveal');
       if (e.parentNode) {
@@ -270,6 +306,7 @@ export function HomePage() {
           <li><span>2023-2024</span>Graduate Certificate, Embedded Systems Development, Conestoga College</li>
           <li><span>2017-2021</span>B.Eng (Hons.), Electrical &amp; Computer Systems Engineering, Monash University</li>
         </ul>
+        <Achievements />
       </section>
 
       <section id="contact" className="contact">
