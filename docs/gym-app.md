@@ -109,6 +109,9 @@ A row holds: `raw_logs` (`"kgxreps,kgxreps"`, always **kg**), `set_types` (same 
   styles. Use `div` or inline style when a utility class does not apply.
 - **Never put `overscroll-behavior` on `body`** (only `html`): `body` is a scroll container here and it blocks
   touch scrolling.
+- **Today looks "done" once a set is ticked** (rows save to the cloud immediately). While `peak_active_session` has a
+  ticked set, `GymPlanPage` plans from `planHistory` (today's rows removed) so the day and targets stay put and
+  Resume reopens the same workout. `WorkoutSession` still gets the full history.
 - Exercise names are keys into history. Renaming one in code splits its history; use `displayName` in
   `exerciseMedia.ts` to change what is shown.
 - Pictures: two frames per exercise from free-exercise-db. The single-arm triceps press machine has no picture.

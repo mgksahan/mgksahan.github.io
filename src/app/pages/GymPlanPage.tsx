@@ -440,12 +440,29 @@ export function GymPlanPage() {
 
   useEffect(() => { load(); }, []);
 
-  const nextDay = useMemo(() => nextDayIndex(history), [history]);
-  const lastDay = useMemo(() => lastAssignedDay(history), [history]);
+  // "Resume" only when today's session has at least one ticked set; an opened-but-empty one is just a fresh start
+  const [, bumpSession] = useState(0);
+  const hasActiveSession = (() => {
+    try {
+      const a = JSON.parse(localStorage.getItem('peak_active_session') || 'null');
+      return !!a && a.v === 2 && a.date === localToday() && Object.values<any>(a.drafts || {}).some(d => d.sets?.some((x: any) => x.done));
+    } catch { return false; }
+  })();
+  // Ticked sets are saved to the cloud straight away, so today would look like a finished session and the page
+  // would jump to the next day (and re-plan from today's partial sets). While a workout is unfinished, plan as if
+  // today has not happened yet; the session itself still gets the full history.
+  const planHistory = useMemo(() => {
+    if (!hasActiveSession) return history;
+    const today = localToday();
+    return Object.fromEntries(Object.entries(history).map(([n, rows]) => [n, rows.filter(r => r.workout_date.slice(0, 10) !== today)]));
+  }, [history, hasActiveSession]);
+
+  const nextDay = useMemo(() => nextDayIndex(planHistory), [planHistory]);
+  const lastDay = useMemo(() => lastAssignedDay(planHistory), [planHistory]);
   const sessions = useMemo(() => {
     const planStart = isoOf(mondayOf(PLAN_START));
-    return assignedSessions(history).filter(x => x.date >= planStart);
-  }, [history]);
+    return assignedSessions(planHistory).filter(x => x.date >= planStart);
+  }, [planHistory]);
 
   // The timeline: sessions done so far (by date), then the next ones. Sessions still due this calendar week use
   // this week's numbers; the ones after that use next week's projection.
@@ -476,9 +493,9 @@ export function GymPlanPage() {
 
   const plans = useMemo(() => reviewing ? [] : day.exercises.map(ex =>
     MAIN_LIFTS.includes(ex.name)
-      ? planMainLift(ex.name, history[ex.name] || [], bodyWeightLb, weekOffset > 0)
-      : planAccessoryOptions(ex.name, history, accessorySets(day.day_index, ex.name, ex.setcount), ex.timer, day.exercises.map(e => e.name))
-  ), [day, history, bodyWeightLb, weekOffset, reviewing]);
+      ? planMainLift(ex.name, planHistory[ex.name] || [], bodyWeightLb, weekOffset > 0)
+      : planAccessoryOptions(ex.name, planHistory, accessorySets(day.day_index, ex.name, ex.setcount), ex.timer, day.exercises.map(e => e.name))
+  ), [day, planHistory, bodyWeightLb, weekOffset, reviewing]);
 
   // What was logged for each of this day's exercises (or its swaps) during the viewed week
   const logged = useMemo<(Logged | null)[]>(() => !reviewing ? [] : day.exercises.map(ex => {
@@ -519,14 +536,6 @@ export function GymPlanPage() {
     routine.days.forEach(d => d.exercises.forEach(e => { all.add(e.name.trim()); alternativesFor(e.name).forEach(a => all.add(a.trim())); }));
     return [...all].filter(n => !n.startsWith('__')).sort();
   }, []);
-  // "Resume" only when today's session has at least one ticked set; an opened-but-empty one is just a fresh start
-  const [, bumpSession] = useState(0);
-  const hasActiveSession = (() => {
-    try {
-      const a = JSON.parse(localStorage.getItem('peak_active_session') || 'null');
-      return !!a && a.v === 2 && a.date === localToday() && Object.values<any>(a.drafts || {}).some(d => d.sets?.some((x: any) => x.done));
-    } catch { return false; }
-  })();
   const canLog = isAdmin && cur.kind === 'upcoming' && (cur.k === 0 || cur.offset === 0) && !loading;
 
   const handleSync = async () => {
