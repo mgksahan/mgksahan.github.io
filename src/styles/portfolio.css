@@ -494,49 +494,73 @@ footer {
   }
 }
 
-/* Achievements: certification badges */
-.achievements { margin-top: 2.5rem; }
-.achievements h3 { font: 500 1.25rem var(--sans); margin: 0 0 1rem; }
-.achievements h3 span { font: 400 0.85rem var(--mono); color: var(--muted); margin-left: .75rem; }
-.badges { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
-.badge { position: relative; display: flex; justify-content: center; outline: none; }
+/* Achievements: top-right pill that expands into a blurred overlay */
 .medal {
-  position: relative; width: 64px; height: 64px; display: grid; place-items: center;
+  position: relative; flex: none; width: 64px; height: 64px; display: grid; place-items: center;
   border-radius: 50%; background: radial-gradient(circle at 30% 25%, #1d3a4a, var(--surface));
   border: 2px solid var(--ice); box-shadow: 0 0 14px rgba(111,211,255,.25);
-  transition: transform .2s, box-shadow .2s;
 }
-.badge:hover .medal, .badge:focus-visible .medal { transform: translateY(-3px) scale(1.06); box-shadow: 0 0 20px rgba(111,211,255,.5); }
-.badge:focus-visible .medal { outline: 2px solid var(--amber); outline-offset: 3px; }
-.glyph { font: 600 .95rem/1 var(--mono); letter-spacing: -.02em; color: var(--ice); }
-.badge:not(.locked):not(.expired) .medal::after {
-  content: "✓"; position: absolute; right: -4px; bottom: -4px; width: 20px; height: 20px; border-radius: 50%;
+.medal:not(.locked):not(.expired)::after {
+  content: "\2713"; position: absolute; right: -4px; bottom: -4px; width: 20px; height: 20px; border-radius: 50%;
   background: var(--amber); color: var(--bg); font: 700 .7rem/20px var(--sans); text-align: center;
 }
-.badge.expired .medal { border-color: var(--muted); box-shadow: none; filter: saturate(.4); }
-.badge.locked .medal { border-color: transparent; box-shadow: none; background: var(--surface); }
-.badge.locked .glyph { color: var(--muted); opacity: .6; }
-.badge.locked svg { position: absolute; inset: -2px; width: calc(100% + 4px); height: calc(100% + 4px); transform: rotate(-90deg); }
+.medal.expired { border-color: var(--muted); box-shadow: none; }
+.medal.locked { border-color: transparent; box-shadow: none; background: var(--surface); }
+.glyph { font: 600 .95rem/1 var(--mono); color: var(--ice); }
+.medal.locked .glyph { color: var(--muted); opacity: .6; }
+.medal svg { position: absolute; inset: -2px; width: calc(100% + 4px); height: calc(100% + 4px); transform: rotate(-90deg); }
 .ring-bg, .ring { fill: none; stroke-width: 2.5; }
 .ring-bg { stroke: var(--line); }
 .ring { stroke: var(--muted); stroke-linecap: round; }
 .pct { position: absolute; bottom: -9px; padding: 0 .35rem; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); font: 500 .65rem/1.4 var(--mono); }
-.tip {
-  position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translate(-50%, 4px); z-index: 5; width: 220px;
-  padding: .6rem .75rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
-  display: flex; flex-direction: column; gap: .15rem; font-size: .8rem; line-height: 1.35; text-align: left;
-  opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s;
-}
-.tip span { color: var(--muted); } .tip em { font: 400 .75rem var(--mono); color: var(--ice); font-style: normal; }
-.badge.locked .tip em { color: var(--muted); }
-.badge:hover .tip, .badge:focus-visible .tip { opacity: 1; transform: translate(-50%, 0); }
-@media (prefers-reduced-motion: reduce) { .medal, .tip { transition: none; } }
-
-.badge:nth-child(-n+2) .tip { left: 0; transform: translate(0, 4px); }
-.badge:nth-child(-n+2):hover .tip, .badge:nth-child(-n+2):focus-visible .tip { transform: translate(0, 0); }
 .logo { width: 34px; height: 34px; object-fit: contain; }
 .logo.tile { width: 42px; height: 42px; border-radius: 9px; object-fit: cover; }
 .logo[src$="emerson.png"] { width: 46px; height: 30px; border-radius: 4px; object-fit: contain; background: #fff; }
-.badge.locked .logo { filter: grayscale(1); opacity: .4; }
-.badge.expired .logo { filter: grayscale(.8); opacity: .7; }
 .logo.plate { width: 46px; height: 30px; padding: 3px 4px; border-radius: 5px; background: #fff; object-fit: contain; box-sizing: border-box; }
+.medal.locked .logo { filter: grayscale(1); opacity: .4; }
+.medal.expired .logo { filter: grayscale(.8); opacity: .7; }
+
+.ach-pill {
+  position: fixed; top: 14px; right: 14px; z-index: 40; width: min(340px, calc(100vw - 28px));
+  display: flex; align-items: center; gap: .6rem; padding: 6px 10px 6px 12px; cursor: pointer;
+  background: color-mix(in srgb, var(--surface) 85%, transparent); backdrop-filter: blur(8px);
+  border: 1px solid var(--line); border-radius: 999px; color: var(--text); font: inherit;
+  transition: border-color .2s, box-shadow .2s;
+}
+.ach-pill:hover { border-color: var(--ice); box-shadow: 0 0 16px rgba(111,211,255,.25); }
+.trophy { width: 18px; height: 18px; fill: var(--amber); flex: none; }
+.ach-count { font: 500 .8rem var(--mono); color: var(--muted); flex: none; }
+.ach-strip { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; }
+.ach-strip .medal { width: 30px; height: 30px; border-width: 1.5px; box-shadow: none; }
+.ach-strip .medal::after, .ach-strip .pct { display: none; }
+.ach-strip .logo { width: 18px; height: 18px; }
+.ach-strip .logo.tile { width: 22px; height: 22px; border-radius: 5px; }
+.ach-strip .logo.plate, .ach-strip .logo[src$="emerson.png"] { width: 24px; height: 16px; padding: 1px 2px; border-radius: 3px; }
+.ach-strip .glyph { font-size: .55rem; }
+.ach-more { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; border: 1px dashed var(--muted); color: var(--muted); font: 500 .65rem var(--mono); }
+
+.ach-overlay {
+  position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1rem;
+  background: rgba(6, 10, 13, .55); backdrop-filter: blur(10px) grayscale(1); -webkit-backdrop-filter: blur(10px) grayscale(1);
+  animation: ach-fade .2s ease-out;
+}
+.ach-panel {
+  width: min(760px, 100%); max-height: 86vh; overflow: auto; padding: 1.5rem; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  animation: ach-pop .22s ease-out;
+}
+.ach-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+.ach-head h3 { margin: 0; font: 500 1.35rem var(--sans); }
+.ach-head h3 span { font: 400 .85rem var(--mono); color: var(--muted); margin-left: .75rem; }
+.ach-close { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--text); font-size: 1.4rem; line-height: 1; cursor: pointer; }
+.ach-close:hover { border-color: var(--ice); }
+.ach-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.ach-card { display: flex; gap: .9rem; align-items: center; padding: .75rem; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.ach-card > div { display: flex; flex-direction: column; min-width: 0; font-size: .85rem; line-height: 1.35; }
+.ach-card span { color: var(--muted); }
+.ach-card em { font: 400 .75rem var(--mono); font-style: normal; color: var(--ice); }
+.ach-card.locked em, .ach-card.locked strong { color: var(--muted); }
+.ach-card.locked { opacity: .8; }
+@keyframes ach-fade { from { opacity: 0; } }
+@keyframes ach-pop { from { opacity: 0; transform: translateY(8px) scale(.97); } }
+@media (prefers-reduced-motion: reduce) { .ach-overlay, .ach-panel { animation: none; } }

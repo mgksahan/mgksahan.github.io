@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import sahanPhoto from '../../assets/sahan.webp';
 import { apiService } from '../../apiService';
-import { certifications } from '../data/certifications';
+import { certifications, type Cert } from '../data/certifications';
 
 type RailPost = {
   slug?: string;
@@ -98,38 +98,117 @@ function PostsRail() {
   );
 }
 
+const MINI = 30;
+const GAP = 6;
+
+function statusOf(c: Cert) {
+  return c.progress !== undefined ? `In progress, ${c.progress}%` : c.expired ? `Expired ${c.expired}` : c.issued ? `Issued ${c.issued}` : 'Completed';
+}
+
+function Medal({ c }: { c: Cert }) {
+  const pending = c.progress !== undefined;
+  return (
+    <span className={`medal${pending ? ' locked' : ''}${c.expired ? ' expired' : ''}`} aria-hidden="true">
+      {pending && (
+        <svg viewBox="0 0 36 36">
+          <circle cx="18" cy="18" r="16" className="ring-bg" />
+          <circle cx="18" cy="18" r="16" className="ring" strokeDasharray={`${(c.progress! / 100) * 100.5} 100.5`} />
+        </svg>
+      )}
+      {c.logo ? (
+        <img className={`logo${c.logo.endsWith('.png') ? ' tile' : /ielts|belden/.test(c.logo) ? ' plate' : ''}`} src={`${import.meta.env.BASE_URL}certs/${c.logo}`} alt="" />
+      ) : (
+        <span className="glyph">{c.icon}</span>
+      )}
+      {pending && <b className="pct">{c.progress}%</b>}
+    </span>
+  );
+}
+
 function Achievements() {
+  const [open, setOpen] = useState(false);
+  const [slots, setSlots] = useState(6);
+  const stripRef = useRef<HTMLSpanElement>(null);
+  const pillRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  const total = certifications.length;
   const earned = certifications.filter((c) => c.progress === undefined).length;
   const sorted = [...certifications].sort((a, b) => Number(b.progress !== undefined) - Number(a.progress !== undefined));
+
+  // How many mini badges fit in the pill (one slot is kept for the "+N" chip when some are hidden)
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const measure = () => setSlots(Math.max(1, Math.floor((el.clientWidth + GAP) / (MINI + GAP))));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    const pill = pillRef.current;
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+      pill?.focus();
+    };
+  }, [open]);
+
+  const shown = slots >= total ? total : Math.max(0, slots - 1);
+  const hidden = total - shown;
+
   return (
-    <div className="achievements">
-      <h3>Achievements <span>{earned}/{certifications.length} unlocked</span></h3>
-      <ul className="badges">
-        {sorted.map((c) => {
-          const pending = c.progress !== undefined;
-          const status = pending ? `In progress, ${c.progress}%` : c.expired ? `Expired ${c.expired}` : c.issued ? `Issued ${c.issued}` : 'Completed';
-          return (
-            <li key={c.name} className={`badge${pending ? ' locked' : ''}${c.expired ? ' expired' : ''}`} tabIndex={0} aria-label={`${c.name}, ${c.issuer}. ${status}`}>
-              <div className="medal" aria-hidden="true">
-                {pending && (
-                  <svg viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="16" className="ring-bg" />
-                    <circle cx="18" cy="18" r="16" className="ring" strokeDasharray={`${(c.progress! / 100) * 100.5} 100.5`} />
-                  </svg>
-                )}
-                {c.logo ? <img className={`logo${c.logo.endsWith('.png') ? ' tile' : c.logo.match(/ielts|belden/) ? ' plate' : ''}`} src={`${import.meta.env.BASE_URL}certs/${c.logo}`} alt="" /> : <span className="glyph">{c.icon}</span>}
-                {pending && <b className="pct">{c.progress}%</b>}
-              </div>
-              <div className="tip" role="presentation">
-                <strong>{c.name}</strong>
-                <span>{c.issuer}</span>
-                <em>{status}</em>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <>
+      <button
+        type="button"
+        ref={pillRef}
+        className="ach-pill"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`Achievements, ${earned} of ${total} unlocked. Open`}
+        onClick={() => setOpen(true)}
+      >
+        <svg className="trophy" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v3a5 5 0 0 1-10 0V4Zm-3 1h3v2a3 3 0 0 1-3-2Zm16 0h-3v2a3 3 0 0 0 3-2ZM11 13h2v3h3v2H8v-2h3v-3Z" /></svg>
+        <span className="ach-count">{earned}/{total}</span>
+        <span className="ach-strip" ref={stripRef}>
+          {sorted.slice(0, shown).map((c) => <Medal key={c.name} c={c} />)}
+          {hidden > 0 && <span className="ach-more">+{hidden}</span>}
+        </span>
+      </button>
+
+      {open && (
+        <div className="ach-overlay" onClick={() => setOpen(false)}>
+          <div className="ach-panel" role="dialog" aria-modal="true" aria-labelledby="ach-title" onClick={(e) => e.stopPropagation()}>
+            <div className="ach-head">
+              <h3 id="ach-title">Achievements <span>{earned}/{total} unlocked</span></h3>
+              <button type="button" ref={closeRef} className="ach-close" aria-label="Close achievements" onClick={() => setOpen(false)}>&times;</button>
+            </div>
+            <ul className="ach-grid">
+              {sorted.map((c) => (
+                <li key={c.name} className={`ach-card${c.progress !== undefined ? ' locked' : ''}${c.expired ? ' expired' : ''}`}>
+                  <Medal c={c} />
+                  <div>
+                    <strong>{c.name}</strong>
+                    <span>{c.issuer}</span>
+                    <em>{statusOf(c)}</em>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -211,7 +290,7 @@ export function HomePage() {
       revealSeq();
     }
 
-    const els = document.querySelectorAll('section h2, .proj, .about p, .timeline li, .badge, .contact a, .contact p');
+    const els = document.querySelectorAll('section h2, .proj, .about p, .timeline li, .contact a, .contact p');
     els.forEach((e: Element) => {
       e.classList.add('reveal');
       if (e.parentNode) {
@@ -246,6 +325,7 @@ export function HomePage() {
 
   return (
     <div className="wrap">
+      <Achievements />
       <header className="hero">
         <div className="left">
           <h1 className="greet" aria-label="Hi, I'm Sahan">
@@ -306,7 +386,6 @@ export function HomePage() {
           <li><span>2023-2024</span>Graduate Certificate, Embedded Systems Development, Conestoga College</li>
           <li><span>2017-2021</span>B.Eng (Hons.), Electrical &amp; Computer Systems Engineering, Monash University</li>
         </ul>
-        <Achievements />
       </section>
 
       <section id="contact" className="contact">
