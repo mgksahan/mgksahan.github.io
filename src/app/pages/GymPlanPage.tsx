@@ -442,10 +442,15 @@ export function GymPlanPage() {
 
   // "Resume" only when today's session has at least one ticked set; an opened-but-empty one is just a fresh start
   const [, bumpSession] = useState(0);
+  // The phone's saved draft is the main signal. Fallback if that draft is gone (cleared storage, overwritten):
+  // today already has sets in the cloud from this app and Finish was not pressed today.
   const hasActiveSession = (() => {
     try {
+      const today = localToday();
       const a = JSON.parse(localStorage.getItem('peak_active_session') || 'null');
-      return !!a && a.v === 2 && a.date === localToday() && Object.values<any>(a.drafts || {}).some(d => d.sets?.some((x: any) => x.done));
+      if (a && a.v === 2 && a.date === today && Object.values<any>(a.drafts || {}).some(d => d.sets?.some((x: any) => x.done))) return true;
+      if (localStorage.getItem('peak_finished_date') === today) return false;
+      return Object.values(history).some(rows => rows.some(r => r.workout_date.slice(0, 10) === today && (r as any).source !== 'jefit' && r.exercise_name !== 'Body Weight' && !!r.raw_logs));
     } catch { return false; }
   })();
   // Ticked sets are saved to the cloud straight away, so today would look like a finished session and the page
@@ -686,7 +691,7 @@ export function GymPlanPage() {
             </button>
             {hasActiveSession && (
               <button
-                onClick={() => { if (window.confirm('Discard the unfinished workout on this phone? Sets you already ticked stay saved.')) { try { localStorage.removeItem('peak_active_session'); } catch { /* ignore */ } bumpSession(n => n + 1); } }}
+                onClick={() => { if (window.confirm('Discard the unfinished workout on this phone? Sets you already ticked stay saved.')) { try { localStorage.removeItem('peak_active_session'); localStorage.setItem('peak_finished_date', localToday()); } catch { /* ignore */ } bumpSession(n => n + 1); } }}
                 className="text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer py-1"
               >
                 Discard unfinished workout
