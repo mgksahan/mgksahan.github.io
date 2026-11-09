@@ -117,7 +117,7 @@ function Achievements() {
                     <circle cx="18" cy="18" r="16" className="ring" strokeDasharray={`${(c.progress! / 100) * 100.5} 100.5`} />
                   </svg>
                 )}
-                {c.logo ? <img className={`logo${c.logo.endsWith('.png') ? ' tile' : ''}`} src={`${import.meta.env.BASE_URL}certs/${c.logo}`} alt="" /> : <span className="glyph">{c.icon}</span>}
+                {c.logo ? <img className={`logo${c.logo.endsWith('.png') ? ' tile' : c.logo.match(/ielts|belden/) ? ' plate' : ''}`} src={`${import.meta.env.BASE_URL}certs/${c.logo}`} alt="" /> : <span className="glyph">{c.icon}</span>}
                 {pending && <b className="pct">{c.progress}%</b>}
               </div>
               <div className="tip" role="presentation">
