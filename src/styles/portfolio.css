@@ -534,3 +534,8 @@ footer {
 
 .badge:nth-child(-n+2) .tip { left: 0; transform: translate(0, 4px); }
 .badge:nth-child(-n+2):hover .tip, .badge:nth-child(-n+2):focus-visible .tip { transform: translate(0, 0); }
+.logo { width: 34px; height: 34px; object-fit: contain; }
+.logo.tile { width: 42px; height: 42px; border-radius: 9px; object-fit: cover; }
+.logo[src$="emerson.png"] { width: 46px; height: 30px; border-radius: 4px; object-fit: contain; background: #fff; }
+.badge.locked .logo { filter: grayscale(1); opacity: .4; }
+.badge.expired .logo { filter: grayscale(.8); opacity: .7; }
