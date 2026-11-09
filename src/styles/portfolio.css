@@ -539,3 +539,4 @@ footer {
 .logo[src$="emerson.png"] { width: 46px; height: 30px; border-radius: 4px; object-fit: contain; background: #fff; }
 .badge.locked .logo { filter: grayscale(1); opacity: .4; }
 .badge.expired .logo { filter: grayscale(.8); opacity: .7; }
+.logo.plate { width: 46px; height: 30px; padding: 3px 4px; border-radius: 5px; background: #fff; object-fit: contain; box-sizing: border-box; }
