@@ -212,7 +212,11 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
   const lastSent = useRef<Record<string, string>>({});
   useEffect(() => {
     const t = setTimeout(() => {
-      try { localStorage.setItem(SESSION_KEY, JSON.stringify({ v: 2, date: today, dayId, startedAt, extras, drafts })); } catch { /* ignore */ }
+      // Never replace a draft that has ticked sets with an empty one (opening a different day would wipe it)
+      try {
+        const anyDone = Object.values(drafts).some(d => d.sets.some(x => x.done));
+        if (anyDone || !localStorage.getItem(SESSION_KEY)) localStorage.setItem(SESSION_KEY, JSON.stringify({ v: 2, date: today, dayId, startedAt, extras, drafts }));
+      } catch { /* ignore */ }
       blocks.forEach(b => {
         const d = drafts[b.key];
         if (!d || !d.sets.some(x => x.done)) return; // nothing ticked in THIS session: leave earlier rows alone
@@ -297,7 +301,7 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
     if (orphan && !window.confirm(`${orphan} note${orphan > 1 ? 's' : ''} won't be saved: notes save with a ticked set for that exercise. Finish anyway?`)) return;
     await flushLogs();
     const left = getSyncStatus().pending;
-    try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+    try { localStorage.removeItem(SESSION_KEY); localStorage.setItem('peak_finished_date', today); } catch { /* ignore */ }
     toast.success(left ? `${totalDone} sets saved on this phone. They'll sync when you're online.` : `${totalDone} sets saved.`);
     onFinished();
     onExit();
