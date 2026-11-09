@@ -160,7 +160,9 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
   };
   const makeDraft = (b: Block, name: string): Draft => {
     const row = (history[name] || []).find(r => r.workout_date.slice(0, 10) === today);
-    return { name, sets: initial(b, name), base: baseFor(b, name), baseRaw: row?.raw_logs, baseTypes: row?.set_types, note: '', baseNote: row?.notes };
+    // Sets already saved today come back as ticked (green) rows at the top, and the plan fills in the sets still to do
+    const done = baseFor(b, name);
+    return { name, sets: [...done, ...initial(b, name).slice(done.length)], base: [], note: '', baseNote: row?.notes };
   };
 
   const defaultName = (b: Block) => {
