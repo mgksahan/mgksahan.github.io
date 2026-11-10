@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Minus, Plus, SkipForward } from 'lucide-react';
-import { setRest, useRest } from '../lib/restTimer';
+import { playRestDone, setRest, useRest } from '../lib/restTimer';
 
 const clock = (sec: number) => `${Math.floor(Math.max(0, sec) / 60)}:${String(Math.max(0, Math.floor(sec) % 60)).padStart(2, '0')}`;
 
@@ -18,7 +18,10 @@ export function RestBar({ raised = false }: { raised?: boolean }) {
     // already over when this opened (e.g. coming back from the plan): don't buzz again
     const fresh = Date.now() - rest.end < 2000;
     buzzedFor.current = rest.end;
-    if (fresh) { try { navigator.vibrate?.([250, 120, 250]); } catch { /* not supported */ } }
+    if (fresh) {
+      playRestDone();
+      try { navigator.vibrate?.([250, 120, 250]); } catch { /* not supported */ }
+    }
   }, [rest, restLeft]);
   if (!rest) return null;
   return (
