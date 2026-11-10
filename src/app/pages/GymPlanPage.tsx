@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { Play, Dumbbell, RefreshCw, AlertTriangle, ChevronDown, Check, TrendingUp, History, LineChart } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiService } from '../../apiService';
@@ -7,6 +7,8 @@ import { useAuth } from '../context/AuthContext';
 import { mediaFor, displayName, EXERCISE_MEDIA } from '../lib/exerciseMedia';
 import { ExerciseHistory } from '../components/ExerciseHistory';
 import { WorkoutSession, SyncPill } from '../components/WorkoutSession';
+import { RestBar } from '../components/RestBar';
+import { setRest } from '../lib/restTimer';
 import { SHORT_NAME, STANDARDS, TIER_BAR, TIER_TEXT, overallRank, rankOf } from '../lib/strengthStandards';
 import {
   FitnessRow, MainLiftPlan, AccessoryOption, LoggedSet, MAIN_LIFTS, PLAN_START,
@@ -405,7 +407,15 @@ export function GymPlanPage() {
   const [syncing, setSyncing] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [logging, setLogging] = useState(false);
+  // The workout screen is its own history entry, so the phone's Back goes to the plan view (and the rest timer
+  // and unfinished workout stay) instead of leaving /gym. It also survives a reload.
+  const navigate = useNavigate();
+  const location = useLocation();
+  const logging = (location.state as { peakLogging?: boolean } | null)?.peakLogging === true;
+  const setLogging = (on: boolean) => {
+    if (on) navigate(location.pathname + location.search, { state: { peakLogging: true } });
+    else if (logging) navigate(-1);
+  };
   const toggleSelected = (name: string) => setSelected(cur => (cur === name ? null : name));
 
   const load = async () => {
@@ -679,6 +689,7 @@ export function GymPlanPage() {
           />
         )}
       </div>
+      {canLog && !logging && hasActiveSession && <RestBar raised />}
       {canLog && !logging && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08] bg-[#0d0e10]/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto max-w-md flex flex-col items-stretch gap-1.5">
@@ -691,7 +702,7 @@ export function GymPlanPage() {
             </button>
             {hasActiveSession && (
               <button
-                onClick={() => { if (window.confirm('Discard the unfinished workout on this phone? Sets you already ticked stay saved.')) { try { localStorage.removeItem('peak_active_session'); localStorage.setItem('peak_finished_date', localToday()); } catch { /* ignore */ } bumpSession(n => n + 1); } }}
+                onClick={() => { if (window.confirm('Discard the unfinished workout on this phone? Sets you already ticked stay saved.')) { try { localStorage.removeItem('peak_active_session'); localStorage.setItem('peak_finished_date', localToday()); } catch { /* ignore */ } setRest(null); bumpSession(n => n + 1); } }}
                 className="text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer py-1"
               >
                 Discard unfinished workout
