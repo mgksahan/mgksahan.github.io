@@ -36,7 +36,7 @@ const sessionDate = (d: string) => {
 };
 
 // Every logged session for this exercise, newest first: sets, est. 1RM, volume and any note
-function SessionList({ rows }: { rows: FitnessRow[] }) {
+function SessionList({ rows, pullUpBw }: { rows: FitnessRow[]; pullUpBw?: (date: string) => number }) {
   const [shown, setShown] = useState(8);
   const sessions = useMemo(() => rows.filter(r => isDate(r.workout_date) && r.raw_logs)
     .sort((a, b) => b.workout_date.localeCompare(a.workout_date)), [rows]);
@@ -48,7 +48,14 @@ function SessionList({ rows }: { rows: FitnessRow[] }) {
       <ul className="space-y-2">
         {sessions.slice(0, shown).map(r => {
           const types = r.set_types ? r.set_types.split(',') : [];
-          const sets = parseSets(r).map((s, i) => ({ ...s, warm: types[i] === 'warm-up' }));
+          // Weighted pull-ups are stored as total load (body + added): show the added weight, with the total beside it.
+          // Older rows logged added weight only (well under body weight): those show as added, no total.
+          const bw = pullUpBw ? pullUpBw(r.workout_date) : 0;
+          const sets = parseSets(r).map((s, i) => {
+            const total = s.lb;
+            const hasTotal = bw > 0 && total >= bw * 0.6;
+            return { ...s, warm: types[i] === 'warm-up', added: pullUpBw ? (hasTotal ? Math.max(0, total - bw) : total) : null, total: hasTotal ? total : null };
+          });
           const vol = Number(r.total_volume_lbs) || sets.reduce((n, s) => n + s.lb * s.reps, 0);
           return (
             <li key={r.workout_date} className="rounded-lg border border-white/[0.08] bg-black/20 px-3 py-2.5">
@@ -61,7 +68,8 @@ function SessionList({ rows }: { rows: FitnessRow[] }) {
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {sets.map((s, i) => (
                   <span key={i} className={`px-2 py-0.5 rounded-md font-mono text-xs tabular-nums ${s.warm ? 'bg-amber-400/10 text-amber-200/80' : 'bg-white/[0.06] text-zinc-100'}`}>
-                    {Math.round(s.lb * 10) / 10}×{s.reps}
+                    {s.added === null ? `${Math.round(s.lb * 10) / 10}×${s.reps}` : `+${Math.round(s.added * 10) / 10}×${s.reps}`}
+                    {s.total !== null && <span className="text-zinc-500"> ({Math.round(s.total)})</span>}
                   </span>
                 ))}
               </div>
@@ -75,7 +83,7 @@ function SessionList({ rows }: { rows: FitnessRow[] }) {
           Show older sessions ({sessions.length - shown} more)
         </button>
       )}
-      <p className="text-[11px] text-zinc-600">Amber sets are warm-ups.</p>
+      <p className="text-[11px] text-zinc-600">Amber sets are warm-ups.{pullUpBw ? ' Pull-ups show added weight, with total load (body + added) in brackets.' : ''}</p>
     </div>
   );
 }
@@ -98,14 +106,16 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
   }, [onClose]);
 
   // One point per session: est. 1RM, volume, and 1RM relative to body weight on that day
+  const bwSeries = useMemo(() => bodyWeightRows.filter(r => isDate(r.workout_date) && Number(r.one_rep_max_lbs) > 0)
+    .map(r => ({ t: ts(r.workout_date), lb: Number(r.one_rep_max_lbs) })).sort((a, b) => a.t - b.t), [bodyWeightRows]);
+  // body weight on a given day (the latest weigh-in on or before it)
+  const bwAt = (date: string | number) => {
+    const t = typeof date === 'number' ? date : ts(date);
+    let w = bwSeries[0]?.lb ?? 0;
+    for (const b of bwSeries) { if (b.t <= t) w = b.lb; else break; }
+    return w;
+  };
   const points = useMemo(() => {
-    const bw = bodyWeightRows.filter(r => isDate(r.workout_date) && Number(r.one_rep_max_lbs) > 0)
-      .map(r => ({ t: ts(r.workout_date), lb: Number(r.one_rep_max_lbs) })).sort((a, b) => a.t - b.t);
-    const bwAt = (t: number) => {
-      let w = bw[0]?.lb ?? 0;
-      for (const b of bw) { if (b.t <= t) w = b.lb; else break; }
-      return w;
-    };
     return rows.filter(r => isDate(r.workout_date) && Number(r.one_rep_max_lbs) > 0)
       .map(r => {
         const t = ts(r.workout_date);
@@ -115,7 +125,8 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
         return { t, oneRm, volume, multiplier: w > 0 ? oneRm / w : 0 };
       })
       .sort((a, b) => a.t - b.t);
-  }, [rows, bodyWeightRows]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, bwSeries]);
 
   const visible = useMemo(() => {
     if (range === 'ALL') return points;
@@ -284,7 +295,7 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
               <p className="text-[11px] text-zinc-500">{visible.length} session{visible.length === 1 ? '' : 's'} shown</p>
             </div>
 
-            <SessionList rows={rows} />
+            <SessionList rows={rows} pullUpBw={name === 'Weighted Pull-Up' ? bwAt : undefined} />
           </>
         )}
       </div>
