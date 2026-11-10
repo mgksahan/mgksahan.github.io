@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LineChart, StickyNote, Check, Plus, Trash2, X, Cloud, CloudOff, Loader2, Minus, SkipForward, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LineChart, StickyNote, Check, Plus, Trash2, X, Cloud, CloudOff, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { mediaFor, displayName } from '../lib/exerciseMedia';
 import { FitnessRow, MainLiftPlan, AccessoryOption, LoggedSet, parseSets, localToday } from '../lib/gymPlan';
+import { RestBar } from './RestBar';
+import { setRest, startRest } from '../lib/restTimer';
 import { NoteHistory, pastNotes } from './ExerciseNotes';
 import { DraftSet, SetType, buildPayload, flushLogs, getSyncStatus, queueLog, subscribeSync } from '../lib/offlineLog';
 
@@ -188,20 +190,10 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
   const patch = (b: Block, fn: (d: Draft) => Draft) =>
     setDrafts(cur => ({ ...cur, [b.key]: fn(cur[b.key] ?? makeDraft(b, defaultName(b))) }));
 
-  // --- rest timer + session clock ---
+  // --- session clock (the rest timer lives in lib/restTimer so it survives leaving this screen) ---
   const [now, setNow] = useState(Date.now());
-  const [rest, setRest] = useState<{ start: number; end: number; total: number } | null>(null);
   const [openNotes, setOpenNotes] = useState<Record<string, boolean>>({});
-  const buzzed = useRef(false);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(t); }, []);
-  const restLeft = rest ? Math.ceil((rest.end - now) / 1000) : 0;
-  useEffect(() => {
-    if (rest && restLeft <= 0 && !buzzed.current) {
-      buzzed.current = true;
-      try { navigator.vibrate?.([250, 120, 250]); } catch { /* not supported */ }
-    }
-  }, [rest, restLeft]);
-  const startRest = (sec: number) => { buzzed.current = false; const t = Date.now(); setRest({ start: t, end: t + sec * 1000, total: sec }); };
 
   // keep the screen on while logging
   useEffect(() => {
@@ -304,6 +296,7 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
     await flushLogs();
     const left = getSyncStatus().pending;
     try { localStorage.removeItem(SESSION_KEY); localStorage.setItem('peak_finished_date', today); } catch { /* ignore */ }
+    setRest(null);
     toast.success(left ? `${totalDone} sets saved on this phone. They'll sync when you're online.` : `${totalDone} sets saved.`);
     onFinished();
     onExit();
@@ -485,23 +478,7 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
         </div>
       )}
 
-      {rest && (
-        <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-4 pt-2 pointer-events-none">
-          <div className={`pointer-events-auto mx-auto max-w-md rounded-2xl border p-3 flex items-center gap-3 shadow-xl bg-[#0d0e10] ${restLeft <= 0 ? 'border-emerald-400/60' : 'border-white/15'}`}>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs text-zinc-400">{restLeft <= 0 ? 'Rest over. Next set.' : 'Rest'} · target {clock((rest.end - rest.start) / 1000)}</div>
-              <div className={`font-mono text-3xl font-semibold tabular-nums leading-none ${restLeft <= 0 ? 'text-emerald-300' : 'text-white'}`}>{restLeft <= 0 ? `+${clock(-restLeft)}` : clock(restLeft)}</div>
-              <div className="font-mono text-xs text-zinc-300 tabular-nums mt-1">Rested {clock((now - rest.start) / 1000)} so far</div>
-              <div className="h-1 rounded-full bg-white/10 mt-2 overflow-hidden">
-                <div className="h-full bg-cyan-400 transition-[width] duration-500" style={{ width: `${Math.max(0, Math.min(100, (restLeft / rest.total) * 100))}%` }} />
-              </div>
-            </div>
-            <button onClick={() => setRest(r => (r ? { ...r, end: r.end - 15000 } : r))} aria-label="15 seconds less" className="p-2.5 rounded-lg bg-white/[0.07] text-zinc-200 cursor-pointer"><Minus size={16} /></button>
-            <button onClick={() => setRest(r => (r ? { ...r, end: Math.max(r.end, Date.now()) + 15000, total: r.total + 15 } : r))} aria-label="15 seconds more" className="p-2.5 rounded-lg bg-white/[0.07] text-zinc-200 cursor-pointer"><Plus size={16} /></button>
-            <button onClick={() => setRest(null)} aria-label="Skip rest" className="p-2.5 rounded-lg bg-white/[0.07] text-zinc-200 cursor-pointer"><SkipForward size={16} /></button>
-          </div>
-        </div>
-      )}
+      <RestBar />
     </div>
   );
 }
