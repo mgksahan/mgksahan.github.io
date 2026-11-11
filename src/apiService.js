@@ -219,6 +219,34 @@ export const apiService = {
     return await res.json();
   },
 
+  // 11. TIME TRACKER (owner only): one item per task / entry / timer / settings
+  fetchTrack: async () => {
+    if (!API_URL) throw new Error('API URL is not configured.');
+    const res = await fetch(`${API_URL}/track`, { headers: { 'Authorization': await bearer() } });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to load tracker.');
+    return await res.json();
+  },
+  putTrack: async (kind, id, data, updatedAt) => {
+    if (!API_URL) throw new Error('API URL is not configured.');
+    const res = await fetch(`${API_URL}/track/${kind}/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': await bearer() },
+      body: JSON.stringify({ data, updatedAt })
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to save tracker item.');
+    return await res.json();
+  },
+  deleteTrack: async (kind, id, updatedAt) => {
+    if (!API_URL) throw new Error('API URL is not configured.');
+    const res = await fetch(`${API_URL}/track/${kind}/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', 'Authorization': await bearer() },
+      body: JSON.stringify({ updatedAt })
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to delete tracker item.');
+    return await res.json();
+  },
+
   // 10. SYNC JEFIT WORKOUTS (owner only)
   syncJefit: async () => {
     if (!API_URL) throw new Error('API URL is not configured.');
