@@ -1,0 +1,195 @@
+import { useSyncExternalStore } from 'react';
+import { apiService } from '../../apiService';
+
+// Time tracker data. Everything is saved in localStorage first, so the timer responds instantly and
+// works offline. Each task, time entry, the running timer and the settings is one item in the cloud
+// (TrackerItems table). Last write wins per item, compared by updatedAt. A delete leaves a tombstone
+// so a device with an old copy cannot bring the item back.
+
+export type Cat = 'work' | 'learn' | 'life';
+export interface Task { id: string; title: string; cat: Cat; pts: number; due: string; done: boolean; doneAt?: number | null; updatedAt: number }
+export interface Entry { id: string; start: number; end: number; cat: Cat; taskId?: string | null; note: string; updatedAt: number }
+export interface Segment { acc: number; since: number | null; cat: Cat; taskId: string | null; note: string }
+export interface TimerDoc {
+  timer: Segment | null;
+  block: { acc: number; since: number | null };   // continuous run time in the current focus block
+  brk: { until: number } | null;                   // break countdown
+  updatedAt: number;
+}
+export interface SettingsDoc { focus: number; brk: number; days: Record<string, number>; updatedAt: number }
+export interface TrackState {
+  tasks: Record<string, Task>;
+  entries: Record<string, Entry>;
+  timer: TimerDoc;
+  settings: SettingsDoc;
+}
+type Kind = 'task' | 'entry' | 'timer' | 'settings';
+interface Pending { kind: Kind; id: string; op: 'put' | 'delete'; data?: unknown; updatedAt: number }
+export interface SyncStatus { pending: number; syncing: boolean; error: string | null; lastSync: number | null }
+
+const KEY = 'track_state_v1';
+
+const emptyState = (): TrackState => ({
+  tasks: {}, entries: {},
+  timer: { timer: null, block: { acc: 0, since: null }, brk: null, updatedAt: 0 },
+  settings: { focus: 25, brk: 5, days: {}, updatedAt: 0 },
+});
+
+let state: TrackState = emptyState();
+let dead: Record<string, number> = {};          // "<kind>#<id>" -> when it was deleted
+let pending: Record<string, Pending> = {};
+let status: SyncStatus = { pending: 0, syncing: false, error: null, lastSync: null };
+let statusSnap: SyncStatus = status;
+const listeners = new Set<() => void>();
+
+try {
+  const s = JSON.parse(localStorage.getItem(KEY) || 'null');
+  if (s?.state) {
+    const base = emptyState();
+    state = { ...base, ...s.state, timer: { ...base.timer, ...s.state.timer }, settings: { ...base.settings, ...s.state.settings } };
+    dead = s.dead || {};
+    pending = s.pending || {};
+  }
+} catch { /* start empty */ }
+
+const persist = () => {
+  try { localStorage.setItem(KEY, JSON.stringify({ state, dead, pending })); } catch { /* storage full or blocked: still in memory */ }
+};
+const emit = () => listeners.forEach(l => l());
+const setStatus = (patch: Partial<SyncStatus>) => {
+  status = { ...status, ...patch, pending: Object.keys(pending).length };
+  statusSnap = status;
+  emit();
+};
+const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; };
+
+export const useTrack = () => useSyncExternalStore(subscribe, () => state);
+export const useTrackSync = () => useSyncExternalStore(subscribe, () => statusSnap);
+
+const sk = (kind: Kind, id: string) => `${kind}#${id}`;
+const now = () => Date.now();
+export const uid = () => Math.random().toString(36).slice(2, 9) + now().toString(36).slice(-3);
+
+function enqueue(p: Pending) {
+  pending[sk(p.kind, p.id)] = p;
+  persist();
+  setStatus({});
+  void syncSoon();
+}
+
+// --- writes ---
+export function saveTask(t: Omit<Task, 'updatedAt'>) {
+  const task = { ...t, updatedAt: now() };
+  state = { ...state, tasks: { ...state.tasks, [t.id]: task } };
+  delete dead[sk('task', t.id)];
+  enqueue({ kind: 'task', id: t.id, op: 'put', data: task, updatedAt: task.updatedAt });
+}
+export function removeTask(id: string) {
+  const { [id]: _gone, ...rest } = state.tasks;
+  const at = now();
+  state = { ...state, tasks: rest };
+  dead[sk('task', id)] = at;
+  enqueue({ kind: 'task', id, op: 'delete', updatedAt: at });
+}
+export function saveEntry(e: Omit<Entry, 'updatedAt'>) {
+  const entry = { ...e, updatedAt: now() };
+  state = { ...state, entries: { ...state.entries, [e.id]: entry } };
+  enqueue({ kind: 'entry', id: e.id, op: 'put', data: entry, updatedAt: entry.updatedAt });
+}
+export function removeEntry(id: string) {
+  const { [id]: _gone, ...rest } = state.entries;
+  const at = now();
+  state = { ...state, entries: rest };
+  dead[sk('entry', id)] = at;
+  enqueue({ kind: 'entry', id, op: 'delete', updatedAt: at });
+}
+export function saveTimer(patch: Partial<Omit<TimerDoc, 'updatedAt'>>) {
+  const doc = { ...state.timer, ...patch, updatedAt: now() };
+  state = { ...state, timer: doc };
+  enqueue({ kind: 'timer', id: 'active', op: 'put', data: doc, updatedAt: doc.updatedAt });
+}
+export function saveSettings(patch: Partial<Omit<SettingsDoc, 'updatedAt'>>) {
+  const doc = { ...state.settings, ...patch, updatedAt: now() };
+  state = { ...state, settings: doc };
+  enqueue({ kind: 'settings', id: 'main', op: 'put', data: doc, updatedAt: doc.updatedAt });
+}
+
+// --- sync ---
+interface Remote { kind: Kind; id: string; data?: any; deleted?: boolean; updatedAt: number }
+
+function localStamp(kind: Kind, id: string): number | undefined {
+  if (kind === 'task') return state.tasks[id]?.updatedAt;
+  if (kind === 'entry') return state.entries[id]?.updatedAt;
+  if (kind === 'timer') return state.timer.updatedAt || undefined;
+  return state.settings.updatedAt || undefined;
+}
+
+function applyRemote(items: Remote[]) {
+  let next = state;
+  for (const r of items) {
+    const key = sk(r.kind, r.id);
+    if (pending[key] && pending[key].updatedAt >= r.updatedAt) continue;     // our newer change is still waiting to go out
+    const mine = Math.max(localStamp(r.kind, r.id) ?? -1, dead[key] ?? -1);
+    if (mine >= r.updatedAt) continue;
+    if (r.deleted) {
+      dead[key] = r.updatedAt;
+      if (r.kind === 'task') { const { [r.id]: _g, ...rest } = next.tasks; next = { ...next, tasks: rest }; }
+      if (r.kind === 'entry') { const { [r.id]: _g, ...rest } = next.entries; next = { ...next, entries: rest }; }
+    } else if (r.data) {
+      delete dead[key];
+      const val = { ...r.data, updatedAt: r.updatedAt };
+      if (r.kind === 'task') next = { ...next, tasks: { ...next.tasks, [r.id]: { ...val, id: r.id } } };
+      if (r.kind === 'entry') next = { ...next, entries: { ...next.entries, [r.id]: { ...val, id: r.id } } };
+      if (r.kind === 'timer') next = { ...next, timer: { ...emptyState().timer, ...val } };
+      if (r.kind === 'settings') next = { ...next, settings: { ...emptyState().settings, ...val } };
+    }
+  }
+  if (next !== state) { state = next; persist(); emit(); }
+}
+
+let syncing = false;
+let timer: ReturnType<typeof setTimeout> | null = null;
+let started = false;
+
+function syncSoon() {
+  if (!started) return;
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(() => { void syncNow(); }, 600);
+}
+
+export async function syncNow(): Promise<void> {
+  if (!started || syncing) return;
+  syncing = true;
+  setStatus({ syncing: true, error: null });
+  try {
+    for (const [key, p] of Object.entries({ ...pending })) {
+      if (p.op === 'put') await apiService.putTrack(p.kind, p.id, p.data, p.updatedAt);
+      else await apiService.deleteTrack(p.kind, p.id, p.updatedAt);
+      if (pending[key]?.updatedAt === p.updatedAt) delete pending[key];   // keep it if a newer change arrived meanwhile
+      persist();
+    }
+    applyRemote(await apiService.fetchTrack());
+    setStatus({ syncing: false, lastSync: now() });
+  } catch (e: any) {
+    setStatus({ syncing: false, error: navigator.onLine ? (e?.message || 'Sync failed') : 'Offline' });
+  } finally {
+    syncing = false;
+  }
+}
+
+// Start syncing (owner only). Returns a function that stops it.
+export function startSync(): () => void {
+  started = true;
+  void syncNow();
+  const poll = setInterval(() => { if (document.visibilityState === 'visible') void syncNow(); }, 30000);
+  const wake = () => { if (document.visibilityState === 'visible') void syncNow(); };
+  document.addEventListener('visibilitychange', wake);
+  window.addEventListener('online', wake);
+  return () => {
+    started = false;
+    clearInterval(poll);
+    document.removeEventListener('visibilitychange', wake);
+    window.removeEventListener('online', wake);
+    if (timer) clearTimeout(timer);
+  };
+}

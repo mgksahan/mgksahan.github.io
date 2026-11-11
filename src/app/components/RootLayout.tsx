@@ -116,6 +116,7 @@ export function RootLayout() {
 
   const isHome = location.pathname === '/';
   const isGym = location.pathname.startsWith('/gym');
+  const isTrack = location.pathname.startsWith('/track');
 
   if (isHome) {
     return (
@@ -125,7 +126,7 @@ export function RootLayout() {
     );
   }
 
-  if (isGym || isStandalone) {
+  if (isGym || isTrack || isStandalone) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col">
         <main className="flex-1 flex flex-col">

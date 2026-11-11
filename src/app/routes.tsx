@@ -8,6 +8,7 @@ import { FitnessPage } from "./pages/FitnessPage";
 import { WritePage } from "./pages/WritePage";
 import { GymPage } from "./pages/GymPage";
 import { GymPlanPage } from "./pages/GymPlanPage";
+import { TrackPage } from "./pages/TrackPage";
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
       { path: "fitness", Component: FitnessPage },
       { path: "gym", Component: GymPlanPage },
       { path: "gym/tracker", Component: GymPage },
+      { path: "track", Component: TrackPage },
       { path: "diary", Component: DiaryPage },
       { path: "diary/write", Component: WritePage },
       { path: "write", element: <Navigate to="/diary/write" replace /> },
