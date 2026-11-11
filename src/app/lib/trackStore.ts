@@ -14,6 +14,7 @@ export interface TimerDoc {
   timer: Segment | null;
   block: { acc: number; since: number | null };   // continuous run time in the current focus block
   brk: { until: number } | null;                   // break countdown
+  pausedBy?: string;                               // set by the phone app when it pauses the timer
   updatedAt: number;
 }
 export interface SettingsDoc { focus: number; brk: number; days: Record<string, number>; updatedAt: number }
@@ -104,7 +105,8 @@ export function removeEntry(id: string) {
   enqueue({ kind: 'entry', id, op: 'delete', updatedAt: at });
 }
 export function saveTimer(patch: Partial<Omit<TimerDoc, 'updatedAt'>>) {
-  const doc = { ...state.timer, ...patch, updatedAt: now() };
+  // Any change made here clears the phone's "paused by" mark
+  const doc = { ...state.timer, pausedBy: undefined, ...patch, updatedAt: now() };
   state = { ...state, timer: doc };
   enqueue({ kind: 'timer', id: 'active', op: 'put', data: doc, updatedAt: doc.updatedAt });
 }
@@ -181,7 +183,13 @@ export async function syncNow(): Promise<void> {
 export function startSync(): () => void {
   started = true;
   void syncNow();
-  const poll = setInterval(() => { if (document.visibilityState === 'visible') void syncNow(); }, 30000);
+  // While the timer is running, check every 5 s so a pause from the phone shows up quickly; otherwise every 30 s
+  let beat = 0;
+  const poll = setInterval(() => {
+    beat++;
+    const running = !!state.timer.timer?.since;
+    if (document.visibilityState === 'visible' && (running || beat % 6 === 0)) void syncNow();
+  }, 5000);
   const wake = () => { if (document.visibilityState === 'visible') void syncNow(); };
   document.addEventListener('visibilitychange', wake);
   window.addEventListener('online', wake);
