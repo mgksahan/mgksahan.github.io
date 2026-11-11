@@ -26,6 +26,7 @@ export function RootLayout() {
     const isGym = location.pathname.startsWith('/gym');
     const isFitness = location.pathname.startsWith('/fitness');
     const isDiary = location.pathname.startsWith('/diary');
+    const isTrackPage = location.pathname.startsWith('/track');
     let manifest = document.querySelector("link[rel='manifest']") as HTMLLinkElement | null;
 
     const setDefaultFavicons = () => {
@@ -81,6 +82,14 @@ export function RootLayout() {
       if (manifest) {
         manifest.remove();
       }
+    } else if (isTrackPage) {
+      setSingleFavicon('/track_icon_192.png', '/track_icon_192.png');
+      if (!manifest) {
+        manifest = document.createElement('link');
+        manifest.rel = 'manifest';
+        document.head.appendChild(manifest);
+      }
+      manifest.href = '/track_manifest.json';
     } else if (isDiary) {
       setSingleFavicon('/favicon-black.svg', '/diary_icon.png');
       if (!manifest) {
@@ -106,6 +115,10 @@ export function RootLayout() {
         navigator.serviceWorker.register('/sw.js', { scope: '/gym/' })
           .then((reg) => console.log('Fitness PWA SW registered:', reg.scope))
           .catch((err) => console.error('Fitness PWA SW registration failed:', err));
+      } else if (isTrackPage) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/track/' })
+          .then((reg) => console.log('Track PWA SW registered:', reg.scope))
+          .catch((err) => console.error('Track PWA SW registration failed:', err));
       } else if (isDiary) {
         navigator.serviceWorker.register('/sw.js', { scope: '/diary/' })
           .then((reg) => console.log('Diary PWA SW registered:', reg.scope))

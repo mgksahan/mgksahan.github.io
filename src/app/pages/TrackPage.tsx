@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router';
-import { Play, Pause, Square, X, Check, Minimize2, Maximize2, Timer, CloudOff, RefreshCw } from 'lucide-react';
+import { Play, Pause, Square, X, Check, Minimize2, Maximize2, Timer, CloudOff, RefreshCw, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   Cat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
@@ -91,6 +91,22 @@ function Tracker() {
   const [mini, setMini] = useState(() => { try { return localStorage.getItem('track_mini') === '1'; } catch { return false; } });
   const [sel, setSel] = useState<Sel>({ cat: 'learn', taskId: null, note: '' });
   const [alert, setAlert] = useState<AlertInfo | null>(null);
+
+  // "Install as an app": Chrome and Edge offer it once the page has a manifest and a service worker
+  const [installEvt, setInstallEvt] = useState<any>(null);
+  useEffect(() => {
+    const onPrompt = (e: Event) => { e.preventDefault(); setInstallEvt(e); };
+    const onInstalled = () => setInstallEvt(null);
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => { window.removeEventListener('beforeinstallprompt', onPrompt); window.removeEventListener('appinstalled', onInstalled); };
+  }, []);
+  const install = async () => {
+    if (!installEvt) return;
+    installEvt.prompt();
+    try { await installEvt.userChoice; } catch { /* ignore */ }
+    setInstallEvt(null);
+  };
 
   const timerDoc = s.timer;
   const seg = timerDoc.timer;
@@ -233,6 +249,11 @@ function Tracker() {
             <h1 className="font-semibold text-white flex items-center gap-2" style={{ margin: 0, fontSize: 18, lineHeight: 1.25, letterSpacing: 'normal', maxWidth: 'none' }}><Timer size={18} className="text-cyan-300" aria-hidden />Time Tracker</h1>
             <div className="flex items-center gap-2">
               <SyncPill sync={sync} />
+              {installEvt && (
+                <button onClick={() => void install()} className="inline-flex items-center gap-1 rounded-lg border border-cyan-300/40 px-2 py-1 text-[12px] text-cyan-300!" title="Install as an app" aria-label="Install as an app">
+                  <Download size={13} />{!mini && 'Install'}
+                </button>
+              )}
               <button onClick={toggleMini} className="rounded-lg border border-white/10 p-1.5 text-zinc-400! hover:text-white!" title={mini ? 'Full view' : 'Corner mode'} aria-label={mini ? 'Full view' : 'Corner mode'}>
                 {mini ? <Maximize2 size={14} /> : <Minimize2 size={14} />}
               </button>

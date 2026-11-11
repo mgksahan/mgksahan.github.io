@@ -1,0 +1,15 @@
+{
+  "id": "/track",
+  "short_name": "Track",
+  "name": "Sahan's Time Tracker",
+  "icons": [
+    { "src": "/track_icon_192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/track_icon_512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/track_icon_512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "start_url": "/track/",
+  "scope": "/track/",
+  "background_color": "#0d0e10",
+  "theme_color": "#0d0e10",
+  "display": "standalone"
+}
