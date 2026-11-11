@@ -223,7 +223,7 @@ function Tracker() {
   const at = Date.now();
   const ms = elapsed(seg, at);
   const brk = timerDoc.brk;
-  const stateText = brk ? `On break · ${fmtMS(Math.max(0, brk.until - at))} left` : seg ? `${seg.since ? 'Tracking' : 'Paused'} · ${CATS[seg.cat].label}` : 'Ready';
+  const stateText = brk ? `On break · ${fmtMS(Math.max(0, brk.until - at))} left` : seg ? `${seg.since ? 'Tracking' : timerDoc.pausedBy === 'phone' ? 'Paused by phone' : 'Paused'} · ${CATS[seg.cat].label}` : 'Ready';
   const curKey = keyOf(cur.taskId, seg ? cur.note : noteText.trim() || cur.note);
   const hasActivity = !!(cur.taskId || (seg ? cur.note : noteText.trim()));
   const tot = activityTotals(curKey);
