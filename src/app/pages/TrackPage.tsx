@@ -377,6 +377,13 @@ function SyncPill({ sync }: { sync: ReturnType<typeof useTrackSync> }) {
 type TotalsFn = (key: string) => { all: number; td: number };
 
 function TaskRow({ t, totals, onToggle, onTrack }: { t: Task; totals: TotalsFn; onToggle: (t: Task) => void; onTrack: (t: Task) => void }) {
+  const [editPts, setEditPts] = useState(false);
+  const [ptsVal, setPtsVal] = useState(String(t.pts));
+  const commitPts = () => {
+    setEditPts(false);
+    const n = Math.min(500, Math.max(1, parseInt(ptsVal) || t.pts));
+    if (n !== t.pts) saveTask({ id: t.id, title: t.title, cat: t.cat, pts: n, due: t.due, done: t.done, doneAt: t.doneAt });
+  };
   const logged = totals(t.id).all;
   const due = t.due ? (t.due === today() ? 'Due today' : `Due ${t.due.slice(5)}`) : '';
   return (
@@ -393,7 +400,12 @@ function TaskRow({ t, totals, onToggle, onTrack }: { t: Task; totals: TotalsFn; 
           {logged > 0 && <span>{fmtDur(logged)} logged</span>}
         </div>
       </div>
-      <span className="font-mono text-[13px] font-bold text-cyan-300 whitespace-nowrap">+{t.pts}</span>
+      {editPts
+        ? <input autoFocus type="number" min={1} max={500} aria-label="Points" value={ptsVal} onChange={e => setPtsVal(e.target.value)} onBlur={commitPts}
+            onKeyDown={e => { if (e.key === 'Enter') commitPts(); if (e.key === 'Escape') { setPtsVal(String(t.pts)); setEditPts(false); } }}
+            className="w-16 rounded-md bg-white/5 border border-white/20 px-1.5 py-0.5 text-[13px] font-mono text-white" />
+        : <button onClick={() => { setPtsVal(String(t.pts)); setEditPts(true); }} title="Edit points" aria-label="Edit points"
+            className="font-mono text-[13px] font-bold text-cyan-300! whitespace-nowrap hover:underline">+{t.pts}</button>}
       {!t.done && <button onClick={() => onTrack(t)} className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-zinc-400! hover:text-cyan-300! hover:border-cyan-300/50" title="Switch the timer to this task">Track</button>}
       <button onClick={() => removeTask(t.id)} aria-label="Delete task" className="text-zinc-500! hover:text-red-400! p-1"><X size={14} /></button>
     </div>
