@@ -8,6 +8,10 @@ import { apiService } from '../../apiService';
 
 export type Cat = 'work' | 'learn' | 'life';
 export interface Task { id: string; title: string; cat: Cat; pts: number; due: string; done: boolean; doneAt?: number | null; updatedAt: number }
+// Board: sticky-note cards in swim lanes. A card can be linked to a task so it shows on the task list.
+export interface Card { id: string; text: string; lane: string; pos: number; cat: Cat; taskId?: string | null; updatedAt: number }
+export interface Lane { id: string; name: string }
+export const DEFAULT_LANES: Lane[] = [{ id: 'ideas', name: 'Ideas' }, { id: 'next', name: 'Next up' }, { id: 'doing', name: 'Doing' }, { id: 'done', name: 'Done' }];
 export interface Entry { id: string; start: number; end: number; cat: Cat; taskId?: string | null; note: string; updatedAt: number }
 export interface Segment { acc: number; since: number | null; cat: Cat; taskId: string | null; note: string }
 export interface TimerDoc {
@@ -17,21 +21,22 @@ export interface TimerDoc {
   pausedBy?: string;                               // set by the phone app when it pauses the timer
   updatedAt: number;
 }
-export interface SettingsDoc { focus: number; brk: number; days: Record<string, number>; updatedAt: number }
+export interface SettingsDoc { focus: number; brk: number; days: Record<string, number>; lanes?: Lane[]; updatedAt: number }
 export interface TrackState {
   tasks: Record<string, Task>;
+  cards: Record<string, Card>;
   entries: Record<string, Entry>;
   timer: TimerDoc;
   settings: SettingsDoc;
 }
-type Kind = 'task' | 'entry' | 'timer' | 'settings';
+type Kind = 'task' | 'card' | 'entry' | 'timer' | 'settings';
 interface Pending { kind: Kind; id: string; op: 'put' | 'delete'; data?: unknown; updatedAt: number }
 export interface SyncStatus { pending: number; syncing: boolean; error: string | null; lastSync: number | null }
 
 const KEY = 'track_state_v1';
 
 const emptyState = (): TrackState => ({
-  tasks: {}, entries: {},
+  tasks: {}, cards: {}, entries: {},
   timer: { timer: null, block: { acc: 0, since: null }, brk: null, updatedAt: 0 },
   settings: { focus: 25, brk: 5, days: {}, updatedAt: 0 },
 });
@@ -92,6 +97,19 @@ export function removeTask(id: string) {
   dead[sk('task', id)] = at;
   enqueue({ kind: 'task', id, op: 'delete', updatedAt: at });
 }
+export function saveCard(c: Omit<Card, 'updatedAt'>) {
+  const card = { ...c, updatedAt: now() };
+  state = { ...state, cards: { ...state.cards, [c.id]: card } };
+  delete dead[sk('card', c.id)];
+  enqueue({ kind: 'card', id: c.id, op: 'put', data: card, updatedAt: card.updatedAt });
+}
+export function removeCard(id: string) {
+  const { [id]: _gone, ...rest } = state.cards;
+  const at = now();
+  state = { ...state, cards: rest };
+  dead[sk('card', id)] = at;
+  enqueue({ kind: 'card', id, op: 'delete', updatedAt: at });
+}
 export function saveEntry(e: Omit<Entry, 'updatedAt'>) {
   const entry = { ...e, updatedAt: now() };
   state = { ...state, entries: { ...state.entries, [e.id]: entry } };
@@ -121,6 +139,7 @@ interface Remote { kind: Kind; id: string; data?: any; deleted?: boolean; update
 
 function localStamp(kind: Kind, id: string): number | undefined {
   if (kind === 'task') return state.tasks[id]?.updatedAt;
+  if (kind === 'card') return state.cards[id]?.updatedAt;
   if (kind === 'entry') return state.entries[id]?.updatedAt;
   if (kind === 'timer') return state.timer.updatedAt || undefined;
   return state.settings.updatedAt || undefined;
@@ -136,11 +155,13 @@ function applyRemote(items: Remote[]) {
     if (r.deleted) {
       dead[key] = r.updatedAt;
       if (r.kind === 'task') { const { [r.id]: _g, ...rest } = next.tasks; next = { ...next, tasks: rest }; }
+      if (r.kind === 'card') { const { [r.id]: _g, ...rest } = next.cards; next = { ...next, cards: rest }; }
       if (r.kind === 'entry') { const { [r.id]: _g, ...rest } = next.entries; next = { ...next, entries: rest }; }
     } else if (r.data) {
       delete dead[key];
       const val = { ...r.data, updatedAt: r.updatedAt };
       if (r.kind === 'task') next = { ...next, tasks: { ...next.tasks, [r.id]: { ...val, id: r.id } } };
+      if (r.kind === 'card') next = { ...next, cards: { ...next.cards, [r.id]: { ...val, id: r.id } } };
       if (r.kind === 'entry') next = { ...next, entries: { ...next.entries, [r.id]: { ...val, id: r.id } } };
       if (r.kind === 'timer') next = { ...next, timer: { ...emptyState().timer, ...val } };
       if (r.kind === 'settings') next = { ...next, settings: { ...emptyState().settings, ...val } };

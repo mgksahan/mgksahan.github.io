@@ -10,6 +10,8 @@ Tasks with points, a calendar, and a timer, all tagged Work / Learning / Persona
 Optional focus blocks (15 to 90 min) alert you when a block ends while the clock keeps counting; the alert offers a break.
 If no alert button is clicked, it nags again at +1 and +2 min (louder each time) and stops tracking at +3 min, saving time only up to the block end (page must be open).
 Tasks can have no due date (shown as "No due date", not on the calendar). Level points = 1 per 10 min tracked; completing a task adds none.
+Board tab: sticky-note cards in swim lanes (default Ideas / Next up / Doing / Done; rename, add, delete lanes). Drag a card by its grip to reorder or move lanes (animated with `motion`).
+"To tasks" on a card creates a no-due-date task linked to it; the card then shows "On task list" / "Task done". Deleting a card keeps its task.
 Stats opens on Today; presets 7/14/30 days or a custom from/to range.
 Tap a task's "+pts" badge to edit its points, even after it is done.
 Corner mode shrinks the page to just the timer.
@@ -38,7 +40,7 @@ flowchart LR
 
 ## How sync works
 
-- One cloud item per task, time entry, the running timer (`timer#active`) and settings (`settings#main`).
+- One cloud item per task, board card (`card#id`; lanes live in `settings#main`), time entry, the running timer (`timer#active`) and settings (`settings#main`).
 - Every change is saved locally first, queued, and sent (retried until it works).
 - Last write wins per item, compared by `updatedAt`. A delete leaves a tombstone so an old copy cannot bring the item back.
 - The running timer is an item, so a timer started on the laptop shows on the phone after the next sync.
@@ -49,5 +51,6 @@ flowchart LR
 | File | Job |
 |---|---|
 | `src/app/pages/TrackPage.tsx` | The page: timer card, tasks, calendar, stats, focus blocks and alerts. |
+| `src/app/pages/TrackBoard.tsx` | The Board tab: lanes, cards, drag and drop. |
 | `src/app/lib/trackStore.ts` | State, localStorage copy, sync queue and merge. |
 | `src/apiService.js` | `fetchTrack`, `putTrack`, `deleteTrack`. |

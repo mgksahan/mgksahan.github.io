@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router';
 import { Play, Pause, Square, X, Check, Minimize2, Maximize2, Timer, CloudOff, RefreshCw, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { BoardTab } from './TrackBoard';
 import {
   Cat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
   saveTask, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
@@ -95,7 +96,7 @@ function Tracker() {
   sRef.current = s;
 
   const [, setNow] = useState(Date.now());
-  const [tab, setTab] = useState<'tasks' | 'cal' | 'stats'>('tasks');
+  const [tab, setTab] = useState<'tasks' | 'board' | 'cal' | 'stats'>('tasks');
   const [mini, setMini] = useState(() => { try { return localStorage.getItem('track_mini') === '1'; } catch { return false; } });
   const [sel, setSel] = useState<Sel>({ cat: 'learn', taskId: null, note: '' });
   const [alert, setAlert] = useState<AlertInfo | null>(null);
@@ -386,12 +387,13 @@ function Tracker() {
       {!mini && (
         <main className={`${card} min-w-0`}>
           <div className="flex gap-1 mb-4 border-b border-white/10" role="tablist">
-            {([['tasks', 'Tasks'], ['cal', 'Calendar'], ['stats', 'Stats']] as const).map(([k, l]) => (
+            {([['tasks', 'Tasks'], ['board', 'Board'], ['cal', 'Calendar'], ['stats', 'Stats']] as const).map(([k, l]) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                 className={`px-3.5 py-2 text-sm font-semibold -mb-px border-b-2 ${tab === k ? 'text-white! border-cyan-300' : 'text-zinc-500! border-transparent hover:text-zinc-300!'}`}>{l}</button>
             ))}
           </div>
           {tab === 'tasks' && <TasksTab tasks={tasks} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
+          {tab === 'board' && <BoardTab />}
           {tab === 'cal' && <CalendarTab tasks={tasks} entries={entries} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
           {tab === 'stats' && <StatsTab s={s} tasks={tasks} entries={entries} labelOf={labelOf} />}
         </main>
