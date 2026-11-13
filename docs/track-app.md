@@ -12,7 +12,10 @@ If no alert button is clicked, it nags again at +1 and +2 min (louder each time)
 Tasks can have no due date (shown as "No due date", not on the calendar). Level points = 1 per 10 min tracked; completing a task adds none.
 Board tab: sticky-note cards in swim lanes (default Ideas / Next up / Doing / Done; rename, add, delete lanes). Drag a card by its grip to reorder or move lanes (animated with `motion`).
 "To tasks" on a card creates a no-due-date task linked to it; the card then shows "On task list" / "Task done". Deleting a card keeps its task.
-Any card can hold subtasks (an epic): progress bar and n/total on the card, expand to tick, add or delete them. A subtask's list icon puts it on the task list; after that the task decides whether it is done.
+Every task also gets a board card (id `c_<taskId>`, made by `adoptTasks` when the Board opens: open -> Next up, done -> Done). Deleting a task deletes that card; deleting a card keeps the task.
+"-> Epic" / "Epic" on a card converts it to an epic and back (the flag is `card.epic`; subtasks are kept when converting back). Cards have a Track button: time goes to the linked task, or to the card id itself when there is no task, and an epic's total includes its subtasks' tasks.
+Tab changes fade (`view` follows `tab` after the old content exits).
+A card that is an epic holds subtasks: progress bar and n/total on the card, expand to tick, add or delete them. A subtask's list icon puts it on the task list; after that the task decides whether it is done.
 Stats opens on Today; presets 7/14/30 days or a custom from/to range.
 Tap a task's "+pts" badge to edit its points, even after it is done.
 Corner mode shrinks the page to just the timer.

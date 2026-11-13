@@ -11,7 +11,7 @@ export interface Task { id: string; title: string; cat: Cat; pts: number; due: s
 // Board: sticky-note cards in swim lanes. A card can be linked to a task so it shows on the task list.
 // A card with subtasks acts as an epic. A subtask can be put on the task list (taskId); then the task is the source of truth for done.
 export interface Sub { id: string; text: string; done: boolean; taskId?: string | null }
-export interface Card { id: string; text: string; lane: string; pos: number; cat: Cat; taskId?: string | null; subs?: Sub[]; updatedAt: number }
+export interface Card { id: string; text: string; lane: string; pos: number; cat: Cat; taskId?: string | null; subs?: Sub[]; epic?: boolean; updatedAt: number }
 export interface Lane { id: string; name: string }
 export const DEFAULT_LANES: Lane[] = [{ id: 'ideas', name: 'Ideas' }, { id: 'next', name: 'Next up' }, { id: 'doing', name: 'Doing' }, { id: 'done', name: 'Done' }];
 export interface Entry { id: string; start: number; end: number; cat: Cat; taskId?: string | null; note: string; updatedAt: number }
@@ -98,6 +98,7 @@ export function removeTask(id: string) {
   state = { ...state, tasks: rest };
   dead[sk('task', id)] = at;
   enqueue({ kind: 'task', id, op: 'delete', updatedAt: at });
+  if (state.cards['c_' + id]) removeCard('c_' + id);      // the card that was made for this task goes with it
 }
 export function saveCard(c: Omit<Card, 'updatedAt'>) {
   const card = { ...c, updatedAt: now() };
@@ -106,11 +107,37 @@ export function saveCard(c: Omit<Card, 'updatedAt'>) {
   enqueue({ kind: 'card', id: c.id, op: 'put', data: card, updatedAt: card.updatedAt });
 }
 export function removeCard(id: string) {
+  const gone = state.cards[id];
   const { [id]: _gone, ...rest } = state.cards;
   const at = now();
   state = { ...state, cards: rest };
   dead[sk('card', id)] = at;
   enqueue({ kind: 'card', id, op: 'delete', updatedAt: at });
+  // Deleting a card must not make adoptTasks() recreate it for the task it was linked to
+  if (gone?.taskId && id !== 'c_' + gone.taskId) {
+    dead[sk('card', 'c_' + gone.taskId)] = at;
+    enqueue({ kind: 'card', id: 'c_' + gone.taskId, op: 'delete', updatedAt: at });
+  }
+}
+
+// Every task gets a board card (id "c_<taskId>", so two devices make the same one). Open tasks go to
+// "Next up", done ones to "Done". Tasks that are a card's subtask, or already have a card, are skipped.
+export function adoptTasks(laneIds: string[]) {
+  if (!laneIds.length) return;
+  const cards = Object.values(state.cards);
+  const taken = new Set<string>();
+  cards.forEach(c => { if (c.taskId) taken.add(c.taskId); (c.subs ?? []).forEach(x => { if (x.taskId) taken.add(x.taskId); }); });
+  const tail: Record<string, number> = {};
+  cards.forEach(c => { tail[c.lane] = Math.max(tail[c.lane] ?? 0, c.pos); });
+  const todo = laneIds.includes('next') ? 'next' : laneIds[0];
+  const done = laneIds.includes('done') ? 'done' : laneIds[laneIds.length - 1];
+  const fresh = Object.values(state.tasks).filter(t => !taken.has(t.id) && !state.cards['c_' + t.id] && !dead[sk('card', 'c_' + t.id)]);
+  fresh.sort((a, b) => (a.done !== b.done ? (a.done ? 1 : -1) : a.done ? (b.doneAt || 0) - (a.doneAt || 0) : (a.due || '9').localeCompare(b.due || '9')));
+  for (const t of fresh) {
+    const lane = t.done ? done : todo;
+    tail[lane] = (tail[lane] ?? 0) + 1;
+    saveCard({ id: 'c_' + t.id, text: t.title, lane, pos: tail[lane], cat: t.cat, taskId: t.id });
+  }
 }
 export function saveEntry(e: Omit<Entry, 'updatedAt'>) {
   const entry = { ...e, updatedAt: now() };

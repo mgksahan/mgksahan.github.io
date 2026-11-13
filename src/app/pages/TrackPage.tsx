@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router';
+import { motion, AnimatePresence } from 'motion/react';
 import { Play, Pause, Square, X, Check, Minimize2, Maximize2, Timer, CloudOff, RefreshCw, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BoardTab } from './TrackBoard';
@@ -97,6 +98,8 @@ function Tracker() {
 
   const [, setNow] = useState(Date.now());
   const [tab, setTab] = useState<'tasks' | 'board' | 'cal' | 'stats'>('tasks');
+  // `view` is the tab on screen: it follows `tab` only after the old content has faded out, so the layout never jumps mid-fade
+  const [view, setView] = useState<'tasks' | 'board' | 'cal' | 'stats'>('tasks');
   const [mini, setMini] = useState(() => { try { return localStorage.getItem('track_mini') === '1'; } catch { return false; } });
   const [sel, setSel] = useState<Sel>({ cat: 'learn', taskId: null, note: '' });
   const [alert, setAlert] = useState<AlertInfo | null>(null);
@@ -255,6 +258,11 @@ function Tracker() {
     if (seg.taskId) { if (note !== seg.note) saveTimer({ timer: { ...seg, note } }); return; }
     if (keyOf(null, note) !== keyOf(null, seg.note)) switchTo({ cat: seg.cat, taskId: null, note });
   };
+  // Board cards: start tracking the card (or pause if it is already the running activity)
+  const trackBoard = (cat: Cat, id: string, title: string) => {
+    if (seg?.taskId === id) { startPause(); return; }
+    unlock(); askPermission(); switchTo({ cat, taskId: id, note: title }, true);
+  };
   const trackTask = (t: Task) => { unlock(); askPermission(); switchTo({ cat: t.cat, taskId: t.id, note: t.title }, true); };
 
   // ---- derived timer display ----
@@ -280,7 +288,7 @@ function Tracker() {
   const toggleMini = () => setMini(m => { const n = !m; try { localStorage.setItem('track_mini', n ? '1' : '0'); } catch { /* ignore */ } return n; });
   const toggleDone = (t: Task) => saveTask({ ...t, done: !t.done, doneAt: !t.done ? Date.now() : null });
 
-  const board = tab === 'board' && !mini;
+  const board = view === 'board' && !mini;
   const alertBox = alert && (
       <div role="alert" className={`rounded-lg border p-3 flex flex-col gap-2 text-sm ${alert.level === 3 ? 'border-red-400 bg-red-400/15' : alert.level === 2 ? 'border-amber-400 bg-amber-400/10' : 'border-cyan-300/60 bg-cyan-300/10'}`}>
         <b className="text-white">{alert.title}</b>
@@ -393,7 +401,9 @@ function Tracker() {
           <div className="flex gap-1 mb-4 border-b border-white/10 items-center" role="tablist">
             {([['tasks', 'Tasks'], ['board', 'Board'], ['cal', 'Calendar'], ['stats', 'Stats']] as const).map(([k, l]) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-                className={`px-3.5 py-2 text-sm font-semibold -mb-px border-b-2 ${tab === k ? 'text-white! border-cyan-300' : 'text-zinc-500! border-transparent hover:text-zinc-300!'}`}>{l}</button>
+                className={`relative px-3.5 py-2 text-sm font-semibold -mb-px border-b-2 border-transparent transition-colors ${tab === k ? 'text-white!' : 'text-zinc-500! hover:text-zinc-300!'}`}>
+                {l}{tab === k && <motion.span layoutId="tabline" className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-cyan-300" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
+              </button>
             ))}
             {board && (
               <div className="ml-auto flex items-center gap-2.5 pb-1 text-[13px] text-zinc-400 min-w-0">
@@ -404,10 +414,16 @@ function Tracker() {
               </div>
             )}
           </div>
-          {tab === 'tasks' && <TasksTab tasks={tasks} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
-          {tab === 'board' && <BoardTab />}
-          {tab === 'cal' && <CalendarTab tasks={tasks} entries={entries} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
-          {tab === 'stats' && <StatsTab s={s} tasks={tasks} entries={entries} labelOf={labelOf} />}
+          <AnimatePresence mode="wait" initial={false} onExitComplete={() => setView(tab)}>
+            {view === tab && (
+              <motion.div key={view} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.16, ease: 'easeOut' }}>
+                {view === 'tasks' && <TasksTab tasks={tasks} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
+                {view === 'board' && <BoardTab onTrack={trackBoard} trackingId={seg?.taskId ?? null} running={running} />}
+                {view === 'cal' && <CalendarTab tasks={tasks} entries={entries} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
+                {view === 'stats' && <StatsTab s={s} tasks={tasks} entries={entries} labelOf={labelOf} />}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </main>
       )}
     </div>
