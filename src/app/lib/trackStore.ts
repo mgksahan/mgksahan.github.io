@@ -134,6 +134,19 @@ export function removeCard(id: string) {
   }
 }
 
+// A task can be ticked somewhere that cannot move cards (the phone widget). When the board opens, move the card of any
+// task that was completed after the card was last touched. Cards you dragged out of Done afterwards stay where you put them.
+export function settleDoneTasks(laneIds: string[]) {
+  if (!laneIds.length) return;
+  const doneLane = laneIds.includes('done') ? 'done' : laneIds[laneIds.length - 1];
+  for (const c of Object.values(state.cards)) {
+    const t = c.taskId ? state.tasks[c.taskId] : undefined;
+    if (!t?.done || !t.doneAt || c.lane === doneLane || t.doneAt <= c.updatedAt) continue;
+    const top = Math.min(1, ...Object.values(state.cards).filter(x => x.lane === doneLane).map(x => x.pos));
+    saveCard({ ...c, lane: doneLane, pos: top - 1 });
+  }
+}
+
 // Every task gets a board card (id "c_<taskId>", so two devices make the same one). Open tasks go to
 // "Next up", done ones to "Done". Tasks that are a card's subtask, or already have a card, are skipped.
 export function adoptTasks(laneIds: string[]) {
