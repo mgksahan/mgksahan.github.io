@@ -97,7 +97,7 @@ const useWide = () => {
   useEffect(() => { const m = window.matchMedia(q); const f = () => setW(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, []);
   return w;
 };
-const SLIDE = { duration: 0.6, ease: [0.4, 0, 0.2, 1] as const };
+const SLIDE = { duration: 0.32, ease: [0.4, 0, 0.2, 1] as const };
 
 export function Tracker() {
   const s = useTrack();
@@ -318,7 +318,7 @@ export function Tracker() {
   );
 
   return (
-    <div className={`flex-1 w-full mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-5 items-start lg:gap-0 transition-[max-width] duration-[600ms] ease-in-out ${mini ? 'max-w-[340px]' : board ? 'max-w-[2400px]' : 'max-w-[1180px]'}`}>
+    <div className={`flex-1 w-full mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-5 items-start lg:gap-0 transition-[max-width] duration-[320ms] ease-in-out ${mini ? 'max-w-[340px]' : board ? 'max-w-[2400px]' : 'max-w-[1180px]'}`}>
       {/* Left column: collapses and slides out to the left while the card on the right grows into the space */}
       <motion.aside
         initial={false}
@@ -434,7 +434,7 @@ export function Tracker() {
           </div>
           <AnimatePresence mode="wait" initial={false} onExitComplete={() => { setShifting((tab === 'board') !== (view === 'board')); setView(tab); }}>
             {view === tab && (
-              <motion.div key={view} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: shifting ? 0.3 : 0.2, delay: shifting ? 0.4 : 0, ease: 'easeOut' }}>
+              <motion.div key={view} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: shifting ? 0.2 : 0.14, delay: shifting ? 0.2 : 0, ease: 'easeOut' }}>
                 {view === 'tasks' && <TasksTab tasks={tasks} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
                 {view === 'board' && <BoardTab onTrack={trackBoard} trackingId={seg?.taskId ?? null} running={running} />}
                 {view === 'cal' && <CalendarTab tasks={tasks} entries={entries} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
