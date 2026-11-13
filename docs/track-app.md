@@ -8,6 +8,9 @@ Backend resources live in `my-aws-environment/terraform/website-backend` (`Track
 Tasks with points, a calendar, and a timer, all tagged Work / Learning / Personal. Time adds up per activity
 (a linked task, or a typed label). Switching activity while the timer runs saves the old stretch and starts the new one.
 Optional focus blocks (15 to 90 min) alert you when a block ends while the clock keeps counting; the alert offers a break.
+If no alert button is clicked, it nags again at +1 and +2 min (louder each time) and stops tracking at +3 min, saving time only up to the block end (page must be open).
+Tasks can have no due date (shown as "No due date", not on the calendar). Level points = 1 per 10 min tracked; completing a task adds none.
+Stats opens on Today; presets 7/14/30 days or a custom from/to range.
 Tap a task's "+pts" badge to edit its points, even after it is done.
 Corner mode shrinks the page to just the timer.
 It installs as an app (Chrome/Edge: Install button in the card or the address bar icon): `public/track_manifest.json`, scope `/track/`, service worker `sw.js` registered from `RootLayout.tsx`.

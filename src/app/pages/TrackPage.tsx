@@ -51,16 +51,22 @@ function unlock() {
     if (ac.state === 'suspended') void ac.resume();
   } catch { /* no audio */ }
 }
-function beep() {
+// level 1 is a gentle double beep; 2 and 3 get more beeps, higher and louder, so they cut through deep work
+const BEEPS: Record<1 | 2 | 3, { at: number[]; hz: number; vol: number }> = {
+  1: { at: [0, 0.35], hz: 880, vol: 0.25 },
+  2: { at: [0, 0.3, 0.6, 0.9], hz: 1000, vol: 0.5 },
+  3: { at: [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75], hz: 1200, vol: 0.9 },
+};
+function beep(level: 1 | 2 | 3 = 1) {
   try {
     if (!ac) return;
-    const c = ac;
-    [0, 0.35].forEach(d => {
+    const c = ac, b = BEEPS[level];
+    b.at.forEach(d => {
       const o = c.createOscillator(), g = c.createGain();
-      o.connect(g); g.connect(c.destination); o.frequency.value = 880;
+      o.connect(g); g.connect(c.destination); o.frequency.value = b.hz;
       const t = c.currentTime + d;
-      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
-      o.start(t); o.stop(t + 0.32);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(b.vol, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o.start(t); o.stop(t + 0.22);
     });
   } catch { /* ignore */ }
 }
@@ -68,7 +74,9 @@ function askPermission() {
   try { if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission(); } catch { /* ignore */ }
 }
 
-interface AlertInfo { title: string; body: string; kind: 'block' | 'break' }
+// A block alert nags in 3 steps (1 min apart). If none of its buttons is clicked, tracking stops 1 minute after the third.
+interface AlertInfo { title: string; body: string; kind: 'block' | 'break' | 'stopped'; endedAt?: number; level?: 1 | 2 | 3 }
+const NAG_STEP = 60000, NAG_STOP = 180000;
 interface Sel { cat: Cat; taskId: string | null; note: string }
 
 export function TrackPage() {
@@ -125,6 +133,7 @@ function Tracker() {
   // ---- tick: clock, block end, break end, tab title ----
   const alertRef = useRef(alert);
   alertRef.current = alert;
+  const autoStopRef = useRef<(endedAt: number) => void>(() => {});
   useEffect(() => {
     const id = setInterval(() => {
       const cs = sRef.current, at = Date.now();
@@ -135,7 +144,17 @@ function Tracker() {
         const n = (cs.settings.days[today()] || 0) + 1;
         saveTimer({ block: { acc: 0, since: at } });
         saveSettings({ days: { ...cs.settings.days, [today()]: n } });
-        notify({ title: `${cs.settings.focus}-minute block done`, body: `Block ${n} today. You are on: ${lbl}. Stay on it, or take a ${cs.settings.brk} minute break.`, kind: 'block' });
+        notify({ title: `${cs.settings.focus}-minute block done`, body: `Block ${n} today. You are on: ${lbl}. Click Keep going or take a ${cs.settings.brk} minute break, or tracking stops in 3 minutes.`, kind: 'block', endedAt: at, level: 1 });
+      }
+      const al = alertRef.current;
+      if (al?.kind === 'block' && al.endedAt) {
+        const wait = at - al.endedAt;
+        if (!doc.timer?.since) setAlert(null);                                  // paused or stopped elsewhere: nothing left to nag about
+        else if (wait >= NAG_STOP) autoStopRef.current(al.endedAt);
+        else {
+          const level = (wait >= 2 * NAG_STEP ? 3 : wait >= NAG_STEP ? 2 : 1) as 1 | 2 | 3;
+          if (level !== al.level) notify({ ...al, level, title: level === 3 ? 'Last warning: tracking stops soon' : 'Still there? Tracking is running', body: `Your ${cs.settings.focus}-minute block ended. Tracking on ${lbl} stops automatically unless you respond.` });
+        }
       }
       if (doc.brk && at >= doc.brk.until) {
         saveTimer({ brk: null });
@@ -148,8 +167,13 @@ function Tracker() {
     return () => { clearInterval(id); document.title = 'Time Tracker'; };
   }, []);
   function notify(a: AlertInfo) {
-    setAlert(a); beep();
-    try { if ('Notification' in window && Notification.permission === 'granted') new Notification(a.title, { body: a.body, tag: 'timetracker' }); } catch { /* ignore */ }
+    setAlert(a); beep(a.level ?? 1);
+    try {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const n = new Notification(a.title, { body: a.body, tag: 'timetracker', renotify: true, requireInteraction: a.kind === 'block' } as NotificationOptions);
+        n.onclick = () => { window.focus(); n.close(); };
+      }
+    } catch { /* ignore */ }
   }
 
   // ---- per-activity totals ----
@@ -168,6 +192,7 @@ function Tracker() {
   // Pivot to another activity. If the timer was running, the new activity starts running right away.
   const switchTo = (next: Sel, start = false) => {
     const was = running;
+    if (alert?.kind === 'block') setAlert(null);
     commitSeg(seg);
     setSel(next); setNoteText(next.note);
     if (was || start) saveTimer({ timer: { acc: 0, since: Date.now(), cat: next.cat, taskId: next.taskId, note: next.note }, block: blockRun(timerDoc.block, true), brk: null });
@@ -188,6 +213,18 @@ function Tracker() {
     commitSeg(seg);
     saveTimer({ timer: null, block: { acc: 0, since: null }, brk: null });
     setAlert(null); setSel(p => ({ ...p, taskId: null, note: '' })); setNoteText('');
+  };
+  // Nobody answered the block alerts: save the time up to when the block ended (not the idle minutes after) and stop
+  autoStopRef.current = (endedAt: number) => {
+    const sg = sRef.current.timer.timer;
+    if (!sg?.since) { setAlert(null); return; }
+    const ms = Math.max(0, elapsed(sg, endedAt));
+    const note = labelOf(sg.taskId, sg.note);
+    if (ms >= 1000) saveEntry({ id: uid(), start: endedAt - ms, end: endedAt, cat: sg.cat, taskId: sg.taskId || null, note });
+    saveTimer({ timer: null, block: { acc: 0, since: null }, brk: null });
+    setSel(p => ({ ...p, taskId: null, note: '' })); setNoteText('');
+    const hm = new Date(endedAt); 
+    notify({ title: 'Tracking stopped', body: `No response, so ${note} was saved and stopped at ${pad(hm.getHours())}:${pad(hm.getMinutes())} (${fmtDur(ms)}).`, kind: 'stopped' });
   };
   const takeBreak = () => {
     unlock();
@@ -234,7 +271,8 @@ function Tracker() {
   const recent = useMemo(() => [...new Set(entries.map(e => e.note).filter(Boolean))].slice(-30), [entries]);
 
   // ---- points ----
-  const points = tasks.reduce((a, t) => a + (t.done ? t.pts : 0), 0) + entries.reduce((a, e) => a + Math.floor(entryMs(e) / 600000), 0);
+  // Level points come from time tracked only: 1 point per 10 minutes. Finishing a task does not add points.
+  const points = Math.floor(entries.reduce((a, e) => a + entryMs(e), 0) / 600000);
   const level = Math.floor(points / 100) + 1, into = points % 100;
   const doneToday = tasks.filter(t => t.done && t.doneAt && dkey(new Date(t.doneAt)) === today()).length;
 
@@ -261,12 +299,15 @@ function Tracker() {
           </div>
 
           {alert && (
-            <div role="alert" className="rounded-lg border border-cyan-300/60 bg-cyan-300/10 p-3 flex flex-col gap-2 text-sm">
+            <div role="alert" className={`rounded-lg border p-3 flex flex-col gap-2 text-sm ${alert.level === 3 ? 'border-red-400 bg-red-400/15' : alert.level === 2 ? 'border-amber-400 bg-amber-400/10' : 'border-cyan-300/60 bg-cyan-300/10'}`}>
               <b className="text-white">{alert.title}</b>
               <span className="text-zinc-300">{alert.body}</span>
+              {alert.kind === 'block' && alert.endedAt && <span className="font-mono text-[13px] text-zinc-200">Stops in {fmtMS(Math.max(0, alert.endedAt + NAG_STOP - at))}</span>}
               <div className="flex gap-2 flex-wrap">
-                {alert.kind === 'block' ? (
-                  <><button className={btnPrimary} onClick={takeBreak}>Take {s.settings.brk} min break</button><button className={btn} onClick={() => setAlert(null)}>Keep going</button></>
+                {alert.kind === 'stopped' ? (
+                  <button className={btn} onClick={() => setAlert(null)}>Dismiss</button>
+                ) : alert.kind === 'block' ? (
+                  <><button className={btnPrimary} onClick={takeBreak}>Take {s.settings.brk} min break</button><button className={btn} onClick={() => { unlock(); setAlert(null); }}>Keep going</button></>
                 ) : (
                   <><button className={btnPrimary} onClick={resumeFromBreak}>Back to it</button><button className={btn} onClick={() => setAlert(null)}>Dismiss</button></>
                 )}
@@ -335,7 +376,7 @@ function Tracker() {
 
         {!mini && (
           <div className={`${card} flex flex-col gap-1.5`}>
-            <div className="flex justify-between text-[13px] text-zinc-400"><b className="text-white text-[15px]">Level {level}</b><span>{points} points</span></div>
+            <div className="flex justify-between text-[13px] text-zinc-400"><b className="text-white text-[15px]">Level {level}</b><span>{points} points · 1 per 10 min</span></div>
             <div className="h-2 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-cyan-300 rounded-full transition-[width] duration-500" style={{ width: `${into}%` }} /></div>
             <div className="flex justify-between text-[13px] text-zinc-400"><span>{100 - into} to level {level + 1}</span><span>{doneToday} done today</span></div>
           </div>
@@ -385,7 +426,7 @@ function TaskRow({ t, totals, onToggle, onTrack }: { t: Task; totals: TotalsFn; 
     if (n !== t.pts) saveTask({ id: t.id, title: t.title, cat: t.cat, pts: n, due: t.due, done: t.done, doneAt: t.doneAt });
   };
   const logged = totals(t.id).all;
-  const due = t.due ? (t.due === today() ? 'Due today' : `Due ${t.due.slice(5)}`) : '';
+  const due = t.due ? (t.due === today() ? 'Due today' : `Due ${t.due.slice(5)}`) : 'No due date';
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-white/[0.07] last:border-b-0">
       <button onClick={() => onToggle(t)} aria-label={t.done ? 'Mark open' : 'Mark done'}
@@ -429,13 +470,14 @@ function TasksTab({ tasks, activityTotals, onToggle, onTrack }: { tasks: Task[];
   const [title, setTitle] = useState('');
   const [pts, setPts] = useState(10);
   const [due, setDue] = useState(today());
+  const [noDue, setNoDue] = useState(false);
   const [cat, setCat] = useState<Cat>('work');
   const open = tasks.filter(t => !t.done).sort((a, b) => ((a.due || '9') < (b.due || '9') ? -1 : 1));
   const done = tasks.filter(t => t.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)).slice(0, 8);
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    saveTask({ id: uid(), title: title.trim(), cat, pts: Math.max(1, pts || 10), due, done: false });
+    saveTask({ id: uid(), title: title.trim(), cat, pts: Math.max(1, pts || 10), due: noDue ? '' : due, done: false });
     setTitle('');
   };
   return (
@@ -443,10 +485,11 @@ function TasksTab({ tasks, activityTotals, onToggle, onTrack }: { tasks: Task[];
       <form onSubmit={add} className="grid grid-cols-[minmax(0,1fr)_72px] sm:grid-cols-[minmax(0,1fr)_84px_140px_auto] gap-2 mb-2">
         <input className={field} placeholder="Add a task" autoComplete="off" required value={title} onChange={e => setTitle(e.target.value)} />
         <input className={field} type="number" min={1} max={500} aria-label="Points" value={pts} onChange={e => setPts(parseInt(e.target.value) || 0)} />
-        <input className={field} type="date" aria-label="Due date" value={due} onChange={e => setDue(e.target.value)} />
+        <input className={`${field} ${noDue ? 'opacity-40' : ''}`} type="date" aria-label="Due date" disabled={noDue} value={due} onChange={e => setDue(e.target.value)} />
         <button className={btnPrimary}>Add</button>
       </form>
-      <div className="flex items-center gap-2 flex-wrap mb-4"><CatChips value={cat} onChange={setCat} /><span className={`${label} ml-1`}>points on completion</span></div>
+      <div className="flex items-center gap-2 flex-wrap mb-4"><CatChips value={cat} onChange={setCat} /><span className={`${label} ml-1`}>points on completion</span>
+        <label className="ml-auto inline-flex items-center gap-1.5 text-[13px] text-zinc-400"><input type="checkbox" checked={noDue} onChange={e => setNoDue(e.target.checked)} />No due date</label></div>
       <h2 className="text-lg font-semibold text-white mb-2" style={{ margin: '0 0 8px' }}>To do · {open.length}</h2>
       {open.length ? open.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} />) : <div className="text-zinc-500 py-3">Nothing open. Add a task above.</div>}
       {done.length > 0 && <>
@@ -533,9 +576,19 @@ function CalendarTab({ tasks, entries, activityTotals, onToggle, onTrack }: { ta
 
 // ---------- stats ----------
 function StatsTab({ s, tasks, entries, labelOf }: { s: TrackState; tasks: Task[]; entries: Entry[]; labelOf: (id: string | null | undefined, note: string | undefined) => string }) {
-  const [range, setRange] = useState(7);
+  // Default is today. Presets look back N days from today; Custom takes any from/to dates.
+  const [mode, setMode] = useState<'today' | 7 | 14 | 30 | 'custom'>('today');
+  const [from, setFrom] = useState(() => { const d = new Date(); return dkey(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 6)); });
+  const [to, setTo] = useState(today());
   const nowD = new Date();
-  const days = Array.from({ length: range }, (_, i) => dkey(new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate() - (range - 1 - i))));
+  const span = mode === 'today' ? 1 : mode === 'custom' ? 0 : mode;
+  const parse = (k: string) => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+  let startD = span ? new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate() - (span - 1)) : parse(from || to || today());
+  let endD = span ? new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate()) : parse(to || from || today());
+  if (startD > endD) [startD, endD] = [endD, startD];
+  const count = Math.min(366, Math.round((endD.getTime() - startD.getTime()) / 86400000) + 1);
+  const days = Array.from({ length: count }, (_, i) => dkey(new Date(startD.getFullYear(), startD.getMonth(), startD.getDate() + i)));
+  const range = days.length;
   const per: Record<string, Record<Cat, number>> = {};
   days.forEach(k => { per[k] = { work: 0, learn: 0, life: 0 }; });
   const tot: Record<Cat, number> = { work: 0, learn: 0, life: 0 };
@@ -555,13 +608,21 @@ function StatsTab({ s, tasks, entries, labelOf }: { s: TrackState; tasks: Task[]
   const doneTasks = tasks.filter(t => t.done && t.doneAt && days.includes(dkey(new Date(t.doneAt))));
   const blocks = days.reduce((a, k) => a + (s.settings.days[k] || 0), 0);
   const dn = (k: string) => new Date(k + 'T00:00').toLocaleString(undefined, { weekday: 'short' }).slice(0, range > 7 ? 1 : 3);
+  const showDn = range <= 31;
   const h2 = 'text-lg font-semibold text-white';
   return (
     <div>
-      <div className="flex gap-1.5 mb-3">
-        {[7, 14, 30].map(v => <button key={v} onClick={() => setRange(v)} aria-pressed={range === v}
-          className={`rounded-full border px-3 py-1 text-[13px] ${range === v ? 'border-cyan-300 bg-cyan-300/15 text-white! font-semibold' : 'border-white/10 text-zinc-300!'}`}>{v} days</button>)}
+      <div className="flex gap-1.5 mb-3 flex-wrap items-center">
+        {([['today', 'Today'], [7, '7 days'], [14, '14 days'], [30, '30 days'], ['custom', 'Custom']] as const).map(([v, l]) => <button key={v} onClick={() => setMode(v)} aria-pressed={mode === v}
+          className={`rounded-full border px-3 py-1 text-[13px] ${mode === v ? 'border-cyan-300 bg-cyan-300/15 text-white! font-semibold' : 'border-white/10 text-zinc-300!'}`}>{l}</button>)}
       </div>
+      {mode === 'custom' && (
+        <div className="flex gap-2 items-center flex-wrap mb-3 text-[13px] text-zinc-400">
+          <input className={`${field} !w-auto`} type="date" aria-label="From date" value={from} max={to || undefined} onChange={e => setFrom(e.target.value)} />
+          <span>to</span>
+          <input className={`${field} !w-auto`} type="date" aria-label="To date" value={to} min={from || undefined} onChange={e => setTo(e.target.value)} />
+        </div>
+      )}
       <div className={label}>Time allocation</div>
       <h2 className={h2} style={{ margin: '4px 0 0' }}>{all ? `${fmtDur(all)} tracked` : 'Nothing tracked yet'}</h2>
       <div className="flex h-4 rounded-full overflow-hidden bg-white/10 my-2.5" role="img" aria-label="Share of time by category">
@@ -585,6 +646,7 @@ function StatsTab({ s, tasks, entries, labelOf }: { s: TrackState; tasks: Task[]
           </div>
         )) : <div className="text-zinc-500 py-2">Track something and it shows up here.</div>}
       </div>
+      {range > 1 && <>
       <div className={`${label} mt-6`}>Per day</div>
       <div className="flex items-end gap-2 h-[130px] mt-1.5">
         {days.map(k => {
@@ -594,13 +656,14 @@ function StatsTab({ s, tasks, entries, labelOf }: { s: TrackState; tasks: Task[]
               <div className="flex flex-col-reverse rounded-[5px] overflow-hidden bg-white/10" style={{ height: `${t / max * 100}%` }}>
                 {CAT_KEYS.map(c => <div key={c} className={CATS[c].bar} style={{ height: `${p[c] / Math.max(1, t) * 100}%` }} />)}
               </div>
-              <div className="text-[11px] text-zinc-500 text-center">{dn(k)}</div>
+              <div className="text-[11px] text-zinc-500 text-center">{showDn ? dn(k) : ''}</div>
             </div>
           );
         })}
       </div>
+      </>}
       <div className={`${label} mt-6`}>Tasks and focus blocks</div>
-      <h2 className={h2} style={{ margin: '4px 0 0' }}>{doneTasks.length} tasks done · {doneTasks.reduce((a, t) => a + t.pts, 0)} points · {blocks} focus blocks</h2>
+      <h2 className={h2} style={{ margin: '4px 0 0' }}>{doneTasks.length} tasks done · {blocks} focus blocks</h2>
     </div>
   );
 }
