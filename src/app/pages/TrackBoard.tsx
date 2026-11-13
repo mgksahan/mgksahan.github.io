@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers } from 'lucide-react';
+import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers, CalendarDays } from 'lucide-react';
 import {
   Cat, Card, Lane, Sub, Task, DEFAULT_LANES, useTrack, adoptTasks, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
 } from '../lib/trackStore';
@@ -9,10 +9,10 @@ import {
 // it to another lane; neighbours glide out of the way. A card can be put on the task list, which creates a
 // task (no due date) linked to the card. Cards sync as "card" items, lanes live in the settings item.
 
-const CATS: Record<Cat, { label: string; note: string; dot: string }> = {
-  work:  { label: 'Work',     note: 'bg-sky-400/15 border-sky-400/40',         dot: 'bg-sky-400' },
-  learn: { label: 'Learning', note: 'bg-amber-400/15 border-amber-400/40',     dot: 'bg-amber-400' },
-  life:  { label: 'Personal', note: 'bg-emerald-400/15 border-emerald-400/40', dot: 'bg-emerald-400' },
+const CATS: Record<Cat, { label: string; note: string; dot: string; edge: string }> = {
+  work:  { label: 'Work',     note: 'bg-sky-400/15 border-sky-400/40',         dot: 'bg-sky-400',     edge: 'border-l-sky-400' },
+  learn: { label: 'Learning', note: 'bg-amber-400/15 border-amber-400/40',     dot: 'bg-amber-400',   edge: 'border-l-amber-400' },
+  life:  { label: 'Personal', note: 'bg-emerald-400/15 border-emerald-400/40', dot: 'bg-emerald-400', edge: 'border-l-emerald-400' },
 };
 const NEXT_CAT: Record<Cat, Cat> = { work: 'learn', learn: 'life', life: 'work' };
 const field = 'w-full min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-cyan-300/60';
@@ -79,12 +79,13 @@ export function BoardTab({ onTrack, trackingId, running }: { onTrack: (cat: Cat,
 
   const putOnTasks = (c: Card) => {
     const id = uid();
-    saveTask({ id, title: (c.text.split('\n')[0] || 'Untitled').slice(0, 120), cat: c.cat, pts: 10, due: '', done: false });
-    saveCard({ ...c, taskId: id });
+    saveTask({ id, title: (c.text.split('\n')[0] || 'Untitled').slice(0, 120), cat: c.cat, pts: 10, due: c.due ?? '', done: false });
+    saveCard({ ...c, taskId: id, due: undefined });
   };
   const takeOffTasks = (c: Card) => {
+    const t = c.taskId ? s.tasks[c.taskId] : undefined;
     if (c.taskId) removeTask(c.taskId);
-    saveCard({ ...c, taskId: null });
+    saveCard({ ...c, taskId: null, due: t?.due || c.due });
   };
 
   const renameLane = (id: string, name: string) => saveSettings({ lanes: lanes.map(l => (l.id === id ? { ...l, name: name.trim() || l.name } : l)) });
@@ -98,7 +99,7 @@ export function BoardTab({ onTrack, trackingId, running }: { onTrack: (cat: Cat,
   };
 
   return (
-    <div className="flex gap-3 items-stretch min-h-[calc(100vh-130px)] overflow-x-auto">
+    <div className="flex gap-3 items-stretch min-h-[calc(100vh-175px)] overflow-x-auto">
       {lanes.map(l => (
         <div data-lanecol
           key={l.id}
@@ -166,6 +167,12 @@ function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack,
   const [open, setOpen] = useState(false);
   const [subText, setSubText] = useState('');
   const subs = card.subs ?? [];
+  // Due date: a linked task owns it; a card with no task keeps its own
+  const due = task ? task.due : card.due ?? '';
+  const [editDue, setEditDue] = useState(false);
+  const setDue = (v: string) => { if (task) saveTask({ ...task, due: v }); else saveCard({ ...card, due: v }); };
+  const overdue = !!due && due < new Date().toLocaleDateString('en-CA');
+  const canDue = !task?.done;
   const epic = card.epic ?? subs.length > 0;
   const subDone = (x: Sub) => (x.taskId && tasks[x.taskId] ? tasks[x.taskId].done : x.done);
   const doneCount = subs.filter(subDone).length;
@@ -203,7 +210,7 @@ function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack,
       initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.15 } }}
       whileDrag={{ scale: 1.05, rotate: 2.5, zIndex: 50, boxShadow: '0 16px 32px rgba(0,0,0,0.5)', cursor: 'grabbing' }}
       transition={{ layout: spring, default: { duration: 0.18 } }}
-      className={`relative rounded-lg border p-2.5 pl-1.5 flex gap-1 shadow-sm ${CATS[card.cat].note}`}
+      className={`group relative rounded-lg border flex gap-1 ${epic ? `p-3 pl-1.5 shadow-md border-l-4 ${CATS[card.cat].note} ${CATS[card.cat].edge}` : `p-2 pl-1 border-l-2 border-white/10 bg-white/[0.035] ${CATS[card.cat].edge}`}`}
     >
       <button
         onPointerDown={e => { e.preventDefault(); controls.start(e); }}
@@ -214,16 +221,25 @@ function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack,
         {edit
           ? <textarea autoFocus rows={3} className={`${field} !py-1.5 resize-none`} value={text} onChange={e => setText(e.target.value)} onBlur={commit}
               onKeyDown={e => { if (e.key === 'Escape') { setText(card.text); setEdit(false); } if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }} />
-          : <div onClick={() => { setText(card.text); setEdit(true); }} className={`text-sm break-words whitespace-pre-wrap cursor-text ${linked && task?.done ? 'line-through text-zinc-500' : 'text-white'}`}>{card.text}</div>}
-        {task?.due && !task.done && <span className="text-[11px] text-zinc-400 -mt-1">Due {task.due.slice(5)}</span>}
+          : <div onClick={() => { setText(card.text); setEdit(true); }} className={`break-words whitespace-pre-wrap cursor-text ${epic ? 'text-[15px] font-semibold' : 'text-[13px]'} ${linked && task?.done ? 'line-through text-zinc-500' : epic ? 'text-white' : 'text-zinc-300'}`}>{epic && <Layers size={13} className="inline -mt-0.5 mr-1.5 text-cyan-300" aria-hidden />}{card.text}</div>}
+        {canDue && editDue && (
+          <div className="flex items-center gap-2 -mt-0.5">
+            <input autoFocus type="date" aria-label="Due date" className={`${field} !py-1 !w-auto !text-[12px]`} value={due} onChange={e => setDue(e.target.value)} onBlur={() => setEditDue(false)} onKeyDown={e => { if (e.key === 'Escape' || e.key === 'Enter') setEditDue(false); }} />
+            {due && <button onMouseDown={e => { e.preventDefault(); setDue(''); setEditDue(false); }} className="text-[11px] text-zinc-400! hover:text-red-400!">Clear</button>}
+          </div>
+        )}
+        {canDue && !editDue && due && (
+          <button onClick={() => setEditDue(true)} title="Change due date" className={`self-start inline-flex items-center gap-1 text-[11px] -mt-0.5 hover:text-white! ${overdue ? 'text-red-400!' : 'text-zinc-400!'}`}><CalendarDays size={12} />{overdue ? 'Overdue · ' : 'Due '}{due.slice(5)}</button>
+        )}
         {epic && subs.length > 0 && (
           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><motion.div className="h-full bg-cyan-300 rounded-full" initial={false} animate={{ width: `${doneCount / subs.length * 100}%` }} transition={{ duration: 0.3 }} /></div>
         )}
-        <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
+        <div className={`flex items-center gap-x-2 gap-y-1 flex-wrap ${epic ? '' : 'opacity-50 group-hover:opacity-100 focus-within:opacity-100 transition-opacity'}`}>
           <button onClick={() => saveCard({ ...card, cat: NEXT_CAT[card.cat] })} title={`${CATS[card.cat].label} (click to change)`} aria-label={`Category: ${CATS[card.cat].label}`} className="p-0.5"><span className={`block h-2.5 w-2.5 rounded-full ${CATS[card.cat].dot}`} /></button>
           {linked
             ? <button onClick={() => onTake()} title="Remove from task list (deletes the task)" className="inline-flex items-center gap-1 text-[11px] text-cyan-300!"><ListChecks size={13} />{task?.done ? 'Task done' : 'On task list'}</button>
             : <button onClick={() => onPut()} title="Add to the task list" className="inline-flex items-center gap-1 text-[11px] text-zinc-400! hover:text-cyan-300!"><ListPlus size={13} />To tasks</button>}
+          {canDue && !due && !editDue && <button onClick={() => setEditDue(true)} title="Set a due date" aria-label="Set due date" className="inline-flex items-center gap-1 text-[11px] text-zinc-400! hover:text-white!"><CalendarDays size={12} />Due</button>}
           <button onClick={() => { saveCard({ ...card, epic: !epic }); if (epic) setOpen(false); }} title={epic ? 'Turn back into a plain task card (subtasks are kept)' : 'Turn into an epic with subtasks'}
             className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[11px] ${epic ? 'border-cyan-300/60 text-cyan-300!' : 'border-white/15 text-zinc-400! hover:text-white!'}`}><Layers size={11} />{epic ? 'Epic' : '→ Epic'}</button>
           {epic && (

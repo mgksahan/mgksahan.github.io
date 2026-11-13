@@ -14,7 +14,8 @@ Board tab: sticky-note cards in swim lanes (default Ideas / Next up / Doing / Do
 "To tasks" on a card creates a no-due-date task linked to it; the card then shows "On task list" / "Task done". Deleting a card keeps its task.
 Every task also gets a board card (id `c_<taskId>`, made by `adoptTasks` when the Board opens: open -> Next up, done -> Done). Deleting a task deletes that card; deleting a card keeps the task.
 "-> Epic" / "Epic" on a card converts it to an epic and back (the flag is `card.epic`; subtasks are kept when converting back). Cards have a Track button: time goes to the linked task, or to the card id itself when there is no task, and an epic's total includes its subtasks' tasks.
-Tab changes fade (`view` follows `tab` after the old content exits).
+Tab changes fade (`view` follows `tab` after the old content exits). Going to Board collapses the left column (width animation on `motion.aside`, content fixed at 360px inside) while the right card grows with flex; the new content fades in after a delay so it never shows mid-resize.
+Epics look rich (tint, thick edge, bold title); plain cards are quiet. Due date is editable on any card: it is the linked task's due, or `card.due` when there is no task.
 A card that is an epic holds subtasks: progress bar and n/total on the card, expand to tick, add or delete them. A subtask's list icon puts it on the task list; after that the task decides whether it is done.
 Stats opens on Today; presets 7/14/30 days or a custom from/to range.
 Tap a task's "+pts" badge to edit its points, even after it is done.
