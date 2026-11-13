@@ -9,7 +9,9 @@ import { apiService } from '../../apiService';
 export type Cat = 'work' | 'learn' | 'life';
 export interface Task { id: string; title: string; cat: Cat; pts: number; due: string; done: boolean; doneAt?: number | null; updatedAt: number }
 // Board: sticky-note cards in swim lanes. A card can be linked to a task so it shows on the task list.
-export interface Card { id: string; text: string; lane: string; pos: number; cat: Cat; taskId?: string | null; updatedAt: number }
+// A card with subtasks acts as an epic. A subtask can be put on the task list (taskId); then the task is the source of truth for done.
+export interface Sub { id: string; text: string; done: boolean; taskId?: string | null }
+export interface Card { id: string; text: string; lane: string; pos: number; cat: Cat; taskId?: string | null; subs?: Sub[]; updatedAt: number }
 export interface Lane { id: string; name: string }
 export const DEFAULT_LANES: Lane[] = [{ id: 'ideas', name: 'Ideas' }, { id: 'next', name: 'Next up' }, { id: 'doing', name: 'Doing' }, { id: 'done', name: 'Done' }];
 export interface Entry { id: string; start: number; end: number; cat: Cat; taskId?: string | null; note: string; updatedAt: number }

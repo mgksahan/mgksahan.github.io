@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { GripVertical, X, ListPlus, ListChecks, Plus } from 'lucide-react';
+import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check } from 'lucide-react';
 import {
-  Cat, Card, Lane, DEFAULT_LANES, useTrack, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
+  Cat, Card, Lane, Sub, Task, DEFAULT_LANES, useTrack, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Board tab: sticky-note cards in swim lanes (a small kanban). Drag a card by its grip to reorder or move
@@ -53,7 +53,7 @@ export function BoardTab() {
     }).length;
     const before = others[slot - 1]?.pos, after = others[slot]?.pos;
     const pos = before === undefined && after === undefined ? 1 : before === undefined ? after! - 1 : after === undefined ? before + 1 : (before + after) / 2;
-    if (target !== laneOf(card) || pos !== card.pos) saveCard({ id: card.id, text: card.text, lane: target, pos, cat: card.cat, taskId: card.taskId });
+    if (target !== laneOf(card) || pos !== card.pos) saveCard({ ...card, lane: target, pos });
   };
 
   const addCard = (lane: string, text: string, cat: Cat) => {
@@ -77,7 +77,7 @@ export function BoardTab() {
     if (lanes.length < 2) return;
     const rest = lanes.filter(l => l.id !== id);
     const tail = inLane(rest[0].id).at(-1)?.pos ?? 0;
-    inLane(id).forEach((c, i) => saveCard({ id: c.id, text: c.text, lane: rest[0].id, pos: tail + 1 + i, cat: c.cat, taskId: c.taskId }));
+    inLane(id).forEach((c, i) => saveCard({ ...c, lane: rest[0].id, pos: tail + 1 + i }));
     saveSettings({ lanes: rest });
   };
 
@@ -95,7 +95,7 @@ export function BoardTab() {
               {inLane(l.id).map(c => (
                 <CardNote
                   key={c.id} card={c} lane={l.id}
-                  task={c.taskId ? s.tasks[c.taskId] : undefined} onPut={() => putOnTasks(c)} onTake={() => takeOffTasks(c)}
+                  tasks={s.tasks} task={c.taskId ? s.tasks[c.taskId] : undefined} onPut={() => putOnTasks(c)} onTake={() => takeOffTasks(c)}
                   onStart={() => setDragging(c.id)}
                   onMove={x => { const t = laneAt(x); setOver(p => (p === t ? p : t)); }}
                   onEnd={(x, y) => { setDragging(null); setOver(null); drop(c, x, y); }}
@@ -139,19 +139,41 @@ function Jot({ onAdd }: { onAdd: (text: string, cat: Cat) => void }) {
   );
 }
 
-function CardNote({ card, lane, task, onPut, onTake, onStart, onMove, onEnd }: {
-  card: Card; lane: string; task?: { done: boolean }; onPut: () => void; onTake: () => void;
+function CardNote({ card, lane, task, tasks, onPut, onTake, onStart, onMove, onEnd }: {
+  card: Card; lane: string; task?: { done: boolean }; tasks: Record<string, Task>; onPut: () => void; onTake: () => void;
   onStart: () => void; onMove: (clientX: number) => void; onEnd: (clientX: number, clientY: number) => void;
 }) {
   const controls = useDragControls();
   const [edit, setEdit] = useState(false);
   const [text, setText] = useState(card.text);
   const linked = !!card.taskId && !!task;
+  const [open, setOpen] = useState(false);
+  const [subText, setSubText] = useState('');
+  const subs = card.subs ?? [];
+  const subDone = (x: Sub) => (x.taskId && tasks[x.taskId] ? tasks[x.taskId].done : x.done);
+  const doneCount = subs.filter(subDone).length;
+  const setSubs = (next: Sub[]) => saveCard({ ...card, subs: next });
+  const toggleSub = (x: Sub) => {
+    const t = x.taskId ? tasks[x.taskId] : undefined;
+    if (t) saveTask({ ...t, done: !t.done, doneAt: !t.done ? Date.now() : null });
+    else setSubs(subs.map(y => (y.id === x.id ? { ...y, done: !y.done } : y)));
+  };
+  const subToTasks = (x: Sub) => {
+    const id = uid();
+    saveTask({ id, title: x.text.slice(0, 120), cat: card.cat, pts: 10, due: '', done: x.done });
+    setSubs(subs.map(y => (y.id === x.id ? { ...y, taskId: id } : y)));
+  };
+  const addSub = (e: React.FormEvent) => {
+    e.preventDefault();
+    const t = subText.trim();
+    if (!t) return;
+    setSubs([...subs, { id: uid(), text: t, done: false }]); setSubText('');
+  };
   const commit = () => {
     setEdit(false);
     const t = text.trim();
     if (!t) { removeCard(card.id); return; }
-    if (t !== card.text) saveCard({ id: card.id, text: t, lane: card.lane, pos: card.pos, cat: card.cat, taskId: card.taskId });
+    if (t !== card.text) saveCard({ ...card, text: t });
   };
   return (
     <motion.div
@@ -176,13 +198,41 @@ function CardNote({ card, lane, task, onPut, onTake, onStart, onMove, onEnd }: {
           ? <textarea autoFocus rows={3} className={`${field} !py-1.5 resize-none`} value={text} onChange={e => setText(e.target.value)} onBlur={commit}
               onKeyDown={e => { if (e.key === 'Escape') { setText(card.text); setEdit(false); } if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }} />
           : <div onClick={() => { setText(card.text); setEdit(true); }} className={`text-sm break-words whitespace-pre-wrap cursor-text ${linked && task?.done ? 'line-through text-zinc-500' : 'text-white'}`}>{card.text}</div>}
+        {subs.length > 0 && (
+          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><motion.div className="h-full bg-cyan-300 rounded-full" initial={false} animate={{ width: `${doneCount / subs.length * 100}%` }} transition={{ duration: 0.3 }} /></div>
+        )}
         <div className="flex items-center gap-1.5">
-          <button onClick={() => saveCard({ id: card.id, text: card.text, lane: card.lane, pos: card.pos, cat: NEXT_CAT[card.cat], taskId: card.taskId })} title={`${CATS[card.cat].label} (click to change)`} aria-label={`Category: ${CATS[card.cat].label}`} className="p-0.5"><span className={`block h-2.5 w-2.5 rounded-full ${CATS[card.cat].dot}`} /></button>
+          <button onClick={() => saveCard({ ...card, cat: NEXT_CAT[card.cat] })} title={`${CATS[card.cat].label} (click to change)`} aria-label={`Category: ${CATS[card.cat].label}`} className="p-0.5"><span className={`block h-2.5 w-2.5 rounded-full ${CATS[card.cat].dot}`} /></button>
           {linked
             ? <button onClick={() => onTake()} title="Remove from task list (deletes the task)" className="inline-flex items-center gap-1 text-[11px] text-cyan-300!"><ListChecks size={13} />{task?.done ? 'Task done' : 'On task list'}</button>
             : <button onClick={() => onPut()} title="Add to the task list" className="inline-flex items-center gap-1 text-[11px] text-zinc-400! hover:text-cyan-300!"><ListPlus size={13} />To tasks</button>}
+          <button onClick={() => setOpen(o => !o)} aria-expanded={open} title="Subtasks" className="inline-flex items-center gap-0.5 text-[11px] text-zinc-400! hover:text-white!">
+            {subs.length ? `${doneCount}/${subs.length}` : 'Subtasks'}<ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+          </button>
           <button onClick={() => removeCard(card.id)} aria-label="Delete card" className="ml-auto text-zinc-500! hover:text-red-400! p-0.5"><X size={13} /></button>
         </div>
+        <AnimatePresence initial={false}>
+          {open && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="flex flex-col gap-1 pt-1 border-t border-white/10">
+                {subs.map(x => {
+                  const d = subDone(x);
+                  return (
+                    <div key={x.id} className="flex items-center gap-1.5 text-[13px]">
+                      <button onClick={() => toggleSub(x)} aria-label={d ? 'Mark open' : 'Mark done'} className={`h-4 w-4 shrink-0 rounded-[5px] border-2 border-white/40 grid place-items-center ${d ? 'bg-cyan-300 border-cyan-300 text-black!' : ''}`}>{d && <Check size={11} strokeWidth={3} />}</button>
+                      <span className={`min-w-0 flex-1 break-words ${d ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>{x.text}</span>
+                      {x.taskId && tasks[x.taskId]
+                        ? <ListChecks size={13} className="text-cyan-300 shrink-0" aria-label="On task list" />
+                        : <button onClick={() => subToTasks(x)} title="Add to the task list" aria-label="Add subtask to task list" className="text-zinc-500! hover:text-cyan-300! shrink-0"><ListPlus size={13} /></button>}
+                      <button onClick={() => setSubs(subs.filter(y => y.id !== x.id))} aria-label="Delete subtask" className="text-zinc-600! hover:text-red-400! shrink-0"><X size={12} /></button>
+                    </div>
+                  );
+                })}
+                <form onSubmit={addSub}><input className={`${field} !py-1 !text-[13px]`} placeholder="Add subtask…" autoComplete="off" value={subText} onChange={e => setSubText(e.target.value)} /></form>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
