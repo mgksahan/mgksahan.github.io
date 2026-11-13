@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers, CalendarDays } from 'lucide-react';
 import {
-  Cat, Card, Lane, Sub, Task, DEFAULT_LANES, useTrack, adoptTasks, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
+  Cat, Card, Lane, Sub, Task, DEFAULT_LANES, useTrack, adoptTasks, settleDoneTasks, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Board tab: sticky-note cards in swim lanes (a small kanban). Drag a card by its grip to reorder or move
@@ -40,7 +40,7 @@ export function BoardTab({ onTrack, trackingId, running }: { onTrack: (cat: Cat,
 
   // Put every task on the board (once), and keep new tasks coming in
   const laneKey = laneIds.join(',');
-  useEffect(() => { adoptTasks(laneIds); }, [s.tasks, laneKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { adoptTasks(laneIds); settleDoneTasks(laneIds); }, [s.tasks, laneKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const laneEls = useRef<Record<string, HTMLElement | null>>({});
   const [over, setOver] = useState<string | null>(null);
