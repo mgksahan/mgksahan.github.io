@@ -280,9 +280,27 @@ function Tracker() {
   const toggleMini = () => setMini(m => { const n = !m; try { localStorage.setItem('track_mini', n ? '1' : '0'); } catch { /* ignore */ } return n; });
   const toggleDone = (t: Task) => saveTask({ ...t, done: !t.done, doneAt: !t.done ? Date.now() : null });
 
+  const board = tab === 'board' && !mini;
+  const alertBox = alert && (
+      <div role="alert" className={`rounded-lg border p-3 flex flex-col gap-2 text-sm ${alert.level === 3 ? 'border-red-400 bg-red-400/15' : alert.level === 2 ? 'border-amber-400 bg-amber-400/10' : 'border-cyan-300/60 bg-cyan-300/10'}`}>
+        <b className="text-white">{alert.title}</b>
+        <span className="text-zinc-300">{alert.body}</span>
+        {alert.kind === 'block' && alert.endedAt && <span className="font-mono text-[13px] text-zinc-200">Stops in {fmtMS(Math.max(0, alert.endedAt + NAG_STOP - at))}</span>}
+        <div className="flex gap-2 flex-wrap">
+          {alert.kind === 'stopped' ? (
+            <button className={btn} onClick={() => setAlert(null)}>Dismiss</button>
+          ) : alert.kind === 'block' ? (
+            <><button className={btnPrimary} onClick={takeBreak}>Take {s.settings.brk} min break</button><button className={btn} onClick={() => { unlock(); setAlert(null); }}>Keep going</button></>
+          ) : (
+            <><button className={btnPrimary} onClick={resumeFromBreak}>Back to it</button><button className={btn} onClick={() => setAlert(null)}>Dismiss</button></>
+          )}
+        </div>
+      </div>
+  );
+
   return (
-    <div className={`flex-1 w-full mx-auto p-4 sm:p-6 grid gap-5 items-start ${mini ? 'max-w-[340px]' : 'max-w-[1180px] lg:grid-cols-[360px_minmax(0,1fr)]'}`}>
-      <aside className={`flex flex-col gap-3.5 min-w-0 ${mini ? '' : 'lg:sticky lg:top-4'}`}>
+    <div className={`flex-1 w-full mx-auto p-4 sm:p-6 grid gap-5 items-start ${mini ? 'max-w-[340px]' : board ? 'max-w-none' : 'max-w-[1180px] lg:grid-cols-[360px_minmax(0,1fr)]'}`}>
+      <aside className={`flex flex-col gap-3.5 min-w-0 ${mini ? '' : 'lg:sticky lg:top-4'} ${board ? 'hidden' : ''}`}>
         <div className={`${card} flex flex-col gap-3`}>
           <div className="flex items-center justify-between gap-2">
             <h1 className="font-semibold text-white flex items-center gap-2" style={{ margin: 0, fontSize: 18, lineHeight: 1.25, letterSpacing: 'normal', maxWidth: 'none' }}><Timer size={18} className="text-cyan-300" aria-hidden />Time Tracker</h1>
@@ -299,22 +317,7 @@ function Tracker() {
             </div>
           </div>
 
-          {alert && (
-            <div role="alert" className={`rounded-lg border p-3 flex flex-col gap-2 text-sm ${alert.level === 3 ? 'border-red-400 bg-red-400/15' : alert.level === 2 ? 'border-amber-400 bg-amber-400/10' : 'border-cyan-300/60 bg-cyan-300/10'}`}>
-              <b className="text-white">{alert.title}</b>
-              <span className="text-zinc-300">{alert.body}</span>
-              {alert.kind === 'block' && alert.endedAt && <span className="font-mono text-[13px] text-zinc-200">Stops in {fmtMS(Math.max(0, alert.endedAt + NAG_STOP - at))}</span>}
-              <div className="flex gap-2 flex-wrap">
-                {alert.kind === 'stopped' ? (
-                  <button className={btn} onClick={() => setAlert(null)}>Dismiss</button>
-                ) : alert.kind === 'block' ? (
-                  <><button className={btnPrimary} onClick={takeBreak}>Take {s.settings.brk} min break</button><button className={btn} onClick={() => { unlock(); setAlert(null); }}>Keep going</button></>
-                ) : (
-                  <><button className={btnPrimary} onClick={resumeFromBreak}>Back to it</button><button className={btn} onClick={() => setAlert(null)}>Dismiss</button></>
-                )}
-              </div>
-            </div>
-          )}
+          {alertBox}
 
           <div>
             <div className={label}>{stateText}</div>
@@ -385,12 +388,21 @@ function Tracker() {
       </aside>
 
       {!mini && (
-        <main className={`${card} min-w-0`}>
-          <div className="flex gap-1 mb-4 border-b border-white/10" role="tablist">
+        <main className={`min-w-0 ${board ? '' : card}`}>
+          {board && alertBox && <div className="mb-3 max-w-[520px]">{alertBox}</div>}
+          <div className="flex gap-1 mb-4 border-b border-white/10 items-center" role="tablist">
             {([['tasks', 'Tasks'], ['board', 'Board'], ['cal', 'Calendar'], ['stats', 'Stats']] as const).map(([k, l]) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                 className={`px-3.5 py-2 text-sm font-semibold -mb-px border-b-2 ${tab === k ? 'text-white! border-cyan-300' : 'text-zinc-500! border-transparent hover:text-zinc-300!'}`}>{l}</button>
             ))}
+            {board && (
+              <div className="ml-auto flex items-center gap-2.5 pb-1 text-[13px] text-zinc-400 min-w-0">
+                <span className="truncate max-w-[260px]">{hasActivity ? labelOf(cur.taskId, seg ? cur.note : noteText) : 'Nothing tracking'}</span>
+                <span className={`font-mono text-base tabular-nums ${running ? 'text-cyan-300' : 'text-white'}`}>{fmtHMS(ms)}</span>
+                <button onClick={startPause} className="rounded-lg bg-cyan-300 p-1.5 text-black!" aria-label={running ? 'Pause' : seg ? 'Resume' : 'Start'}>{running ? <Pause size={14} /> : <Play size={14} />}</button>
+                <button onClick={toggleMini} className="rounded-lg border border-white/10 p-1.5 text-zinc-400! hover:text-white!" title="Corner mode" aria-label="Corner mode"><Minimize2 size={14} /></button>
+              </div>
+            )}
           </div>
           {tab === 'tasks' && <TasksTab tasks={tasks} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
           {tab === 'board' && <BoardTab />}
