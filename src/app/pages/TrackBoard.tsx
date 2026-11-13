@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check } from 'lucide-react';
+import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers } from 'lucide-react';
 import {
-  Cat, Card, Lane, Sub, Task, DEFAULT_LANES, useTrack, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
+  Cat, Card, Lane, Sub, Task, DEFAULT_LANES, useTrack, adoptTasks, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Board tab: sticky-note cards in swim lanes (a small kanban). Drag a card by its grip to reorder or move
@@ -18,13 +18,29 @@ const NEXT_CAT: Record<Cat, Cat> = { work: 'learn', learn: 'life', life: 'work' 
 const field = 'w-full min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-cyan-300/60';
 const spring = { type: 'spring', stiffness: 520, damping: 40, mass: 0.8 } as const;
 
-export function BoardTab() {
+const fmtDur = (ms: number) => { const m = Math.round(ms / 60000); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; };
+// What a card's time is logged against: its linked task, or the card itself when it has none (an epic can be tracked on its own)
+const trackIdOf = (c: Card, tasks: Record<string, Task>) => (c.taskId && tasks[c.taskId] ? c.taskId : c.id);
+
+export function BoardTab({ onTrack, trackingId, running }: { onTrack: (cat: Cat, id: string, title: string) => void; trackingId: string | null; running: boolean }) {
   const s = useTrack();
   const lanes: Lane[] = s.settings.lanes?.length ? s.settings.lanes : DEFAULT_LANES;
   const laneIds = lanes.map(l => l.id);
   const cards = Object.values(s.cards);
   const laneOf = (c: Card) => (laneIds.includes(c.lane) ? c.lane : laneIds[0]);
   const inLane = (id: string) => cards.filter(c => laneOf(c) === id).sort((a, b) => a.pos - b.pos);
+
+  // Time logged per activity id, so a card can show its own total plus its subtasks' tasks
+  const loggedBy: Record<string, number> = {};
+  Object.values(s.entries).forEach(e => { if (e.taskId) loggedBy[e.taskId] = (loggedBy[e.taskId] || 0) + (e.end - e.start); });
+  const loggedOf = (c: Card) => {
+    const ids = new Set([trackIdOf(c, s.tasks), ...(c.epic ?? (c.subs?.length ?? 0) > 0 ? (c.subs ?? []).map(x => x.taskId).filter(Boolean) as string[] : [])]);
+    let t = 0; ids.forEach(i => { t += loggedBy[i] || 0; }); return t;
+  };
+
+  // Put every task on the board (once), and keep new tasks coming in
+  const laneKey = laneIds.join(',');
+  useEffect(() => { adoptTasks(laneIds); }, [s.tasks, laneKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const laneEls = useRef<Record<string, HTMLElement | null>>({});
   const [over, setOver] = useState<string | null>(null);
@@ -95,7 +111,7 @@ export function BoardTab() {
               {inLane(l.id).map(c => (
                 <CardNote
                   key={c.id} card={c} lane={l.id}
-                  tasks={s.tasks} task={c.taskId ? s.tasks[c.taskId] : undefined} onPut={() => putOnTasks(c)} onTake={() => takeOffTasks(c)}
+                  tasks={s.tasks} task={c.taskId ? s.tasks[c.taskId] : undefined} logged={loggedOf(c)} tracking={trackingId === trackIdOf(c, s.tasks)} running={running} onTrack={() => onTrack(c.cat, trackIdOf(c, s.tasks), c.text.split('\n')[0].slice(0, 120))} onPut={() => putOnTasks(c)} onTake={() => takeOffTasks(c)}
                   onStart={() => setDragging(c.id)}
                   onMove={x => { const t = laneAt(x); setOver(p => (p === t ? p : t)); }}
                   onEnd={(x, y) => { setDragging(null); setOver(null); drop(c, x, y); }}
@@ -139,8 +155,8 @@ function Jot({ onAdd }: { onAdd: (text: string, cat: Cat) => void }) {
   );
 }
 
-function CardNote({ card, lane, task, tasks, onPut, onTake, onStart, onMove, onEnd }: {
-  card: Card; lane: string; task?: { done: boolean }; tasks: Record<string, Task>; onPut: () => void; onTake: () => void;
+function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack, onPut, onTake, onStart, onMove, onEnd }: {
+  card: Card; lane: string; task?: Task; tasks: Record<string, Task>; logged: number; tracking: boolean; running: boolean; onTrack: () => void; onPut: () => void; onTake: () => void;
   onStart: () => void; onMove: (clientX: number) => void; onEnd: (clientX: number, clientY: number) => void;
 }) {
   const controls = useDragControls();
@@ -150,6 +166,7 @@ function CardNote({ card, lane, task, tasks, onPut, onTake, onStart, onMove, onE
   const [open, setOpen] = useState(false);
   const [subText, setSubText] = useState('');
   const subs = card.subs ?? [];
+  const epic = card.epic ?? subs.length > 0;
   const subDone = (x: Sub) => (x.taskId && tasks[x.taskId] ? tasks[x.taskId].done : x.done);
   const doneCount = subs.filter(subDone).length;
   const setSubs = (next: Sub[]) => saveCard({ ...card, subs: next });
@@ -198,21 +215,30 @@ function CardNote({ card, lane, task, tasks, onPut, onTake, onStart, onMove, onE
           ? <textarea autoFocus rows={3} className={`${field} !py-1.5 resize-none`} value={text} onChange={e => setText(e.target.value)} onBlur={commit}
               onKeyDown={e => { if (e.key === 'Escape') { setText(card.text); setEdit(false); } if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }} />
           : <div onClick={() => { setText(card.text); setEdit(true); }} className={`text-sm break-words whitespace-pre-wrap cursor-text ${linked && task?.done ? 'line-through text-zinc-500' : 'text-white'}`}>{card.text}</div>}
-        {subs.length > 0 && (
+        {task?.due && !task.done && <span className="text-[11px] text-zinc-400 -mt-1">Due {task.due.slice(5)}</span>}
+        {epic && subs.length > 0 && (
           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><motion.div className="h-full bg-cyan-300 rounded-full" initial={false} animate={{ width: `${doneCount / subs.length * 100}%` }} transition={{ duration: 0.3 }} /></div>
         )}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
           <button onClick={() => saveCard({ ...card, cat: NEXT_CAT[card.cat] })} title={`${CATS[card.cat].label} (click to change)`} aria-label={`Category: ${CATS[card.cat].label}`} className="p-0.5"><span className={`block h-2.5 w-2.5 rounded-full ${CATS[card.cat].dot}`} /></button>
           {linked
             ? <button onClick={() => onTake()} title="Remove from task list (deletes the task)" className="inline-flex items-center gap-1 text-[11px] text-cyan-300!"><ListChecks size={13} />{task?.done ? 'Task done' : 'On task list'}</button>
             : <button onClick={() => onPut()} title="Add to the task list" className="inline-flex items-center gap-1 text-[11px] text-zinc-400! hover:text-cyan-300!"><ListPlus size={13} />To tasks</button>}
-          <button onClick={() => setOpen(o => !o)} aria-expanded={open} title="Subtasks" className="inline-flex items-center gap-0.5 text-[11px] text-zinc-400! hover:text-white!">
-            {subs.length ? `${doneCount}/${subs.length}` : 'Subtasks'}<ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+          <button onClick={() => { saveCard({ ...card, epic: !epic }); if (epic) setOpen(false); }} title={epic ? 'Turn back into a plain task card (subtasks are kept)' : 'Turn into an epic with subtasks'}
+            className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[11px] ${epic ? 'border-cyan-300/60 text-cyan-300!' : 'border-white/15 text-zinc-400! hover:text-white!'}`}><Layers size={11} />{epic ? 'Epic' : '→ Epic'}</button>
+          {epic && (
+            <button onClick={() => setOpen(o => !o)} aria-expanded={open} title="Subtasks" className="inline-flex items-center gap-0.5 text-[11px] text-zinc-400! hover:text-white!">
+              {subs.length ? `${doneCount}/${subs.length}` : 'Subtasks'}<ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+          )}
+          <button onClick={onTrack} title={tracking && running ? 'Pause the timer' : 'Track time on this card'} aria-label="Track time"
+            className={`inline-flex items-center gap-1 text-[11px] ${tracking && running ? 'text-cyan-300!' : 'text-zinc-400! hover:text-cyan-300!'}`}>
+            {tracking && running ? <Pause size={12} /> : <Play size={12} />}{logged > 0 ? fmtDur(logged) : 'Track'}
           </button>
           <button onClick={() => removeCard(card.id)} aria-label="Delete card" className="ml-auto text-zinc-500! hover:text-red-400! p-0.5"><X size={13} /></button>
         </div>
         <AnimatePresence initial={false}>
-          {open && (
+          {open && epic && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
               <div className="flex flex-col gap-1 pt-1 border-t border-white/10">
                 {subs.map(x => {
