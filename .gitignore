@@ -30,3 +30,8 @@ assets/js/dist
 dist
 dist-ssr
 *.local
+
+harness.html
+src/harness.tsx
+.harness.pid
+.harness.log
