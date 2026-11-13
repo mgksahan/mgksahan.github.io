@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { Play, Pause, Square, X, Check, Minimize2, Maximize2, Timer, CloudOff, RefreshCw, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BoardTab } from './TrackBoard';
 import {
   Cat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
-  saveTask, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
+  saveTask, toggleTaskDone, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Time tracker at /track (owner only). Tasks with points, a calendar, and a running timer, all tagged
@@ -109,6 +109,19 @@ export function Tracker() {
   const [tab, setTab] = useState<'tasks' | 'board' | 'cal' | 'stats'>('tasks');
   // `view` is the tab on screen: it follows `tab` only after the old content has faded out, so the layout never jumps mid-fade
   const [view, setView] = useState<'tasks' | 'board' | 'cal' | 'stats'>('tasks');
+  const [leaving, setLeaving] = useState(false);     // old content is fading out
+  const viewRef = useRef(view); viewRef.current = view;
+  const swapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (swapTimer.current) clearTimeout(swapTimer.current); }, []);
+  // Switch tab: fade the old content out, swap, fade the new one in. The content is never unmounted mid-way,
+  // and every click resets the timer, so clicking fast always ends on the last tab you clicked.
+  const goTab = (k: 'tasks' | 'board' | 'cal' | 'stats') => {
+    setTab(k);
+    if (swapTimer.current) clearTimeout(swapTimer.current);
+    if (k === viewRef.current) { setLeaving(false); return; }          // back to what is already on screen
+    setLeaving(true);
+    swapTimer.current = setTimeout(() => { setShifting((k === 'board') !== (viewRef.current === 'board')); setView(k); setLeaving(false); }, 140);
+  };
   const [shifting, setShifting] = useState(false);   // the layout is about to change: let the card finish growing before its content fades in
   const wide = useWide();
   const [mini, setMini] = useState(() => { try { return localStorage.getItem('track_mini') === '1'; } catch { return false; } });
@@ -297,7 +310,7 @@ export function Tracker() {
   const doneToday = tasks.filter(t => t.done && t.doneAt && dkey(new Date(t.doneAt)) === today()).length;
 
   const toggleMini = () => setMini(m => { const n = !m; try { localStorage.setItem('track_mini', n ? '1' : '0'); } catch { /* ignore */ } return n; });
-  const toggleDone = (t: Task) => saveTask({ ...t, done: !t.done, doneAt: !t.done ? Date.now() : null });
+  const toggleDone = (t: Task) => toggleTaskDone(t);
 
   const board = view === 'board' && !mini;
   const alertBox = alert && (
@@ -418,7 +431,7 @@ export function Tracker() {
           {board && alertBox && <div className="mb-3 max-w-[520px]">{alertBox}</div>}
           <div className="flex gap-1 mb-4 border-b border-white/10 items-center" role="tablist">
             {([['tasks', 'Tasks'], ['board', 'Board'], ['cal', 'Calendar'], ['stats', 'Stats']] as const).map(([k, l]) => (
-              <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+              <button key={k} role="tab" aria-selected={tab === k} onClick={() => goTab(k)}
                 className={`relative px-3.5 py-2 text-sm font-semibold -mb-px border-b-2 border-transparent transition-colors ${tab === k ? 'text-white!' : 'text-zinc-500! hover:text-zinc-300!'}`}>
                 {l}{tab === k && <motion.span layoutId="tabline" className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-cyan-300" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
               </button>
@@ -432,16 +445,13 @@ export function Tracker() {
               </div>
             )}
           </div>
-          <AnimatePresence mode="wait" initial={false} onExitComplete={() => { setShifting((tab === 'board') !== (view === 'board')); setView(tab); }}>
-            {view === tab && (
-              <motion.div key={view} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: shifting ? 0.2 : 0.14, delay: shifting ? 0.2 : 0, ease: 'easeOut' }}>
-                {view === 'tasks' && <TasksTab tasks={tasks} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
-                {view === 'board' && <BoardTab onTrack={trackBoard} trackingId={seg?.taskId ?? null} running={running} />}
-                {view === 'cal' && <CalendarTab tasks={tasks} entries={entries} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
-                {view === 'stats' && <StatsTab s={s} tasks={tasks} entries={entries} labelOf={labelOf} />}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <motion.div key={view} initial={{ opacity: 0, y: 10 }} animate={leaving ? { opacity: 0, y: -8 } : { opacity: 1, y: 0 }}
+            transition={{ duration: leaving ? 0.14 : shifting ? 0.2 : 0.14, delay: leaving ? 0 : shifting ? 0.2 : 0, ease: 'easeOut' }}>
+            {view === 'tasks' && <TasksTab tasks={tasks} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
+            {view === 'board' && <BoardTab onTrack={trackBoard} trackingId={seg?.taskId ?? null} running={running} />}
+            {view === 'cal' && <CalendarTab tasks={tasks} entries={entries} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
+            {view === 'stats' && <StatsTab s={s} tasks={tasks} entries={entries} labelOf={labelOf} />}
+          </motion.div>
         </main>
       )}
     </div>

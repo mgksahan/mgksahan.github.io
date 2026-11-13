@@ -92,6 +92,20 @@ export function saveTask(t: Omit<Task, 'updatedAt'>) {
   delete dead[sk('task', t.id)];
   enqueue({ kind: 'task', id: t.id, op: 'put', data: task, updatedAt: task.updatedAt });
 }
+// Tick a task off (or reopen it) and move its board card to match: done -> top of the Done lane, reopened -> Next up
+export function toggleTaskDone(t: Task) {
+  const done = !t.done;
+  saveTask({ ...t, done, doneAt: done ? now() : null });
+  const laneIds = (state.settings.lanes?.length ? state.settings.lanes : DEFAULT_LANES).map(l => l.id);
+  const doneLane = laneIds.includes('done') ? 'done' : laneIds[laneIds.length - 1];
+  const todoLane = laneIds.includes('next') ? 'next' : laneIds[0];
+  for (const c of Object.values(state.cards)) {
+    if (c.taskId !== t.id) continue;
+    const inLane = (l: string) => Object.values(state.cards).filter(x => x.lane === l && x.id !== c.id).map(x => x.pos);
+    if (done && c.lane !== doneLane) saveCard({ ...c, lane: doneLane, pos: Math.min(1, ...inLane(doneLane)) - 1 });
+    else if (!done && c.lane === doneLane) saveCard({ ...c, lane: todoLane, pos: Math.max(0, ...inLane(todoLane)) + 1 });
+  }
+}
 export function removeTask(id: string) {
   const { [id]: _gone, ...rest } = state.tasks;
   const at = now();
