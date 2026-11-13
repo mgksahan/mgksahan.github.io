@@ -90,7 +90,16 @@ export function TrackPage() {
   return <Tracker />;
 }
 
-function Tracker() {
+// Wide screens get the animated side-by-side layout; narrow ones stack and simply hide the timer on Board
+const useWide = () => {
+  const q = '(min-width: 1024px)';
+  const [w, setW] = useState(() => window.matchMedia(q).matches);
+  useEffect(() => { const m = window.matchMedia(q); const f = () => setW(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, []);
+  return w;
+};
+const SLIDE = { duration: 0.6, ease: [0.4, 0, 0.2, 1] as const };
+
+export function Tracker() {
   const s = useTrack();
   const sync = useTrackSync();
   const sRef = useRef(s);
@@ -100,6 +109,8 @@ function Tracker() {
   const [tab, setTab] = useState<'tasks' | 'board' | 'cal' | 'stats'>('tasks');
   // `view` is the tab on screen: it follows `tab` only after the old content has faded out, so the layout never jumps mid-fade
   const [view, setView] = useState<'tasks' | 'board' | 'cal' | 'stats'>('tasks');
+  const [shifting, setShifting] = useState(false);   // the layout is about to change: let the card finish growing before its content fades in
+  const wide = useWide();
   const [mini, setMini] = useState(() => { try { return localStorage.getItem('track_mini') === '1'; } catch { return false; } });
   const [sel, setSel] = useState<Sel>({ cat: 'learn', taskId: null, note: '' });
   const [alert, setAlert] = useState<AlertInfo | null>(null);
@@ -307,8 +318,14 @@ function Tracker() {
   );
 
   return (
-    <div className={`flex-1 w-full mx-auto p-4 sm:p-6 grid gap-5 items-start ${mini ? 'max-w-[340px]' : board ? 'max-w-none' : 'max-w-[1180px] lg:grid-cols-[360px_minmax(0,1fr)]'}`}>
-      <aside className={`flex flex-col gap-3.5 min-w-0 ${mini ? '' : 'lg:sticky lg:top-4'} ${board ? 'hidden' : ''}`}>
+    <div className={`flex-1 w-full mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-5 items-start lg:gap-0 transition-[max-width] duration-[600ms] ease-in-out ${mini ? 'max-w-[340px]' : board ? 'max-w-[2400px]' : 'max-w-[1180px]'}`}>
+      {/* Left column: collapses and slides out to the left while the card on the right grows into the space */}
+      <motion.aside
+        initial={false}
+        animate={wide && !mini ? (board ? { width: 0, opacity: 0, x: -50, marginRight: 0 } : { width: 360, opacity: 1, x: 0, marginRight: 20 }) : undefined}
+        transition={SLIDE}
+        className={`w-full shrink-0 ${mini ? '' : 'lg:sticky lg:top-4 lg:overflow-hidden'} ${board ? 'max-lg:hidden' : ''}`}>
+      <div className="flex flex-col gap-3.5 min-w-0 w-full lg:w-[360px]">
         <div className={`${card} flex flex-col gap-3`}>
           <div className="flex items-center justify-between gap-2">
             <h1 className="font-semibold text-white flex items-center gap-2" style={{ margin: 0, fontSize: 18, lineHeight: 1.25, letterSpacing: 'normal', maxWidth: 'none' }}><Timer size={18} className="text-cyan-300" aria-hidden />Time Tracker</h1>
@@ -393,10 +410,11 @@ function Tracker() {
             <div className="flex justify-between text-[13px] text-zinc-400"><span>{100 - into} to level {level + 1}</span><span>{doneToday} done today</span></div>
           </div>
         )}
-      </aside>
+      </div>
+      </motion.aside>
 
       {!mini && (
-        <main className={`min-w-0 ${board ? '' : card}`}>
+        <main className={`min-w-0 w-full lg:flex-1 ${card}`}>
           {board && alertBox && <div className="mb-3 max-w-[520px]">{alertBox}</div>}
           <div className="flex gap-1 mb-4 border-b border-white/10 items-center" role="tablist">
             {([['tasks', 'Tasks'], ['board', 'Board'], ['cal', 'Calendar'], ['stats', 'Stats']] as const).map(([k, l]) => (
@@ -414,9 +432,9 @@ function Tracker() {
               </div>
             )}
           </div>
-          <AnimatePresence mode="wait" initial={false} onExitComplete={() => setView(tab)}>
+          <AnimatePresence mode="wait" initial={false} onExitComplete={() => { setShifting((tab === 'board') !== (view === 'board')); setView(tab); }}>
             {view === tab && (
-              <motion.div key={view} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.16, ease: 'easeOut' }}>
+              <motion.div key={view} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: shifting ? 0.3 : 0.2, delay: shifting ? 0.4 : 0, ease: 'easeOut' }}>
                 {view === 'tasks' && <TasksTab tasks={tasks} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
                 {view === 'board' && <BoardTab onTrack={trackBoard} trackingId={seg?.taskId ?? null} running={running} />}
                 {view === 'cal' && <CalendarTab tasks={tasks} entries={entries} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
