@@ -82,15 +82,15 @@ export function BoardTab() {
   };
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 items-start">
+    <div className="flex gap-3 items-stretch min-h-[calc(100vh-130px)] overflow-x-auto">
       {lanes.map(l => (
         <div data-lanecol
           key={l.id}
           ref={el => { laneEls.current[l.id] = el; }}
-          className={`w-[220px] shrink-0 rounded-xl border p-2.5 flex flex-col gap-2 transition-colors duration-200 ${over === l.id && dragging ? 'border-cyan-300/70 bg-cyan-300/[0.07]' : 'border-white/10 bg-white/[0.03]'}`}
+          className={`flex-1 basis-0 min-w-[150px] rounded-xl border p-3 flex flex-col gap-2.5 transition-colors duration-200 ${over === l.id && dragging ? 'border-cyan-300/70 bg-cyan-300/[0.07]' : 'border-white/10 bg-white/[0.03]'}`}
         >
           <LaneHeader lane={l} count={inLane(l.id).length} canDelete={lanes.length > 1} onRename={n => renameLane(l.id, n)} onDelete={() => deleteLane(l.id)} />
-          <div className="flex flex-col gap-2 min-h-10">
+          <div className="flex flex-col gap-2.5 flex-1">
             <AnimatePresence initial={false}>
               {inLane(l.id).map(c => (
                 <CardNote
@@ -107,7 +107,7 @@ export function BoardTab() {
           <Jot onAdd={(t, cat) => addCard(l.id, t, cat)} />
         </div>
       ))}
-      <button onClick={addLane} className="shrink-0 rounded-xl border border-dashed border-white/15 px-4 py-3 text-sm text-zinc-400! hover:text-white! hover:border-white/30 inline-flex items-center gap-1.5"><Plus size={14} />Lane</button>
+      <button onClick={addLane} className="shrink-0 self-start rounded-xl border border-dashed border-white/15 px-3 py-3 text-sm text-zinc-400! hover:text-white! hover:border-white/30 inline-flex items-center gap-1.5"><Plus size={14} />Lane</button>
     </div>
   );
 }
