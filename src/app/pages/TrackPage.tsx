@@ -5,7 +5,7 @@ import { Play, Pause, Square, X, Check, Minimize2, Maximize2, Timer, CloudOff, R
 import { useAuth } from '../context/AuthContext';
 import { BoardTab } from './TrackBoard';
 import {
-  Cat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
+  Cat, NEXT_CAT, setActivityCat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
   saveTask, toggleTaskDone, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
 } from '../lib/trackStore';
 
@@ -494,7 +494,7 @@ function TaskRow({ t, totals, onToggle, onTrack }: { t: Task; totals: TotalsFn; 
       <div className="flex-1 min-w-0">
         <div className={`break-words ${t.done ? 'line-through text-zinc-500' : 'text-white'}`}>{t.title}</div>
         <div className="flex gap-2.5 flex-wrap text-xs text-zinc-500">
-          <span className="inline-flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${CATS[t.cat].dot}`} />{CATS[t.cat].label}</span>
+          <button onClick={() => setActivityCat({ taskId: t.id }, NEXT_CAT[t.cat])} title="Change category (also changes its time entries)" className="inline-flex items-center gap-1.5 text-zinc-500! hover:text-white!"><span className={`h-2 w-2 rounded-full ${CATS[t.cat].dot}`} />{CATS[t.cat].label}</button>
           {due && <span>{due}</span>}
           {logged > 0 && <span>{fmtDur(logged)} logged</span>}
         </div>
@@ -619,7 +619,7 @@ function CalendarTab({ tasks, entries, activityTotals, onToggle, onTrack }: { ta
             <div className={`${label} mt-4`}>Time entries</div>
             {dayEntries.map(e => (
               <div key={e.id} className="flex items-center gap-2.5 py-2 border-b border-white/[0.07] text-sm">
-                <span className={`h-2 w-2 rounded-full shrink-0 ${CATS[e.cat].dot}`} />
+                <button onClick={() => saveEntry({ ...e, cat: NEXT_CAT[e.cat] })} title={`${CATS[e.cat].label}: click to change this entry`} aria-label={`Category: ${CATS[e.cat].label}`} className="p-1 -m-1 shrink-0"><span className={`block h-2 w-2 rounded-full ${CATS[e.cat].dot}`} /></button>
                 <span className="min-w-0 break-words text-zinc-200">{e.note || CATS[e.cat].label}</span>
                 <span className="ml-auto font-mono text-[13px] text-zinc-300 whitespace-nowrap">{hm(e.start)} · {fmtDur(entryMs(e))}</span>
                 <button onClick={() => removeEntry(e.id)} aria-label="Delete entry" className="text-zinc-500! hover:text-red-400! p-1"><X size={14} /></button>
@@ -650,13 +650,13 @@ function StatsTab({ s, tasks, entries, labelOf }: { s: TrackState; tasks: Task[]
   const per: Record<string, Record<Cat, number>> = {};
   days.forEach(k => { per[k] = { work: 0, learn: 0, life: 0 }; });
   const tot: Record<Cat, number> = { work: 0, learn: 0, life: 0 };
-  const acts: Record<string, { ms: number; cat: Cat; label: string }> = {};
+  const acts: Record<string, { ms: number; cat: Cat; label: string; taskId: string | null; note: string }> = {};
   entries.forEach(e => {
     const k = dkey(new Date(e.start));
     if (!per[k]) return;
     per[k][e.cat] += entryMs(e); tot[e.cat] += entryMs(e);
     const ak = keyOf(e.taskId, e.note);
-    const g = (acts[ak] ||= { ms: 0, cat: e.cat, label: labelOf(e.taskId, e.note) });
+    const g = (acts[ak] ||= { ms: 0, cat: e.cat, label: labelOf(e.taskId, e.note), taskId: e.taskId || null, note: e.note });
     g.ms += entryMs(e);
   });
   const all = tot.work + tot.learn + tot.life;
@@ -698,7 +698,7 @@ function StatsTab({ s, tasks, entries, labelOf }: { s: TrackState; tasks: Task[]
       <div className="flex flex-col gap-2.5 mt-2">
         {list.length ? list.map(a => (
           <div key={a.label + a.cat} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2.5 gap-y-1 items-center text-sm">
-            <span className="flex items-center gap-2 min-w-0 break-words text-zinc-200"><span className={`h-2 w-2 rounded-full shrink-0 ${CATS[a.cat].dot}`} />{a.label}</span>
+            <span className="flex items-center gap-2 min-w-0 break-words text-zinc-200"><button onClick={() => setActivityCat({ taskId: a.taskId, note: a.note }, NEXT_CAT[a.cat])} title={`${CATS[a.cat].label}: click to change this activity`} aria-label={`Category: ${CATS[a.cat].label}`} className="p-1 -m-1 shrink-0"><span className={`block h-2 w-2 rounded-full ${CATS[a.cat].dot}`} /></button>{a.label}</span>
             <span className="font-mono text-[13px] text-zinc-300">{fmtDur(a.ms)}</span>
             <div className="col-span-2 h-1.5 rounded-full bg-white/10 overflow-hidden"><div className={`h-full ${CATS[a.cat].bar}`} style={{ width: `${a.ms / top * 100}%` }} /></div>
           </div>

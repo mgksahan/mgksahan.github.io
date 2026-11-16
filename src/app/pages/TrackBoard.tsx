@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers, CalendarDays } from 'lucide-react';
 import {
-  Cat, Card, Lane, Sub, Task, DEFAULT_LANES, useTrack, adoptTasks, settleDoneTasks, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
+  Cat, Card, Lane, Sub, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Board tab: sticky-note cards in swim lanes (a small kanban). Drag a card by its grip to reorder or move
@@ -14,7 +14,6 @@ const CATS: Record<Cat, { label: string; note: string; dot: string; edge: string
   learn: { label: 'Learning', note: 'bg-amber-400/15 border-amber-400/40',     dot: 'bg-amber-400',   edge: 'border-l-amber-400' },
   life:  { label: 'Personal', note: 'bg-emerald-400/15 border-emerald-400/40', dot: 'bg-emerald-400', edge: 'border-l-emerald-400' },
 };
-const NEXT_CAT: Record<Cat, Cat> = { work: 'learn', learn: 'life', life: 'work' };
 const field = 'w-full min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-cyan-300/60';
 const spring = { type: 'spring', stiffness: 520, damping: 40, mass: 0.8 } as const;
 
@@ -235,7 +234,7 @@ function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack,
           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><motion.div className="h-full bg-cyan-300 rounded-full" initial={false} animate={{ width: `${doneCount / subs.length * 100}%` }} transition={{ duration: 0.3 }} /></div>
         )}
         <div className={`flex items-center gap-x-2 gap-y-1 flex-wrap ${epic ? '' : 'opacity-50 group-hover:opacity-100 focus-within:opacity-100 transition-opacity'}`}>
-          <button onClick={() => saveCard({ ...card, cat: NEXT_CAT[card.cat] })} title={`${CATS[card.cat].label} (click to change)`} aria-label={`Category: ${CATS[card.cat].label}`} className="p-0.5"><span className={`block h-2.5 w-2.5 rounded-full ${CATS[card.cat].dot}`} /></button>
+          <button onClick={() => setActivityCat({ taskId: task ? card.taskId : card.id }, NEXT_CAT[card.cat])} title={`${CATS[card.cat].label} (click to change; also changes its time entries)`} aria-label={`Category: ${CATS[card.cat].label}`} className="p-0.5"><span className={`block h-2.5 w-2.5 rounded-full ${CATS[card.cat].dot}`} /></button>
           {linked
             ? <button onClick={() => onTake()} title="Remove from task list (deletes the task)" className="inline-flex items-center gap-1 text-[11px] text-cyan-300!"><ListChecks size={13} />{task?.done ? 'Task done' : 'On task list'}</button>
             : <button onClick={() => onPut()} title="Add to the task list" className="inline-flex items-center gap-1 text-[11px] text-zinc-400! hover:text-cyan-300!"><ListPlus size={13} />To tasks</button>}
