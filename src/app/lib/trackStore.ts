@@ -92,6 +92,20 @@ export function saveTask(t: Omit<Task, 'updatedAt'>) {
   delete dead[sk('task', t.id)];
   enqueue({ kind: 'task', id: t.id, op: 'put', data: task, updatedAt: task.updatedAt });
 }
+export const NEXT_CAT: Record<Cat, Cat> = { work: 'learn', learn: 'life', life: 'work' };
+
+// Change an activity's category after the fact. An activity is a task (or board card id) or a typed label. The change
+// covers everything that belongs to it, so the Stats totals follow: its past time entries, its task and its board cards.
+export function setActivityCat(ref: { taskId?: string | null; note?: string }, cat: Cat) {
+  const key = (t?: string | null, n?: string) => (t ? t : 'n:' + ((n || '').trim().toLowerCase() || 'untitled'));
+  const k = key(ref.taskId, ref.note);
+  for (const e of Object.values(state.entries)) if (key(e.taskId, e.note) === k && e.cat !== cat) saveEntry({ ...e, cat });
+  if (!ref.taskId) return;
+  const t = state.tasks[ref.taskId];
+  if (t && t.cat !== cat) saveTask({ ...t, cat });
+  for (const c of Object.values(state.cards)) if ((c.taskId === ref.taskId || c.id === ref.taskId) && c.cat !== cat) saveCard({ ...c, cat });
+}
+
 // Tick a task off (or reopen it) and move its board card to match: done -> top of the Done lane, reopened -> Next up
 export function toggleTaskDone(t: Task) {
   const done = !t.done;
