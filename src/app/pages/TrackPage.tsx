@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { BoardTab } from './TrackBoard';
 import {
   Cat, NEXT_CAT, MIN_ENTRY_MS, MIN_LISTED_MS, setActivityCat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
-  saveTask, toggleTaskDone, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
+  saveTask, renameTask, toggleTaskDone, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Time tracker at /track (owner only). Tasks with points, a calendar, and a running timer, all tagged
@@ -476,6 +476,8 @@ function SyncPill({ sync }: { sync: ReturnType<typeof useTrackSync> }) {
 type TotalsFn = (key: string) => { all: number; td: number };
 
 function TaskRow({ t, totals, onToggle, onTrack }: { t: Task; totals: TotalsFn; onToggle: (t: Task) => void; onTrack: (t: Task) => void }) {
+  const [editTitle, setEditTitle] = useState(false);
+  const [titleVal, setTitleVal] = useState(t.title);
   const [editPts, setEditPts] = useState(false);
   const [ptsVal, setPtsVal] = useState(String(t.pts));
   const commitPts = () => {
@@ -492,7 +494,10 @@ function TaskRow({ t, totals, onToggle, onTrack }: { t: Task; totals: TotalsFn; 
         {t.done && <Check size={14} strokeWidth={3} />}
       </button>
       <div className="flex-1 min-w-0">
-        <div className={`break-words ${t.done ? 'line-through text-zinc-500' : 'text-white'}`}>{t.title}</div>
+        {editTitle
+          ? <input autoFocus aria-label="Task name" className={`${field} !py-1`} value={titleVal} onChange={e => setTitleVal(e.target.value)}
+              onBlur={() => { setEditTitle(false); renameTask(t.id, titleVal); }} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setTitleVal(t.title); setEditTitle(false); } }} />
+          : <div onClick={() => { setTitleVal(t.title); setEditTitle(true); }} title="Click to rename" className={`break-words cursor-text ${t.done ? 'line-through text-zinc-500' : 'text-white'}`}>{t.title}</div>}
         <div className="flex gap-2.5 flex-wrap text-xs text-zinc-500">
           <button onClick={() => setActivityCat({ taskId: t.id }, NEXT_CAT[t.cat])} title="Change category (also changes its time entries)" className="inline-flex items-center gap-1.5 text-xs text-zinc-500! hover:text-white!"><span className={`h-2 w-2 rounded-full ${CATS[t.cat].dot}`} />{CATS[t.cat].label}</button>
           {due && <span>{due}</span>}

@@ -92,6 +92,46 @@ export function saveTask(t: Omit<Task, 'updatedAt'>) {
   delete dead[sk('task', t.id)];
   enqueue({ kind: 'task', id: t.id, op: 'put', data: task, updatedAt: task.updatedAt });
 }
+// Names: a task, its board card (and epic subtasks that are tasks) share one title, so it is changed in one place and
+// the others follow. A card's text may have extra lines; only the first line is the title.
+const firstLine = (t: string) => (t.split('\n')[0] || 'Untitled').slice(0, 120);
+
+export function renameTask(id: string, title: string) {
+  const t = state.tasks[id];
+  title = title.trim().slice(0, 120);
+  if (!t || !title || title === t.title) return;
+  saveTask({ ...t, title });
+  for (const c of Object.values(state.cards)) {
+    const hasSub = (c.subs ?? []).some(x => x.taskId === id);
+    if (c.taskId !== id && !hasSub) continue;
+    const next: Card = { ...c };
+    if (c.taskId === id) next.text = [title, ...c.text.split('\n').slice(1)].join('\n');
+    if (hasSub) next.subs = (c.subs ?? []).map(x => (x.taskId === id ? { ...x, text: title } : x));
+    saveCard(next);
+  }
+}
+
+export function renameCard(c: Card, text: string) {
+  text = text.trim();
+  if (!text || text === c.text) return;
+  saveCard({ ...c, text });
+  const title = firstLine(text);
+  const t = c.taskId ? state.tasks[c.taskId] : undefined;
+  if (t) { if (t.title !== title) saveTask({ ...t, title }); return; }
+  // A card tracked on its own: its time entries and a running timer carry the name, so they follow
+  for (const e of Object.values(state.entries)) if (e.taskId === c.id && e.note !== title) saveEntry({ ...e, note: title });
+  const seg = state.timer.timer;
+  if (seg && seg.taskId === c.id && seg.note !== title) saveTimer({ timer: { ...seg, note: title } });
+}
+
+export function renameSub(card: Card, subId: string, text: string) {
+  text = text.trim();
+  const sub = (card.subs ?? []).find(x => x.id === subId);
+  if (!sub || !text || text === sub.text) return;
+  if (sub.taskId && state.tasks[sub.taskId]) { renameTask(sub.taskId, text); return; }
+  saveCard({ ...card, subs: (card.subs ?? []).map(x => (x.id === subId ? { ...x, text } : x)) });
+}
+
 export const NEXT_CAT: Record<Cat, Cat> = { work: 'learn', learn: 'life', life: 'work' };
 
 // Change an activity's category after the fact. An activity is a task (or board card id) or a typed label. The change

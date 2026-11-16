@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers, CalendarDays } from 'lucide-react';
 import {
-  Cat, Card, Lane, Sub, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
+  Cat, Card, Lane, Sub, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, renameCard, renameSub, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Board tab: sticky-note cards in swim lanes (a small kanban). Drag a card by its grip to reorder or move
@@ -165,6 +165,8 @@ function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack,
   const linked = !!card.taskId && !!task;
   const [open, setOpen] = useState(false);
   const [subText, setSubText] = useState('');
+  const [editSub, setEditSub] = useState<string | null>(null);
+  const [subVal, setSubVal] = useState('');
   const subs = card.subs ?? [];
   // Due date: a linked task owns it; a card with no task keeps its own
   const due = task ? task.due : card.due ?? '';
@@ -196,7 +198,7 @@ function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack,
     setEdit(false);
     const t = text.trim();
     if (!t) { removeCard(card.id); return; }
-    if (t !== card.text) saveCard({ ...card, text: t });
+    renameCard(card, t);
   };
   return (
     <motion.div
@@ -261,7 +263,10 @@ function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack,
                   return (
                     <div key={x.id} className="flex items-center gap-1.5 text-[13px]">
                       <button onClick={() => toggleSub(x)} aria-label={d ? 'Mark open' : 'Mark done'} className={`h-4 w-4 shrink-0 rounded-[5px] border-2 border-white/40 grid place-items-center ${d ? 'bg-cyan-300 border-cyan-300 text-black!' : ''}`}>{d && <Check size={11} strokeWidth={3} />}</button>
-                      <span className={`min-w-0 flex-1 break-words ${d ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>{x.text}</span>
+                      {editSub === x.id
+                        ? <input autoFocus className={`${field} !py-0.5 !text-[13px] flex-1`} value={subVal} onChange={e => setSubVal(e.target.value)}
+                            onBlur={() => { setEditSub(null); renameSub(card, x.id, subVal); }} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setSubVal(x.text); setEditSub(null); } }} />
+                        : <span onClick={() => { setSubVal(x.text); setEditSub(x.id); }} title="Click to rename" className={`min-w-0 flex-1 break-words cursor-text ${d ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>{x.text}</span>}
                       {x.taskId && tasks[x.taskId]
                         ? <ListChecks size={13} className="text-cyan-300 shrink-0" aria-label="On task list" />
                         : <button onClick={() => subToTasks(x)} title="Add to the task list" aria-label="Add subtask to task list" className="text-zinc-500! hover:text-cyan-300! shrink-0"><ListPlus size={13} /></button>}
