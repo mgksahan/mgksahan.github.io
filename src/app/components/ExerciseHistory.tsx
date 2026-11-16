@@ -6,7 +6,7 @@ import { FitnessRow, parseSets, toKg } from '../lib/gymPlan';
 import { displayName } from '../lib/exerciseMedia';
 import { STANDARDS, TIERS, TIER_BAR, TIER_TEXT, rankOf } from '../lib/strengthStandards';
 
-type Metric = 'oneRm' | 'volume' | 'multiplier';
+type Metric = 'oneRm' | 'volume' | 'multiplier' | 'added' | 'addedMult';
 type Range = '1M' | '3M' | '6M' | '1Y' | 'ALL' | 'CUSTOM';
 
 const METRICS: { id: Metric; label: string; hint: string }[] = [
@@ -14,6 +14,12 @@ const METRICS: { id: Metric; label: string; hint: string }[] = [
   { id: 'volume', label: 'Volume', hint: 'Total weight lifted per session (sets × reps × weight)' },
   { id: 'multiplier', label: '× Bodyweight', hint: 'Estimated 1RM divided by your body weight that day' },
 ];
+// Weighted pull-ups only: the weight hanging from the belt, alone and relative to body weight
+const ADDED_METRICS: { id: Metric; label: string; hint: string }[] = [
+  { id: 'added', label: 'Added weight', hint: 'Estimated 1RM minus your body weight that day' },
+  { id: 'addedMult', label: 'Added ÷ BW', hint: 'Added weight divided by your body weight that day' },
+];
+const isRatio = (m: Metric) => m === 'multiplier' || m === 'addedMult';
 const RANGES: { id: Range; label: string }[] = [
   { id: '1M', label: '1M' }, { id: '3M', label: '3M' }, { id: '6M', label: '6M' }, { id: '1Y', label: '1Y' }, { id: 'ALL', label: 'All' },
 ];
@@ -26,7 +32,7 @@ const fmtDay = (t: number) => new Date(t).toLocaleDateString(undefined, { month:
 const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
 
 function fmtValue(metric: Metric, v: number) {
-  if (metric === 'multiplier') return `${v.toFixed(2)}×`;
+  if (isRatio(metric)) return `${v.toFixed(2)}×`;
   return `${Math.round(v).toLocaleString()} lb`;
 }
 
@@ -122,11 +128,13 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
         const oneRm = Number(r.one_rep_max_lbs);
         const volume = Number(r.total_volume_lbs) || parseSets(r).reduce((s, x) => s + x.lb * x.reps, 0);
         const w = bwAt(t);
-        return { t, oneRm, volume, multiplier: w > 0 ? oneRm / w : 0 };
+        // Weighted pull-ups are stored as total load; older rows logged added weight only
+        const added = name === 'Weighted Pull-Up' ? (w > 0 && oneRm >= w * 0.6 ? Math.max(0, oneRm - w) : oneRm) : 0;
+        return { t, oneRm, volume, multiplier: w > 0 ? oneRm / w : 0, added, addedMult: w > 0 ? added / w : 0 };
       })
       .sort((a, b) => a.t - b.t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, bwSeries]);
+  }, [rows, bwSeries, name]);
 
   const visible = useMemo(() => {
     if (range === 'ALL') return points;
@@ -185,7 +193,7 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
         ) : (
           <>
             <div className="inline-flex flex-wrap gap-1 rounded-xl border border-white/10 p-1">
-              {METRICS.map(m => (
+              {(name === 'Weighted Pull-Up' ? [...METRICS, ...ADDED_METRICS] : METRICS).map(m => (
                 <button key={m.id} title={m.hint} onClick={() => setMetric(m.id)} className={pill(metric === m.id)}>{m.label}</button>
               ))}
             </div>
@@ -244,17 +252,18 @@ export function ExerciseHistory({ name, rows, bodyWeightRows, onClose }: {
                     <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={fmtDate}
                       tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={32} />
                     <YAxis domain={['auto', 'auto']} width={44} tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false}
-                      tickFormatter={v => (metric === 'multiplier' ? Number(v).toFixed(2) : Math.round(Number(v)).toLocaleString())} />
+                      tickFormatter={v => (isRatio(metric) ? Number(v).toFixed(2) : Math.round(Number(v)).toLocaleString())} />
                     <Tooltip
                       cursor={{ stroke: 'rgba(34,211,238,0.4)' }}
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
-                        const p = payload[0].payload as { t: number; oneRm: number; volume: number; multiplier: number };
+                        const p = payload[0].payload as { t: number; oneRm: number; volume: number; multiplier: number; added: number; addedMult: number };
                         return (
                           <div className="rounded-xl border border-white/15 bg-[#0a0f1c]/95 px-3 py-2 text-[11px] text-zinc-300 shadow-xl">
                             <div className="font-bold text-white mb-1">{fmtDay(p.t)}</div>
                             <div>1RM <b className="text-white tabular-nums">{Math.round(p.oneRm)} lb</b> <span className="text-zinc-500">({toKg(p.oneRm).toFixed(1)} kg)</span></div>
                             <div>Volume <b className="text-white tabular-nums">{Math.round(p.volume).toLocaleString()} lb</b></div>
+                            {name === 'Weighted Pull-Up' && <div>Added <b className="text-white tabular-nums">+{Math.round(p.added)} lb</b>{p.addedMult > 0 && <span className="text-zinc-500"> ({p.addedMult.toFixed(2)}× BW)</span>}</div>}
                             {p.multiplier > 0 && <div>× BW <b className="text-white tabular-nums">{p.multiplier.toFixed(2)}×</b></div>}
                           </div>
                         );
