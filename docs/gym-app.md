@@ -94,8 +94,12 @@ A row holds: `raw_logs` (`"kgxreps,kgxreps"`, always **kg**), `set_types` (same 
 
 - Every tick is saved to `localStorage` and queued (`peak_pending_logs`); it is sent immediately when online and
   retried on reconnect and every 30 seconds. The header and workout bar show the sync state.
-- An unfinished workout is kept in `peak_active_session` (version 2, today only). "Resume" appears only when
-  it has a ticked set.
+- Whether today's workout is open or finished is a cloud row: pseudo-exercise `__SESSION_STATE__` (one row per
+  date, `raw_logs` = `open` | `finished`, like `Body Weight`). The first ticked set writes `open`; Finish and
+  Discard write `finished`. It rides the same queue, so it works offline, and every device agrees. "Resume"
+  shows when the marker is `open`. With no marker (older days) the device's own `peak_active_session` draft
+  (version 2, today only, needs a ticked set) is used, then the fallback "today has app-logged sets and this
+  device's `peak_finished_date` is not today".
 - Last good history per exercise is kept in `peak_history_cache`, and `sw.js` caches the app shell and pictures,
   so `/gym` opens with no signal (after one online visit).
 
@@ -109,8 +113,8 @@ A row holds: `raw_logs` (`"kgxreps,kgxreps"`, always **kg**), `set_types` (same 
   styles. Use `div` or inline style when a utility class does not apply.
 - **Never put `overscroll-behavior` on `body`** (only `html`): `body` is a scroll container here and it blocks
   touch scrolling.
-- **Today looks "done" once a set is ticked** (rows save to the cloud immediately). While `peak_active_session` has a
-  ticked set, `GymPlanPage` plans from `planHistory` (today's rows removed) so the day and targets stay put and
+- **Today looks "done" once a set is ticked** (rows save to the cloud immediately). While today is open (marker, or a draft with a
+  ticked set), `GymPlanPage` plans from `planHistory` (today's rows removed) so the day and targets stay put and
   Resume reopens the same workout. `WorkoutSession` still gets the full history.
 - Exercise names are keys into history. Renaming one in code splits its history; use `displayName` in
   `exerciseMedia.ts` to change what is shown.

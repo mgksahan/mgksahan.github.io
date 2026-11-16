@@ -65,6 +65,16 @@ export function queueLog(payload: LogPayload) {
   void flushLogs();
 }
 
+// Cloud-synced "is today's workout finished?" marker, so every device agrees. One pseudo-exercise row per day
+// (like Body Weight); raw_logs is 'open' or 'finished'. Rides the same queue, so it also works offline.
+export const SESSION_STATE = '__SESSION_STATE__';
+export function markSession(date: string, state: 'open' | 'finished') {
+  queueLog({
+    exercise_name: SESSION_STATE, workout_date: date, raw_logs: state, set_types: '',
+    one_rep_max_kg: 0, one_rep_max_lbs: 0, total_volume_lbs: 0, source: 'peak',
+  });
+}
+
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => void flushLogs());
   setInterval(() => { if (Object.keys(queue).length) void flushLogs(); }, 30000);
