@@ -6,7 +6,7 @@ import { FitnessRow, MainLiftPlan, AccessoryOption, LoggedSet, parseSets, localT
 import { RestBar } from './RestBar';
 import { setRest, startRest } from '../lib/restTimer';
 import { NoteHistory, pastNotes } from './ExerciseNotes';
-import { DraftSet, SetType, buildPayload, flushLogs, getSyncStatus, queueLog, subscribeSync } from '../lib/offlineLog';
+import { DraftSet, SetType, buildPayload, flushLogs, getSyncStatus, markSession, queueLog, subscribeSync } from '../lib/offlineLog';
 
 // Jefit-style logging: every set (warm-ups, top set, back-offs, accessories) is a row you can edit.
 // Tick a set to log it and start the rest timer. Each tick saves to the cloud right away; with no
@@ -204,11 +204,13 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
 
   // --- save: to the phone immediately, to the cloud on every change ---
   const lastSent = useRef<Record<string, string>>({});
+  const markedOpen = useRef(false);
   useEffect(() => {
     const t = setTimeout(() => {
       // Never replace a draft that has ticked sets with an empty one (opening a different day would wipe it)
       try {
         const anyDone = Object.values(drafts).some(d => d.sets.some(x => x.done));
+        if (anyDone && !markedOpen.current) { markedOpen.current = true; markSession(today, 'open'); }
         if (anyDone || !localStorage.getItem(SESSION_KEY)) localStorage.setItem(SESSION_KEY, JSON.stringify({ v: 2, date: today, dayId, startedAt, extras, drafts }));
       } catch { /* ignore */ }
       blocks.forEach(b => {
@@ -293,6 +295,7 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
     if (!totalDone && !window.confirm('No sets are ticked. Leave without saving anything?')) return;
     const orphan = blocks.filter(b => { const d = draftOf(b); return d.note.trim() && !d.sets.some(x => x.done); }).length;
     if (orphan && !window.confirm(`${orphan} note${orphan > 1 ? 's' : ''} won't be saved: notes save with a ticked set for that exercise. Finish anyway?`)) return;
+    markSession(today, 'finished');
     await flushLogs();
     const left = getSyncStatus().pending;
     try { localStorage.removeItem(SESSION_KEY); localStorage.setItem('peak_finished_date', today); } catch { /* ignore */ }

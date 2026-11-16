@@ -9,6 +9,7 @@ import { ExerciseHistory } from '../components/ExerciseHistory';
 import { WorkoutSession, SyncPill } from '../components/WorkoutSession';
 import { RestBar } from '../components/RestBar';
 import { setRest } from '../lib/restTimer';
+import { SESSION_STATE, markSession } from '../lib/offlineLog';
 import { SHORT_NAME, STANDARDS, TIER_BAR, TIER_TEXT, overallRank, rankOf } from '../lib/strengthStandards';
 import {
   FitnessRow, MainLiftPlan, AccessoryOption, LoggedSet, MAIN_LIFTS, PLAN_START,
@@ -421,7 +422,7 @@ export function GymPlanPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const names = new Set<string>([...MAIN_LIFTS, ...RANK_LIFTS, 'Body Weight']);
+      const names = new Set<string>([...MAIN_LIFTS, ...RANK_LIFTS, 'Body Weight', SESSION_STATE]);
       routine.days.forEach(d => d.exercises.forEach(e => { names.add(e.name); alternativesFor(e.name).forEach(a => names.add(a)); }));
       // Last good copy of each exercise's history, so the plan still opens with no signal
       let cache: Record<string, FitnessRow[]> = {};
@@ -452,15 +453,19 @@ export function GymPlanPage() {
 
   // "Resume" only when today's session has at least one ticked set; an opened-but-empty one is just a fresh start
   const [, bumpSession] = useState(0);
-  // The phone's saved draft is the main signal. Fallback if that draft is gone (cleared storage, overwritten):
-  // today already has sets in the cloud from this app and Finish was not pressed today.
+  // The cloud marker (__SESSION_STATE__, written by Finish and by the first ticked set) is the source of truth, so
+  // every device agrees. Without a marker (older days): this device's saved draft, then the fallback that today
+  // already has sets in the cloud from this app and Finish was not pressed on this device.
   const hasActiveSession = (() => {
     try {
       const today = localToday();
+      const marker = (history[SESSION_STATE] || []).find(r => r.workout_date.slice(0, 10) === today)?.raw_logs;
+      if (marker === 'finished') return false;
+      if (marker === 'open') return true;
       const a = JSON.parse(localStorage.getItem('peak_active_session') || 'null');
       if (a && a.v === 2 && a.date === today && Object.values<any>(a.drafts || {}).some(d => d.sets?.some((x: any) => x.done))) return true;
       if (localStorage.getItem('peak_finished_date') === today) return false;
-      return Object.values(history).some(rows => rows.some(r => r.workout_date.slice(0, 10) === today && (r as any).source !== 'jefit' && r.exercise_name !== 'Body Weight' && !!r.raw_logs));
+      return Object.values(history).some(rows => rows.some(r => r.workout_date.slice(0, 10) === today && (r as any).source !== 'jefit' && r.exercise_name !== 'Body Weight' && !r.exercise_name.startsWith('__') && !!r.raw_logs));
     } catch { return false; }
   })();
   // Ticked sets are saved to the cloud straight away, so today would look like a finished session and the page
@@ -702,7 +707,7 @@ export function GymPlanPage() {
             </button>
             {hasActiveSession && (
               <button
-                onClick={() => { if (window.confirm('Discard the unfinished workout on this phone? Sets you already ticked stay saved.')) { try { localStorage.removeItem('peak_active_session'); localStorage.setItem('peak_finished_date', localToday()); } catch { /* ignore */ } setRest(null); bumpSession(n => n + 1); } }}
+                onClick={() => { if (window.confirm('Discard the unfinished workout? Sets you already ticked stay saved.')) { markSession(localToday(), 'finished'); setHistory(h => ({ ...h, [SESSION_STATE]: [{ exercise_name: SESSION_STATE, workout_date: localToday(), raw_logs: 'finished' }] })); try { localStorage.removeItem('peak_active_session'); localStorage.setItem('peak_finished_date', localToday()); } catch { /* ignore */ } setRest(null); bumpSession(n => n + 1); } }}
                 className="text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer py-1"
               >
                 Discard unfinished workout
