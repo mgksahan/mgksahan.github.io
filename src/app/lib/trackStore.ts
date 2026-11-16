@@ -120,6 +120,15 @@ export function toggleTaskDone(t: Task) {
     else if (!done && c.lane === doneLane) saveCard({ ...c, lane: todoLane, pos: Math.max(0, ...inLane(todoLane)) + 1 });
   }
 }
+// Time shorter than this is an accidental start/stop: it is not saved, and not listed in Stats
+export const MIN_ENTRY_MS = 30000;
+export const MIN_LISTED_MS = 60000;
+
+// Clean-up of accidental start/stop entries saved before the minimum existed. Runs after the first sync of a session.
+export function pruneTinyEntries() {
+  Object.values(state.entries).filter(e => e.end - e.start < MIN_ENTRY_MS).forEach(e => removeEntry(e.id));
+}
+
 export function removeTask(id: string) {
   const { [id]: _gone, ...rest } = state.tasks;
   const at = now();
@@ -127,6 +136,9 @@ export function removeTask(id: string) {
   dead[sk('task', id)] = at;
   enqueue({ kind: 'task', id, op: 'delete', updatedAt: at });
   if (state.cards['c_' + id]) removeCard('c_' + id);      // the card that was made for this task goes with it
+  // A task made by accident usually has a few seconds of tracked time: those go with it. Real time (a minute or more) is kept.
+  const mine = Object.values(state.entries).filter(e => e.taskId === id);
+  if (mine.length && mine.reduce((a, e) => a + (e.end - e.start), 0) < MIN_LISTED_MS) mine.forEach(e => removeEntry(e.id));
 }
 export function saveCard(c: Omit<Card, 'updatedAt'>) {
   const card = { ...c, updatedAt: now() };
@@ -241,6 +253,7 @@ function applyRemote(items: Remote[]) {
 }
 
 let syncing = false;
+let pruned = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let started = false;
 
@@ -262,6 +275,7 @@ export async function syncNow(): Promise<void> {
       persist();
     }
     applyRemote(await apiService.fetchTrack());
+    if (!pruned) { pruned = true; pruneTinyEntries(); }
     setStatus({ syncing: false, lastSync: now() });
   } catch (e: any) {
     setStatus({ syncing: false, error: navigator.onLine ? (e?.message || 'Sync failed') : 'Offline' });

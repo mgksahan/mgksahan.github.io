@@ -5,7 +5,7 @@ import { Play, Pause, Square, X, Check, Minimize2, Maximize2, Timer, CloudOff, R
 import { useAuth } from '../context/AuthContext';
 import { BoardTab } from './TrackBoard';
 import {
-  Cat, NEXT_CAT, setActivityCat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
+  Cat, NEXT_CAT, MIN_ENTRY_MS, MIN_LISTED_MS, setActivityCat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
   saveTask, toggleTaskDone, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
 } from '../lib/trackStore';
 
@@ -215,7 +215,7 @@ export function Tracker() {
   const commitSeg = (sg: Segment | null) => {
     if (!sg) return;
     const ms = elapsed(sg, Date.now());
-    if (ms >= 1000) { const end = Date.now(); saveEntry({ id: uid(), start: end - ms, end, cat: sg.cat, taskId: sg.taskId || null, note: labelOf(sg.taskId, sg.note) }); }
+    if (ms >= MIN_ENTRY_MS) { const end = Date.now(); saveEntry({ id: uid(), start: end - ms, end, cat: sg.cat, taskId: sg.taskId || null, note: labelOf(sg.taskId, sg.note) }); }
   };
   // Pivot to another activity. If the timer was running, the new activity starts running right away.
   const switchTo = (next: Sel, start = false) => {
@@ -248,7 +248,7 @@ export function Tracker() {
     if (!sg?.since) { setAlert(null); return; }
     const ms = Math.max(0, elapsed(sg, endedAt));
     const note = labelOf(sg.taskId, sg.note);
-    if (ms >= 1000) saveEntry({ id: uid(), start: endedAt - ms, end: endedAt, cat: sg.cat, taskId: sg.taskId || null, note });
+    if (ms >= MIN_ENTRY_MS) saveEntry({ id: uid(), start: endedAt - ms, end: endedAt, cat: sg.cat, taskId: sg.taskId || null, note });
     saveTimer({ timer: null, block: { acc: 0, since: null }, brk: null });
     setSel(p => ({ ...p, taskId: null, note: '' })); setNoteText('');
     const hm = new Date(endedAt); 
@@ -494,7 +494,7 @@ function TaskRow({ t, totals, onToggle, onTrack }: { t: Task; totals: TotalsFn; 
       <div className="flex-1 min-w-0">
         <div className={`break-words ${t.done ? 'line-through text-zinc-500' : 'text-white'}`}>{t.title}</div>
         <div className="flex gap-2.5 flex-wrap text-xs text-zinc-500">
-          <button onClick={() => setActivityCat({ taskId: t.id }, NEXT_CAT[t.cat])} title="Change category (also changes its time entries)" className="inline-flex items-center gap-1.5 text-zinc-500! hover:text-white!"><span className={`h-2 w-2 rounded-full ${CATS[t.cat].dot}`} />{CATS[t.cat].label}</button>
+          <button onClick={() => setActivityCat({ taskId: t.id }, NEXT_CAT[t.cat])} title="Change category (also changes its time entries)" className="inline-flex items-center gap-1.5 text-xs text-zinc-500! hover:text-white!"><span className={`h-2 w-2 rounded-full ${CATS[t.cat].dot}`} />{CATS[t.cat].label}</button>
           {due && <span>{due}</span>}
           {logged > 0 && <span>{fmtDur(logged)} logged</span>}
         </div>
@@ -661,7 +661,7 @@ function StatsTab({ s, tasks, entries, labelOf }: { s: TrackState; tasks: Task[]
   });
   const all = tot.work + tot.learn + tot.life;
   const max = Math.max(3600000, ...days.map(k => per[k].work + per[k].learn + per[k].life));
-  const list = Object.values(acts).sort((a, b) => b.ms - a.ms).slice(0, 10);
+  const list = Object.values(acts).filter(a => a.ms >= MIN_LISTED_MS).sort((a, b) => b.ms - a.ms).slice(0, 10);   // under a minute would read as 0m
   const top = list[0]?.ms || 1;
   const doneTasks = tasks.filter(t => t.done && t.doneAt && days.includes(dkey(new Date(t.doneAt))));
   const blocks = days.reduce((a, k) => a + (s.settings.days[k] || 0), 0);
