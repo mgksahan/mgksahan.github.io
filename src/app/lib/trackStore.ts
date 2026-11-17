@@ -7,9 +7,10 @@ import { apiService } from '../../apiService';
 // so a device with an old copy cannot bring the item back.
 
 export type Cat = 'work' | 'learn' | 'life';
-export interface Task { id: string; title: string; cat: Cat; pts: number; due: string; done: boolean; doneAt?: number | null; updatedAt: number }
+// A subtask is a normal task with epicId set to its epic card (it shows on the Tasks page and Calendar like any task, grouped under the epic on the Board). ord keeps their order inside the epic.
+export interface Task { id: string; title: string; cat: Cat; pts: number; due: string; done: boolean; doneAt?: number | null; epicId?: string; ord?: number; updatedAt: number }
 // Board: sticky-note cards in swim lanes. A card can be linked to a task so it shows on the task list.
-// A card with subtasks acts as an epic. A subtask can be put on the task list (taskId); then the task is the source of truth for done.
+// Legacy: subtasks used to live inside the card. migrateSubs() turns them into tasks and clears this.
 export interface Sub { id: string; text: string; done: boolean; taskId?: string | null }
 export interface Card { id: string; text: string; lane: string; pos: number; cat: Cat; taskId?: string | null; subs?: Sub[]; epic?: boolean; due?: string; updatedAt: number }   // due: only used while the card has no linked task (a task keeps its own due date)
 export interface Lane { id: string; name: string }
@@ -215,6 +216,27 @@ export function settleDoneTasks(laneIds: string[]) {
 
 // Every task gets a board card (id "c_<taskId>", so two devices make the same one). Open tasks go to
 // "Next up", done ones to "Done". Tasks that are a card's subtask, or already have a card, are skipped.
+export function addSubtask(epic: Card, title: string) {
+  title = title.trim().slice(0, 120);
+  if (!title) return;
+  saveTask({ id: uid(), title, cat: epic.cat, pts: 10, due: '', done: false, epicId: epic.id, ord: now() });
+}
+
+// One-off conversion of old in-card subtasks into real tasks (same ids on every device, so it is safe to run anywhere, repeatedly)
+export function migrateSubs() {
+  for (const c of Object.values(state.cards)) {
+    const subs = c.subs ?? [];
+    if (!subs.length) continue;
+    subs.forEach((x, i) => {
+      const id = x.taskId && state.tasks[x.taskId] ? x.taskId : 's_' + x.id;
+      const t = state.tasks[id];
+      if (t) { if (t.epicId !== c.id) saveTask({ ...t, epicId: c.id, ord: t.ord ?? c.updatedAt + i }); }
+      else if (!dead[sk('task', id)]) saveTask({ id, title: x.text, cat: c.cat, pts: 10, due: '', done: x.done, doneAt: x.done ? now() : null, epicId: c.id, ord: c.updatedAt + i });
+    });
+    saveCard({ ...c, subs: undefined, epic: true });
+  }
+}
+
 export function adoptTasks(laneIds: string[]) {
   if (!laneIds.length) return;
   const cards = Object.values(state.cards);
@@ -224,7 +246,7 @@ export function adoptTasks(laneIds: string[]) {
   cards.forEach(c => { tail[c.lane] = Math.max(tail[c.lane] ?? 0, c.pos); });
   const todo = laneIds.includes('next') ? 'next' : laneIds[0];
   const done = laneIds.includes('done') ? 'done' : laneIds[laneIds.length - 1];
-  const fresh = Object.values(state.tasks).filter(t => !taken.has(t.id) && !state.cards['c_' + t.id] && !dead[sk('card', 'c_' + t.id)]);
+  const fresh = Object.values(state.tasks).filter(t => !taken.has(t.id) && !(t.epicId && state.cards[t.epicId]) && !state.cards['c_' + t.id] && !dead[sk('card', 'c_' + t.id)]);   // subtasks live inside their epic
   fresh.sort((a, b) => (a.done !== b.done ? (a.done ? 1 : -1) : a.done ? (b.doneAt || 0) - (a.doneAt || 0) : (a.due || '9').localeCompare(b.due || '9')));
   for (const t of fresh) {
     const lane = t.done ? done : todo;
@@ -315,7 +337,7 @@ export async function syncNow(): Promise<void> {
       persist();
     }
     applyRemote(await apiService.fetchTrack());
-    if (!pruned) { pruned = true; pruneTinyEntries(); }
+    if (!pruned) { pruned = true; pruneTinyEntries(); migrateSubs(); }
     setStatus({ syncing: false, lastSync: now() });
   } catch (e: any) {
     setStatus({ syncing: false, error: navigator.onLine ? (e?.message || 'Sync failed') : 'Offline' });
