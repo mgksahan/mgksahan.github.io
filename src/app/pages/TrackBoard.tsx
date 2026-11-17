@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers, CalendarDays, Unlink } from 'lucide-react';
-import { EstChip, fmtEstMin, estTone } from '../components/EstChip';
 import {
-  Cat, Card, Lane, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, migrateSubs, addSubtask, convertToEpic, convertToTask, setEpicDone, setTaskEstimate, moveIntoEpic, detachSubtask, renameCard, renameTask, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
+  Cat, Card, Lane, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, migrateSubs, addSubtask, convertToEpic, convertToTask, setEpicDone, moveIntoEpic, detachSubtask, renameCard, renameTask, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Board tab: sticky-note cards in swim lanes (a small kanban). Drag a card by its grip to reorder or move
@@ -217,9 +216,6 @@ function CardNote({ card, lane, task, onDelete, dropTarget, epicTasks, loggedBy,
   const epic = card.epic ?? epicTasks.length > 0;
   const canDue = task ? !task.done : !(epic && card.done);
   const doneCount = epicTasks.filter(x => x.done).length;
-  // An epic's estimate is the sum of its subtasks' estimates, shown against all the time tracked on it
-  const estSum = epic ? epicTasks.reduce((a, x) => a + (x.est || 0), 0) : 0;
-  const trackLabel = task && !epic ? 'Track' : estSum ? `${fmtDur(logged)} / ${fmtEstMin(estSum)}` : logged > 0 ? fmtDur(logged) : 'Track';
   const addSub = (e: React.FormEvent) => { e.preventDefault(); addSubtask(card, subText); setSubText(''); };
   const commit = () => {
     setEdit(false);
@@ -283,9 +279,8 @@ function CardNote({ card, lane, task, onDelete, dropTarget, epicTasks, loggedBy,
           )}
           <button onClick={onTrack} title={tracking && running ? 'Pause the timer' : 'Track time on this card'} aria-label="Track time"
             className={`inline-flex items-center gap-1 text-[11px] ${tracking && running ? 'text-cyan-300!' : 'text-zinc-400! hover:text-cyan-300!'}`}>
-            {tracking && running ? <Pause size={12} /> : <Play size={12} />}<span className={epic && estSum ? estTone(Math.round(logged / 60000), estSum) : ''}>{trackLabel}</span>
+            {tracking && running ? <Pause size={12} /> : <Play size={12} />}{logged > 0 ? fmtDur(logged) : 'Track'}
           </button>
-          {task && !epic && <EstChip est={task.est} loggedMs={logged} done={task.done} onChange={m => setTaskEstimate(task.id, m)} />}
           <button onClick={onDelete} aria-label="Delete card" className="ml-auto text-zinc-500! hover:text-red-400! p-0.5"><X size={13} /></button>
         </div>
         <AnimatePresence initial={false}>
@@ -327,10 +322,10 @@ function SubRow({ x, logged, tracking, onToggle, onTrack }: { x: Task; logged: n
             : <button onClick={() => setEditDue(true)} title="Change due date" className={`inline-flex items-center gap-1 text-[11px] hover:text-white! ${overdue ? 'text-red-400!' : 'text-zinc-400!'}`}><CalendarDays size={11} />{x.due ? `${overdue ? 'Overdue · ' : ''}${x.due.slice(5)}` : 'Due'}</button>}
           {!x.done && (
             <button onClick={onTrack} aria-label="Track time" title={tracking ? 'Pause the timer' : 'Track time on this subtask'} className={`inline-flex items-center gap-1 text-[11px] ${tracking ? 'text-cyan-300!' : 'text-zinc-400! hover:text-cyan-300!'}`}>
-              {tracking ? <Pause size={11} /> : <Play size={11} />}Track
+              {tracking ? <Pause size={11} /> : <Play size={11} />}{logged > 0 ? fmtDur(logged) : 'Track'}
             </button>
           )}
-          <EstChip est={x.est} loggedMs={logged} done={x.done} onChange={m => setTaskEstimate(x.id, m)} />
+          {x.done && logged > 0 && <span>{fmtDur(logged)}</span>}
         </div>
       </div>
       <button onClick={() => detachSubtask(x.id)} aria-label="Make a free task" title="Take out of the epic (becomes a free task)" className="text-zinc-600! hover:text-cyan-300! shrink-0 mt-0.5"><Unlink size={12} /></button>
