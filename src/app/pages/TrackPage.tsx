@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router';
 import { motion } from 'motion/react';
-import { Play, Pause, Square, X, Check, Minimize2, Maximize2, Timer, CloudOff, RefreshCw, Download } from 'lucide-react';
+import { Play, Pause, Square, X, Check, Minimize2, Maximize2, Timer, CloudOff, RefreshCw, Download, Layers } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BoardTab } from './TrackBoard';
 import {
   Cat, NEXT_CAT, MIN_ENTRY_MS, MIN_LISTED_MS, setActivityCat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
-  saveTask, renameTask, toggleTaskDone, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
+  saveTask, renameTask, toggleTaskDone, migrateSubs, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Time tracker at /track (owner only). Tasks with points, a calendar, and a running timer, all tagged
@@ -310,7 +310,10 @@ export function Tracker() {
   const doneToday = tasks.filter(t => t.done && t.doneAt && dkey(new Date(t.doneAt)) === today()).length;
 
   const toggleMini = () => setMini(m => { const n = !m; try { localStorage.setItem('track_mini', n ? '1' : '0'); } catch { /* ignore */ } return n; });
-  const toggleDone = (t: Task) => toggleTaskDone(t);
+  // Ticking a task done while the timer is on it (running or paused) stops the timer and saves the time to that task
+  const toggleDone = (t: Task) => { if (!t.done && seg?.taskId === t.id) stop(); toggleTaskDone(t); };
+  const epicOf = (t: Task) => (t.epicId ? s.cards[t.epicId]?.text.split('\n')[0] : undefined);
+  useEffect(() => { migrateSubs(); }, []);       // old in-card subtasks become real tasks
 
   const board = view === 'board' && !mini;
   const alertBox = alert && (
@@ -447,9 +450,9 @@ export function Tracker() {
           </div>
           <motion.div key={view} initial={{ opacity: 0, y: 10 }} animate={leaving ? { opacity: 0, y: -8 } : { opacity: 1, y: 0 }}
             transition={{ duration: leaving ? 0.14 : shifting ? 0.2 : 0.14, delay: leaving ? 0 : shifting ? 0.2 : 0, ease: 'easeOut' }}>
-            {view === 'tasks' && <TasksTab tasks={tasks} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
-            {view === 'board' && <BoardTab onTrack={trackBoard} trackingId={seg?.taskId ?? null} running={running} />}
-            {view === 'cal' && <CalendarTab tasks={tasks} entries={entries} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} />}
+            {view === 'tasks' && <TasksTab tasks={tasks} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} epicOf={epicOf} />}
+            {view === 'board' && <BoardTab onTrack={trackBoard} onToggleTask={toggleDone} trackingId={seg?.taskId ?? null} running={running} />}
+            {view === 'cal' && <CalendarTab tasks={tasks} entries={entries} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} epicOf={epicOf} />}
             {view === 'stats' && <StatsTab s={s} tasks={tasks} entries={entries} labelOf={labelOf} />}
           </motion.div>
         </main>
@@ -475,7 +478,7 @@ function SyncPill({ sync }: { sync: ReturnType<typeof useTrackSync> }) {
 // ---------- tasks ----------
 type TotalsFn = (key: string) => { all: number; td: number };
 
-function TaskRow({ t, totals, onToggle, onTrack }: { t: Task; totals: TotalsFn; onToggle: (t: Task) => void; onTrack: (t: Task) => void }) {
+function TaskRow({ t, totals, onToggle, onTrack, epic }: { t: Task; totals: TotalsFn; onToggle: (t: Task) => void; onTrack: (t: Task) => void; epic?: string }) {
   const [editTitle, setEditTitle] = useState(false);
   const [titleVal, setTitleVal] = useState(t.title);
   const [editPts, setEditPts] = useState(false);
@@ -483,7 +486,7 @@ function TaskRow({ t, totals, onToggle, onTrack }: { t: Task; totals: TotalsFn; 
   const commitPts = () => {
     setEditPts(false);
     const n = Math.min(500, Math.max(1, parseInt(ptsVal) || t.pts));
-    if (n !== t.pts) saveTask({ id: t.id, title: t.title, cat: t.cat, pts: n, due: t.due, done: t.done, doneAt: t.doneAt });
+    if (n !== t.pts) saveTask({ ...t, pts: n });
   };
   const logged = totals(t.id).all;
   const due = t.due ? (t.due === today() ? 'Due today' : `Due ${t.due.slice(5)}`) : 'No due date';
@@ -500,6 +503,7 @@ function TaskRow({ t, totals, onToggle, onTrack }: { t: Task; totals: TotalsFn; 
           : <div onClick={() => { setTitleVal(t.title); setEditTitle(true); }} title="Click to rename" className={`break-words cursor-text ${t.done ? 'line-through text-zinc-500' : 'text-white'}`}>{t.title}</div>}
         <div className="flex gap-2.5 flex-wrap text-xs text-zinc-500">
           <button onClick={() => setActivityCat({ taskId: t.id }, NEXT_CAT[t.cat])} title="Change category (also changes its time entries)" className="inline-flex items-center gap-1.5 text-xs text-zinc-500! hover:text-white!"><span className={`h-2 w-2 rounded-full ${CATS[t.cat].dot}`} />{CATS[t.cat].label}</button>
+          {epic && <span className="inline-flex items-center gap-1 text-cyan-300/80" title="This is a subtask of an epic"><Layers size={11} />{epic}</span>}
           {due && <span>{due}</span>}
           {logged > 0 && <span>{fmtDur(logged)} logged</span>}
         </div>
@@ -529,7 +533,7 @@ function CatChips({ value, onChange }: { value: Cat; onChange: (c: Cat) => void 
   );
 }
 
-function TasksTab({ tasks, activityTotals, onToggle, onTrack }: { tasks: Task[]; activityTotals: TotalsFn; onToggle: (t: Task) => void; onTrack: (t: Task) => void }) {
+function TasksTab({ tasks, activityTotals, onToggle, onTrack, epicOf }: { tasks: Task[]; activityTotals: TotalsFn; onToggle: (t: Task) => void; onTrack: (t: Task) => void; epicOf: (t: Task) => string | undefined }) {
   const [title, setTitle] = useState('');
   const [pts, setPts] = useState(10);
   const [due, setDue] = useState(today());
@@ -554,17 +558,17 @@ function TasksTab({ tasks, activityTotals, onToggle, onTrack }: { tasks: Task[];
       <div className="flex items-center gap-2 flex-wrap mb-4"><CatChips value={cat} onChange={setCat} /><span className={`${label} ml-1`}>points on completion</span>
         <label className="ml-auto inline-flex items-center gap-1.5 text-[13px] text-zinc-400"><input type="checkbox" checked={noDue} onChange={e => setNoDue(e.target.checked)} />No due date</label></div>
       <h2 className="text-lg font-semibold text-white mb-2" style={{ margin: '0 0 8px' }}>To do · {open.length}</h2>
-      {open.length ? open.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} />) : <div className="text-zinc-500 py-3">Nothing open. Add a task above.</div>}
+      {open.length ? open.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} epic={epicOf(t)} />) : <div className="text-zinc-500 py-3">Nothing open. Add a task above.</div>}
       {done.length > 0 && <>
         <h2 className="text-lg font-semibold text-white" style={{ margin: '22px 0 8px' }}>Completed</h2>
-        {done.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} />)}
+        {done.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} epic={epicOf(t)} />)}
       </>}
     </div>
   );
 }
 
 // ---------- calendar ----------
-function CalendarTab({ tasks, entries, activityTotals, onToggle, onTrack }: { tasks: Task[]; entries: Entry[]; activityTotals: TotalsFn; onToggle: (t: Task) => void; onTrack: (t: Task) => void }) {
+function CalendarTab({ tasks, entries, activityTotals, onToggle, onTrack, epicOf }: { tasks: Task[]; entries: Entry[]; activityTotals: TotalsFn; onToggle: (t: Task) => void; onTrack: (t: Task) => void; epicOf: (t: Task) => string | undefined }) {
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selDay, setSelDay] = useState(today());
   const [title, setTitle] = useState('');
@@ -619,7 +623,7 @@ function CalendarTab({ tasks, entries, activityTotals, onToggle, onTrack }: { ta
               <input className={`${field} !w-[72px]`} type="number" min={1} max={500} aria-label="Points" value={pts} onChange={e => setPts(parseInt(e.target.value) || 0)} /></div>
             <div className="flex items-center gap-2 flex-wrap"><CatChips value={cat} onChange={setCat} /><button className={`${btnPrimary} ml-auto`}>Add</button></div>
           </form>
-          {info.t.length ? info.t.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} />) : <div className="text-zinc-500 py-2">No tasks due on this day.</div>}
+          {info.t.length ? info.t.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} epic={epicOf(t)} />) : <div className="text-zinc-500 py-2">No tasks due on this day.</div>}
           {dayEntries.length > 0 && <>
             <div className={`${label} mt-4`}>Time entries</div>
             {dayEntries.map(e => (
@@ -655,13 +659,18 @@ function StatsTab({ s, tasks, entries, labelOf }: { s: TrackState; tasks: Task[]
   const per: Record<string, Record<Cat, number>> = {};
   days.forEach(k => { per[k] = { work: 0, learn: 0, life: 0 }; });
   const tot: Record<Cat, number> = { work: 0, learn: 0, life: 0 };
+  const statLabel = (id: string | null | undefined, note: string | undefined) => {
+    const t = id ? s.tasks[id] : undefined;
+    const epic = t?.epicId ? s.cards[t.epicId]?.text.split('\n')[0] : undefined;
+    return epic ? `${epic} › ${labelOf(id, note)}` : labelOf(id, note);
+  };
   const acts: Record<string, { ms: number; cat: Cat; label: string; taskId: string | null; note: string }> = {};
   entries.forEach(e => {
     const k = dkey(new Date(e.start));
     if (!per[k]) return;
     per[k][e.cat] += entryMs(e); tot[e.cat] += entryMs(e);
     const ak = keyOf(e.taskId, e.note);
-    const g = (acts[ak] ||= { ms: 0, cat: e.cat, label: labelOf(e.taskId, e.note), taskId: e.taskId || null, note: e.note });
+    const g = (acts[ak] ||= { ms: 0, cat: e.cat, label: statLabel(e.taskId, e.note), taskId: e.taskId || null, note: e.note });
     g.ms += entryMs(e);
   });
   const all = tot.work + tot.learn + tot.life;

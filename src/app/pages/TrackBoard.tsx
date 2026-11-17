@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers, CalendarDays } from 'lucide-react';
 import {
-  Cat, Card, Lane, Sub, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, renameCard, renameSub, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
+  Cat, Card, Lane, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, migrateSubs, addSubtask, renameCard, renameTask, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Board tab: sticky-note cards in swim lanes (a small kanban). Drag a card by its grip to reorder or move
@@ -21,7 +21,7 @@ const fmtDur = (ms: number) => { const m = Math.round(ms / 60000); return m < 60
 // What a card's time is logged against: its linked task, or the card itself when it has none (an epic can be tracked on its own)
 const trackIdOf = (c: Card, tasks: Record<string, Task>) => (c.taskId && tasks[c.taskId] ? c.taskId : c.id);
 
-export function BoardTab({ onTrack, trackingId, running }: { onTrack: (cat: Cat, id: string, title: string) => void; trackingId: string | null; running: boolean }) {
+export function BoardTab({ onTrack, onToggleTask, trackingId, running }: { onTrack: (cat: Cat, id: string, title: string) => void; onToggleTask: (t: Task) => void; trackingId: string | null; running: boolean }) {
   const s = useTrack();
   const lanes: Lane[] = s.settings.lanes?.length ? s.settings.lanes : DEFAULT_LANES;
   const laneIds = lanes.map(l => l.id);
@@ -29,17 +29,19 @@ export function BoardTab({ onTrack, trackingId, running }: { onTrack: (cat: Cat,
   const laneOf = (c: Card) => (laneIds.includes(c.lane) ? c.lane : laneIds[0]);
   const inLane = (id: string) => cards.filter(c => laneOf(c) === id).sort((a, b) => a.pos - b.pos);
 
+  const epicTasksOf = (epicId: string) => Object.values(s.tasks).filter(t => t.epicId === epicId).sort((a, b) => (a.ord ?? 0) - (b.ord ?? 0));
+
   // Time logged per activity id, so a card can show its own total plus its subtasks' tasks
   const loggedBy: Record<string, number> = {};
   Object.values(s.entries).forEach(e => { if (e.taskId) loggedBy[e.taskId] = (loggedBy[e.taskId] || 0) + (e.end - e.start); });
   const loggedOf = (c: Card) => {
-    const ids = new Set([trackIdOf(c, s.tasks), ...(c.epic ?? (c.subs?.length ?? 0) > 0 ? (c.subs ?? []).map(x => x.taskId).filter(Boolean) as string[] : [])]);
+    const ids = new Set([trackIdOf(c, s.tasks), ...epicTasksOf(c.id).map(x => x.id)]);   // a Set, so nothing is counted twice
     let t = 0; ids.forEach(i => { t += loggedBy[i] || 0; }); return t;
   };
 
   // Put every task on the board (once), and keep new tasks coming in
   const laneKey = laneIds.join(',');
-  useEffect(() => { adoptTasks(laneIds); settleDoneTasks(laneIds); }, [s.tasks, laneKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { migrateSubs(); adoptTasks(laneIds); settleDoneTasks(laneIds); }, [s.tasks, s.cards, laneKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const laneEls = useRef<Record<string, HTMLElement | null>>({});
   const [over, setOver] = useState<string | null>(null);
@@ -111,7 +113,7 @@ export function BoardTab({ onTrack, trackingId, running }: { onTrack: (cat: Cat,
               {inLane(l.id).map(c => (
                 <CardNote
                   key={c.id} card={c} lane={l.id}
-                  tasks={s.tasks} task={c.taskId ? s.tasks[c.taskId] : undefined} logged={loggedOf(c)} tracking={trackingId === trackIdOf(c, s.tasks)} running={running} onTrack={() => onTrack(c.cat, trackIdOf(c, s.tasks), c.text.split('\n')[0].slice(0, 120))} onPut={() => putOnTasks(c)} onTake={() => takeOffTasks(c)}
+                  tasks={s.tasks} task={c.taskId ? s.tasks[c.taskId] : undefined} epicTasks={epicTasksOf(c.id)} loggedBy={loggedBy} trackingId={trackingId} onTrackTask={t => onTrack(t.cat, t.id, t.title)} onToggleTask={onToggleTask} logged={loggedOf(c)} tracking={trackingId === trackIdOf(c, s.tasks)} running={running} onTrack={() => onTrack(c.cat, trackIdOf(c, s.tasks), c.text.split('\n')[0].slice(0, 120))} onPut={() => putOnTasks(c)} onTake={() => takeOffTasks(c)}
                   onStart={() => setDragging(c.id)}
                   onMove={x => { const t = laneAt(x); setOver(p => (p === t ? p : t)); }}
                   onEnd={(x, y) => { setDragging(null); setOver(null); drop(c, x, y); }}
@@ -155,8 +157,8 @@ function Jot({ onAdd }: { onAdd: (text: string, cat: Cat) => void }) {
   );
 }
 
-function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack, onPut, onTake, onStart, onMove, onEnd }: {
-  card: Card; lane: string; task?: Task; tasks: Record<string, Task>; logged: number; tracking: boolean; running: boolean; onTrack: () => void; onPut: () => void; onTake: () => void;
+function CardNote({ card, lane, task, epicTasks, loggedBy, trackingId, onTrackTask, onToggleTask, logged, tracking, running, onTrack, onPut, onTake, onStart, onMove, onEnd }: {
+  card: Card; lane: string; task?: Task; tasks: Record<string, Task>; epicTasks: Task[]; loggedBy: Record<string, number>; trackingId: string | null; onTrackTask: (t: Task) => void; onToggleTask: (t: Task) => void; logged: number; tracking: boolean; running: boolean; onTrack: () => void; onPut: () => void; onTake: () => void;
   onStart: () => void; onMove: (clientX: number) => void; onEnd: (clientX: number, clientY: number) => void;
 }) {
   const controls = useDragControls();
@@ -165,35 +167,15 @@ function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack,
   const linked = !!card.taskId && !!task;
   const [open, setOpen] = useState(false);
   const [subText, setSubText] = useState('');
-  const [editSub, setEditSub] = useState<string | null>(null);
-  const [subVal, setSubVal] = useState('');
-  const subs = card.subs ?? [];
   // Due date: a linked task owns it; a card with no task keeps its own
   const due = task ? task.due : card.due ?? '';
   const [editDue, setEditDue] = useState(false);
   const setDue = (v: string) => { if (task) saveTask({ ...task, due: v }); else saveCard({ ...card, due: v }); };
   const overdue = !!due && due < new Date().toLocaleDateString('en-CA');
   const canDue = !task?.done;
-  const epic = card.epic ?? subs.length > 0;
-  const subDone = (x: Sub) => (x.taskId && tasks[x.taskId] ? tasks[x.taskId].done : x.done);
-  const doneCount = subs.filter(subDone).length;
-  const setSubs = (next: Sub[]) => saveCard({ ...card, subs: next });
-  const toggleSub = (x: Sub) => {
-    const t = x.taskId ? tasks[x.taskId] : undefined;
-    if (t) saveTask({ ...t, done: !t.done, doneAt: !t.done ? Date.now() : null });
-    else setSubs(subs.map(y => (y.id === x.id ? { ...y, done: !y.done } : y)));
-  };
-  const subToTasks = (x: Sub) => {
-    const id = uid();
-    saveTask({ id, title: x.text.slice(0, 120), cat: card.cat, pts: 10, due: '', done: x.done });
-    setSubs(subs.map(y => (y.id === x.id ? { ...y, taskId: id } : y)));
-  };
-  const addSub = (e: React.FormEvent) => {
-    e.preventDefault();
-    const t = subText.trim();
-    if (!t) return;
-    setSubs([...subs, { id: uid(), text: t, done: false }]); setSubText('');
-  };
+  const epic = card.epic ?? epicTasks.length > 0;
+  const doneCount = epicTasks.filter(x => x.done).length;
+  const addSub = (e: React.FormEvent) => { e.preventDefault(); addSubtask(card, subText); setSubText(''); };
   const commit = () => {
     setEdit(false);
     const t = text.trim();
@@ -232,8 +214,8 @@ function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack,
         {canDue && !editDue && due && (
           <button onClick={() => setEditDue(true)} title="Change due date" className={`self-start inline-flex items-center gap-1 text-[11px] -mt-0.5 hover:text-white! ${overdue ? 'text-red-400!' : 'text-zinc-400!'}`}><CalendarDays size={12} />{overdue ? 'Overdue · ' : 'Due '}{due.slice(5)}</button>
         )}
-        {epic && subs.length > 0 && (
-          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><motion.div className="h-full bg-cyan-300 rounded-full" initial={false} animate={{ width: `${doneCount / subs.length * 100}%` }} transition={{ duration: 0.3 }} /></div>
+        {epic && epicTasks.length > 0 && (
+          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><motion.div className="h-full bg-cyan-300 rounded-full" initial={false} animate={{ width: `${doneCount / epicTasks.length * 100}%` }} transition={{ duration: 0.3 }} /></div>
         )}
         <div className={`flex items-center gap-x-2 gap-y-1 flex-wrap ${epic ? '' : 'opacity-50 group-hover:opacity-100 focus-within:opacity-100 transition-opacity'}`}>
           <button onClick={() => setActivityCat({ taskId: task ? card.taskId : card.id }, NEXT_CAT[card.cat])} title={`${CATS[card.cat].label} (click to change; also changes its time entries)`} aria-label={`Category: ${CATS[card.cat].label}`} className="p-0.5"><span className={`block h-2.5 w-2.5 rounded-full ${CATS[card.cat].dot}`} /></button>
@@ -241,11 +223,11 @@ function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack,
             ? <button onClick={() => onTake()} title="Remove from task list (deletes the task)" className="inline-flex items-center gap-1 text-[11px] text-cyan-300!"><ListChecks size={13} />{task?.done ? 'Task done' : 'On task list'}</button>
             : <button onClick={() => onPut()} title="Add to the task list" className="inline-flex items-center gap-1 text-[11px] text-zinc-400! hover:text-cyan-300!"><ListPlus size={13} />To tasks</button>}
           {canDue && !due && !editDue && <button onClick={() => setEditDue(true)} title="Set a due date" aria-label="Set due date" className="inline-flex items-center gap-1 text-[11px] text-zinc-400! hover:text-white!"><CalendarDays size={12} />Due</button>}
-          <button onClick={() => { saveCard({ ...card, epic: !epic }); if (epic) setOpen(false); }} title={epic ? 'Turn back into a plain task card (subtasks are kept)' : 'Turn into an epic with subtasks'}
+          <button onClick={() => { saveCard({ ...card, epic: !epic }); if (epic) setOpen(false); }} title={epic ? 'Turn back into a plain task card (its subtasks stay on the task list)' : 'Turn into an epic with subtasks'}
             className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[11px] ${epic ? 'border-cyan-300/60 text-cyan-300!' : 'border-white/15 text-zinc-400! hover:text-white!'}`}><Layers size={11} />{epic ? 'Epic' : '→ Epic'}</button>
           {epic && (
             <button onClick={() => setOpen(o => !o)} aria-expanded={open} title="Subtasks" className="inline-flex items-center gap-0.5 text-[11px] text-zinc-400! hover:text-white!">
-              {subs.length ? `${doneCount}/${subs.length}` : 'Subtasks'}<ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+              {epicTasks.length ? `${doneCount}/${epicTasks.length}` : 'Subtasks'}<ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
           )}
           <button onClick={onTrack} title={tracking && running ? 'Pause the timer' : 'Track time on this card'} aria-label="Track time"
@@ -258,22 +240,10 @@ function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack,
           {open && epic && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
               <div className="flex flex-col gap-1 pt-1 border-t border-white/10">
-                {subs.map(x => {
-                  const d = subDone(x);
-                  return (
-                    <div key={x.id} className="flex items-center gap-1.5 text-[13px]">
-                      <button onClick={() => toggleSub(x)} aria-label={d ? 'Mark open' : 'Mark done'} className={`h-4 w-4 shrink-0 rounded-[5px] border-2 border-white/40 grid place-items-center ${d ? 'bg-cyan-300 border-cyan-300 text-black!' : ''}`}>{d && <Check size={11} strokeWidth={3} />}</button>
-                      {editSub === x.id
-                        ? <input autoFocus className={`${field} !py-0.5 !text-[13px] flex-1`} value={subVal} onChange={e => setSubVal(e.target.value)}
-                            onBlur={() => { setEditSub(null); renameSub(card, x.id, subVal); }} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setSubVal(x.text); setEditSub(null); } }} />
-                        : <span onClick={() => { setSubVal(x.text); setEditSub(x.id); }} title="Click to rename" className={`min-w-0 flex-1 break-words cursor-text ${d ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>{x.text}</span>}
-                      {x.taskId && tasks[x.taskId]
-                        ? <ListChecks size={13} className="text-cyan-300 shrink-0" aria-label="On task list" />
-                        : <button onClick={() => subToTasks(x)} title="Add to the task list" aria-label="Add subtask to task list" className="text-zinc-500! hover:text-cyan-300! shrink-0"><ListPlus size={13} /></button>}
-                      <button onClick={() => setSubs(subs.filter(y => y.id !== x.id))} aria-label="Delete subtask" className="text-zinc-600! hover:text-red-400! shrink-0"><X size={12} /></button>
-                    </div>
-                  );
-                })}
+                {epicTasks.map(x => (
+                  <SubRow key={x.id} x={x} logged={loggedBy[x.id] || 0} tracking={trackingId === x.id && running}
+                    onToggle={() => onToggleTask(x)} onTrack={() => onTrackTask(x)} />
+                ))}
                 <form onSubmit={addSub}><input className={`${field} !py-1 !text-[13px]`} placeholder="Add subtask…" autoComplete="off" value={subText} onChange={e => setSubText(e.target.value)} /></form>
               </div>
             </motion.div>
@@ -281,5 +251,37 @@ function CardNote({ card, lane, task, tasks, logged, tracking, running, onTrack,
         </AnimatePresence>
       </div>
     </motion.div>
+  );
+}
+
+// A subtask is a normal task shown inside its epic: tick, rename, category, due date, track, delete.
+function SubRow({ x, logged, tracking, onToggle, onTrack }: { x: Task; logged: number; tracking: boolean; onToggle: () => void; onTrack: () => void }) {
+  const [editName, setEditName] = useState(false);
+  const [val, setVal] = useState(x.title);
+  const [editDue, setEditDue] = useState(false);
+  const overdue = !!x.due && !x.done && x.due < new Date().toLocaleDateString('en-CA');
+  return (
+    <div className="flex items-start gap-1.5 text-[13px]">
+      <button onClick={onToggle} aria-label={x.done ? 'Mark open' : 'Mark done'} className={`mt-0.5 h-4 w-4 shrink-0 rounded-[5px] border-2 border-white/40 grid place-items-center ${x.done ? 'bg-cyan-300 border-cyan-300 text-black!' : ''}`}>{x.done && <Check size={11} strokeWidth={3} />}</button>
+      <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+        {editName
+          ? <input autoFocus aria-label="Subtask name" className={`${field} !py-0.5 !text-[13px]`} value={val} onChange={e => setVal(e.target.value)}
+              onBlur={() => { setEditName(false); renameTask(x.id, val); }} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setVal(x.title); setEditName(false); } }} />
+          : <span onClick={() => { setVal(x.title); setEditName(true); }} title="Click to rename" className={`break-words cursor-text ${x.done ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>{x.title}</span>}
+        <div className="flex items-center gap-2.5 text-[11px] text-zinc-400 flex-wrap">
+          <button onClick={() => setActivityCat({ taskId: x.id }, NEXT_CAT[x.cat])} title={`${CATS[x.cat].label} (click to change)`} aria-label={`Category: ${CATS[x.cat].label}`} className="p-0.5"><span className={`block h-2 w-2 rounded-full ${CATS[x.cat].dot}`} /></button>
+          {editDue
+            ? <input autoFocus type="date" aria-label="Due date" className={`${field} !py-0.5 !w-auto !text-[11px]`} value={x.due} onChange={e => saveTask({ ...x, due: e.target.value })} onBlur={() => setEditDue(false)} onKeyDown={e => { if (e.key === 'Escape' || e.key === 'Enter') setEditDue(false); }} />
+            : <button onClick={() => setEditDue(true)} title="Change due date" className={`inline-flex items-center gap-1 text-[11px] hover:text-white! ${overdue ? 'text-red-400!' : 'text-zinc-400!'}`}><CalendarDays size={11} />{x.due ? `${overdue ? 'Overdue · ' : ''}${x.due.slice(5)}` : 'Due'}</button>}
+          {!x.done && (
+            <button onClick={onTrack} aria-label="Track time" title={tracking ? 'Pause the timer' : 'Track time on this subtask'} className={`inline-flex items-center gap-1 text-[11px] ${tracking ? 'text-cyan-300!' : 'text-zinc-400! hover:text-cyan-300!'}`}>
+              {tracking ? <Pause size={11} /> : <Play size={11} />}{logged > 0 ? fmtDur(logged) : 'Track'}
+            </button>
+          )}
+          {x.done && logged > 0 && <span>{fmtDur(logged)}</span>}
+        </div>
+      </div>
+      <button onClick={() => removeTask(x.id)} aria-label="Delete subtask" title="Delete (it is also a task)" className="text-zinc-600! hover:text-red-400! shrink-0 mt-0.5"><X size={12} /></button>
+    </div>
   );
 }
