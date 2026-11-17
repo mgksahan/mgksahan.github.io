@@ -8,7 +8,7 @@ import { apiService } from '../../apiService';
 
 export type Cat = 'work' | 'learn' | 'life';
 // A subtask is a normal task with epicId set to its epic card (it shows on the Tasks page and Calendar like any task, grouped under the epic on the Board). ord keeps their order inside the epic.
-export interface Task { id: string; title: string; cat: Cat; pts: number; due: string; done: boolean; doneAt?: number | null; epicId?: string; ord?: number; est?: number; updatedAt: number }   // est: estimated minutes (optional); points come from tracked time, not from pts
+export interface Task { id: string; title: string; cat: Cat; pts: number; due: string; done: boolean; doneAt?: number | null; epicId?: string; ord?: number; updatedAt: number }   // points come from tracked time (1 per 10 min), pts is unused
 // Board: sticky-note cards in swim lanes. A card can be linked to a task so it shows on the task list.
 // Legacy: subtasks used to live inside the card. migrateSubs() turns them into tasks and clears this.
 export interface Sub { id: string; text: string; done: boolean; taskId?: string | null }
@@ -307,27 +307,6 @@ export function setEpicDone(cardId: string, done: boolean, tick: (t: Task) => vo
   const ids = currentLaneIds(), dl = doneLaneId(ids);
   const lane = done ? dl : c.lane === dl ? todoLaneId(ids) : c.lane;
   saveCard({ ...c, done, lane, pos: lane === c.lane ? c.pos : done ? laneTop(lane) : laneBottom(lane) });
-}
-
-/** "45", "45m", "1h", "1.5h", "1h30", "1h 30m", "1:30" -> minutes. Null when it is not a time. A bare number means minutes. */
-export function parseEstimate(input: string): number | null {
-  const s = input.trim().toLowerCase().replace(/\s+/g, '');
-  if (!s) return null;
-  let m = s.match(/^(\d+(?:\.\d+)?)h(?:(\d+)m?)?$/);
-  if (m) return Math.round(parseFloat(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0));
-  m = s.match(/^(\d+(?:\.\d+)?)m(?:in)?$/);
-  if (m) return Math.round(parseFloat(m[1]));
-  m = s.match(/^(\d+):(\d{1,2})$/);
-  if (m) return parseInt(m[1]) * 60 + parseInt(m[2]);
-  m = s.match(/^(\d+(?:\.\d+)?)$/);
-  if (m) return Math.round(parseFloat(m[1]));
-  return null;
-}
-
-export function setTaskEstimate(id: string, minutes: number | null) {
-  const t = state.tasks[id];
-  if (!t || (minutes ?? undefined) === t.est) return;
-  saveTask({ ...t, est: minutes && minutes > 0 ? minutes : undefined });
 }
 
 export function addSubtask(epic: Card, title: string) {
