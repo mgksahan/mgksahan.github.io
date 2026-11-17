@@ -414,9 +414,19 @@ export function WorkoutSession({ dayId, dayName, plans, extraNames, history, bod
                         <Check size={18} />
                       </button>
                       <button onClick={() => removeSet(b, i)} aria-label={`Remove set ${i + 1}`} className="text-zinc-600 hover:text-rose-300 cursor-pointer"><Trash2 size={14} /></button>
-                      {d.name.includes('Barbell') && s.lb >= 45 && (
-                        <span className="col-span-6 -mt-1 pl-[2.4rem] text-[11px] text-zinc-600 font-mono">{platesPerSide(s.lb)}</span>
-                      )}
+                      {(() => {
+                        const plates = d.name.includes('Barbell') && s.lb >= 45 ? platesPerSide(s.lb) : '';
+                        // Estimated 1RM of this set (Epley, same as what is saved). Pull-ups: total load, with the added part in brackets.
+                        const load = b.isPullUp ? s.lb + bodyWeightLb : s.lb;
+                        const e1 = s.lb > 0 && s.reps > 0 && s.reps <= 10 ? load * (1 + s.reps / 30) : 0;
+                        if (!plates && !e1) return null;
+                        return (
+                          <span className="col-span-6 -mt-1 pl-[2.4rem] flex justify-between text-[11px] text-zinc-600 font-mono">
+                            <span>{plates}</span>
+                            {e1 > 0 && <span className={`tabular-nums ${warm ? 'text-zinc-700' : 'text-zinc-500'}`}>1RM ≈ {Math.round(e1)}{b.isPullUp ? ` (+${Math.max(0, Math.round(e1 - bodyWeightLb))})` : ''}</span>}
+                          </span>
+                        );
+                      })()}
                     </div>
                   );
                 })}
