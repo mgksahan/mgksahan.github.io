@@ -6,8 +6,9 @@ import { useAuth } from '../context/AuthContext';
 import { BoardTab } from './TrackBoard';
 import {
   Cat, NEXT_CAT, MIN_ENTRY_MS, MIN_LISTED_MS, setActivityCat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
-  saveTask, renameTask, toggleTaskDone, migrateSubs, convertTaskToEpic, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
+  saveTask, renameTask, toggleTaskDone, migrateSubs, convertTaskToEpic, setTaskEstimate, parseEstimate, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
 } from '../lib/trackStore';
+import { EstChip, fmtEstMin, estTone } from '../components/EstChip';
 
 // Time tracker at /track (owner only). Tasks with points, a calendar, and a running timer, all tagged
 // Work / Learning / Personal. Time adds up per activity. Optional focus blocks remind you when a block ends
@@ -481,14 +482,8 @@ type TotalsFn = (key: string) => { all: number; td: number };
 function TaskRow({ t, totals, onToggle, onTrack, epic }: { t: Task; totals: TotalsFn; onToggle: (t: Task) => void; onTrack: (t: Task) => void; epic?: string }) {
   const [editTitle, setEditTitle] = useState(false);
   const [titleVal, setTitleVal] = useState(t.title);
-  const [editPts, setEditPts] = useState(false);
-  const [ptsVal, setPtsVal] = useState(String(t.pts));
-  const commitPts = () => {
-    setEditPts(false);
-    const n = Math.min(500, Math.max(1, parseInt(ptsVal) || t.pts));
-    if (n !== t.pts) saveTask({ ...t, pts: n });
-  };
   const logged = totals(t.id).all;
+  const pts = Math.floor(logged / 600000);          // points come from time: 1 per 10 minutes tracked on this task
   const due = t.due ? (t.due === today() ? 'Due today' : `Due ${t.due.slice(5)}`) : 'No due date';
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-white/[0.07] last:border-b-0">
@@ -505,15 +500,10 @@ function TaskRow({ t, totals, onToggle, onTrack, epic }: { t: Task; totals: Tota
           <button onClick={() => setActivityCat({ taskId: t.id }, NEXT_CAT[t.cat])} title="Change category (also changes its time entries)" className="inline-flex items-center gap-1.5 text-xs text-zinc-500! hover:text-white!"><span className={`h-2 w-2 rounded-full ${CATS[t.cat].dot}`} />{CATS[t.cat].label}</button>
           {epic && <span className="inline-flex items-center gap-1 text-cyan-300/80" title="This is a subtask of an epic"><Layers size={11} />{epic}</span>}
           {due && <span>{due}</span>}
-          {logged > 0 && <span>{fmtDur(logged)} logged</span>}
+          <EstChip est={t.est} loggedMs={logged} done={t.done} onChange={m => setTaskEstimate(t.id, m)} />
         </div>
       </div>
-      {editPts
-        ? <input autoFocus type="number" min={1} max={500} aria-label="Points" value={ptsVal} onChange={e => setPtsVal(e.target.value)} onBlur={commitPts}
-            onKeyDown={e => { if (e.key === 'Enter') commitPts(); if (e.key === 'Escape') { setPtsVal(String(t.pts)); setEditPts(false); } }}
-            className="w-16 rounded-md bg-white/5 border border-white/20 px-1.5 py-0.5 text-[13px] font-mono text-white" />
-        : <button onClick={() => { setPtsVal(String(t.pts)); setEditPts(true); }} title="Edit points" aria-label="Edit points"
-            className="font-mono text-[13px] font-bold text-cyan-300! whitespace-nowrap hover:underline">+{t.pts}</button>}
+      <span title="Points: 1 per 10 minutes tracked on this task" className={`font-mono text-[13px] font-bold whitespace-nowrap ${pts > 0 ? 'text-cyan-300' : 'text-zinc-600'}`}>+{pts}</span>
       {!t.done && !t.epicId && <button onClick={() => convertTaskToEpic(t.id)} className="rounded-lg border border-white/10 p-1.5 text-zinc-500! hover:text-cyan-300! hover:border-cyan-300/50" title="Turn into an epic (it moves to the Board; its subtasks list here under it)" aria-label="Turn into an epic"><Layers size={13} /></button>}
       {!t.done && <button onClick={() => onTrack(t)} className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-zinc-400! hover:text-cyan-300! hover:border-cyan-300/50" title="Switch the timer to this task">Track</button>}
       <button onClick={() => { if (logged >= 60000 && !confirm(`Delete “${t.title}”? Its ${fmtDur(logged)} of tracked time stays in Stats but will no longer be listed under it.`)) return; removeTask(t.id); }} aria-label="Delete task" className="text-zinc-500! hover:text-red-400! p-1"><X size={14} /></button>
@@ -536,7 +526,7 @@ function CatChips({ value, onChange }: { value: Cat; onChange: (c: Cat) => void 
 
 function TasksTab({ tasks, activityTotals, onToggle, onTrack, epicOf }: { tasks: Task[]; activityTotals: TotalsFn; onToggle: (t: Task) => void; onTrack: (t: Task) => void; epicOf: (t: Task) => string | undefined }) {
   const [title, setTitle] = useState('');
-  const [pts, setPts] = useState(10);
+  const [est, setEst] = useState('');
   const [due, setDue] = useState(today());
   const [noDue, setNoDue] = useState(false);
   const [cat, setCat] = useState<Cat>('work');
@@ -545,18 +535,18 @@ function TasksTab({ tasks, activityTotals, onToggle, onTrack, epicOf }: { tasks:
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    saveTask({ id: uid(), title: title.trim(), cat, pts: Math.max(1, pts || 10), due: noDue ? '' : due, done: false });
-    setTitle('');
+    saveTask({ id: uid(), title: title.trim(), cat, pts: 10, due: noDue ? '' : due, done: false, est: parseEstimate(est) || undefined });
+    setTitle(''); setEst('');
   };
   return (
     <div>
       <form onSubmit={add} className="grid grid-cols-[minmax(0,1fr)_72px] sm:grid-cols-[minmax(0,1fr)_84px_140px_auto] gap-2 mb-2">
         <input className={field} placeholder="Add a task" autoComplete="off" required value={title} onChange={e => setTitle(e.target.value)} />
-        <input className={field} type="number" min={1} max={500} aria-label="Points" value={pts} onChange={e => setPts(parseInt(e.target.value) || 0)} />
+        <input className={field} placeholder="Est. 1h30" aria-label="Estimate (optional)" autoComplete="off" value={est} onChange={e => setEst(e.target.value)} />
         <input className={`${field} ${noDue ? 'opacity-40' : ''}`} type="date" aria-label="Due date" disabled={noDue} value={due} onChange={e => setDue(e.target.value)} />
         <button className={btnPrimary}>Add</button>
       </form>
-      <div className="flex items-center gap-2 flex-wrap mb-4"><CatChips value={cat} onChange={setCat} /><span className={`${label} ml-1`}>points on completion</span>
+      <div className="flex items-center gap-2 flex-wrap mb-4"><CatChips value={cat} onChange={setCat} /><span className={`${label} ml-1`}>estimate is optional · points come from time tracked</span>
         <label className="ml-auto inline-flex items-center gap-1.5 text-[13px] text-zinc-400"><input type="checkbox" checked={noDue} onChange={e => setNoDue(e.target.checked)} />No due date</label></div>
       <h2 className="text-lg font-semibold text-white mb-2" style={{ margin: '0 0 8px' }}>To do · {open.length}</h2>
       {open.length ? open.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} epic={epicOf(t)} />) : <div className="text-zinc-500 py-3">Nothing open. Add a task above.</div>}
@@ -573,7 +563,7 @@ function CalendarTab({ tasks, entries, activityTotals, onToggle, onTrack, epicOf
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selDay, setSelDay] = useState(today());
   const [title, setTitle] = useState('');
-  const [pts, setPts] = useState(10);
+  const [est, setEst] = useState('');
   const [cat, setCat] = useState<Cat>('work');
   const y = month.getFullYear(), mo = month.getMonth();
   const first = new Date(y, mo, 1), start = new Date(y, mo, 1 - ((first.getDay() + 6) % 7));
@@ -591,8 +581,8 @@ function CalendarTab({ tasks, entries, activityTotals, onToggle, onTrack, epicOf
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    saveTask({ id: uid(), title: title.trim(), cat, pts: Math.max(1, pts || 10), due: selDay, done: false });
-    setTitle('');
+    saveTask({ id: uid(), title: title.trim(), cat, pts: 10, due: selDay, done: false, est: parseEstimate(est) || undefined });
+    setTitle(''); setEst('');
   };
   const nb = 'rounded-lg border border-white/10 px-2.5 py-1 text-[13px] text-zinc-400! hover:text-white!';
   return (
@@ -621,7 +611,7 @@ function CalendarTab({ tasks, entries, activityTotals, onToggle, onTrack, epicOf
           <h2 className="text-lg font-semibold text-white" style={{ margin: '4px 0 0' }}>{info.ms ? `${fmtDur(info.ms)} tracked` : 'Nothing tracked'}</h2>
           <form onSubmit={add} className="flex flex-col gap-2 my-3">
             <div className="flex gap-2"><input className={field} placeholder="Add a task for this day" autoComplete="off" required value={title} onChange={e => setTitle(e.target.value)} />
-              <input className={`${field} !w-[72px]`} type="number" min={1} max={500} aria-label="Points" value={pts} onChange={e => setPts(parseInt(e.target.value) || 0)} /></div>
+              <input className={`${field} !w-[96px]`} placeholder="Est. 1h30" aria-label="Estimate (optional)" autoComplete="off" value={est} onChange={e => setEst(e.target.value)} /></div>
             <div className="flex items-center gap-2 flex-wrap"><CatChips value={cat} onChange={setCat} /><button className={`${btnPrimary} ml-auto`}>Add</button></div>
           </form>
           {info.t.length ? info.t.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} epic={epicOf(t)} />) : <div className="text-zinc-500 py-2">No tasks due on this day.</div>}
@@ -679,6 +669,13 @@ function StatsTab({ s, tasks, entries, labelOf }: { s: TrackState; tasks: Task[]
   const list = Object.values(acts).filter(a => a.ms >= MIN_LISTED_MS).sort((a, b) => b.ms - a.ms).slice(0, 10);   // under a minute would read as 0m
   const top = list[0]?.ms || 1;
   const doneTasks = tasks.filter(t => t.done && t.doneAt && days.includes(dkey(new Date(t.doneAt))));
+  // Prediction vs actual: finished tasks (in this period) that had an estimate, against all the time tracked on them
+  const actualBy: Record<string, number> = {};
+  entries.forEach(e => { if (e.taskId) actualBy[e.taskId] = (actualBy[e.taskId] || 0) + entryMs(e); });
+  const predicted = doneTasks.filter(t => t.est && (actualBy[t.id] || 0) >= MIN_LISTED_MS)
+    .map(t => ({ t, est: t.est!, actual: Math.round((actualBy[t.id] || 0) / 60000) })).sort((a, b) => (b.t.doneAt || 0) - (a.t.doneAt || 0));
+  const estSum = predicted.reduce((a, p) => a + p.est, 0), actualSum = predicted.reduce((a, p) => a + p.actual, 0);
+  const noEst = doneTasks.filter(t => !t.est).length;
   const blocks = days.reduce((a, k) => a + (s.settings.days[k] || 0), 0);
   const dn = (k: string) => new Date(k + 'T00:00').toLocaleString(undefined, { weekday: 'short' }).slice(0, range > 7 ? 1 : 3);
   const showDn = range <= 31;
@@ -735,6 +732,23 @@ function StatsTab({ s, tasks, entries, labelOf }: { s: TrackState; tasks: Task[]
         })}
       </div>
       </>}
+      <div className={`${label} mt-6`}>Estimates vs actual</div>
+      {predicted.length ? (
+        <div className="mt-1.5">
+          <h2 className={h2} style={{ margin: '0 0 8px' }}>{actualSum >= estSum ? `Took ${Math.round((actualSum / estSum - 1) * 100)}% longer than estimated` : `Finished ${Math.round((1 - actualSum / estSum) * 100)}% faster than estimated`}
+            <span className="text-sm font-normal text-zinc-400"> · estimated {fmtEstMin(estSum)}, tracked {fmtEstMin(actualSum)} over {predicted.length} task{predicted.length > 1 ? 's' : ''}</span></h2>
+          <div className="flex flex-col gap-2">
+            {predicted.slice(0, 8).map(({ t, est, actual }) => (
+              <div key={t.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2.5 gap-y-1 items-center text-sm">
+                <span className="min-w-0 break-words text-zinc-200">{t.title}</span>
+                <span className={`font-mono text-[13px] ${estTone(actual, est)}`}>{fmtEstMin(actual)} / {fmtEstMin(est)} · {actual >= est ? '+' : '-'}{Math.abs(Math.round((actual / est - 1) * 100))}%</span>
+                <div className="col-span-2 relative h-1.5 rounded-full bg-white/10 overflow-hidden"><div className={`h-full ${actual > est * 1.5 ? 'bg-red-400' : actual > est ? 'bg-amber-300' : 'bg-emerald-300'}`} style={{ width: `${Math.min(100, actual / Math.max(est, actual) * 100)}%` }} /><div className="absolute inset-y-0 w-0.5 bg-white/60" style={{ left: `${Math.min(100, est / Math.max(est, actual) * 100)}%` }} title="Estimate" /></div>
+              </div>
+            ))}
+          </div>
+          {noEst > 0 && <div className="text-[13px] text-zinc-500 mt-2">{noEst} finished task{noEst > 1 ? 's' : ''} had no estimate. Add one with "+ Est" next time to see how your guesses compare.</div>}
+        </div>
+      ) : <div className="text-zinc-500 py-2">Add an estimate ("+ Est" on a task) and finish it to see predicted vs actual time here.</div>}
       <div className={`${label} mt-6`}>Tasks and focus blocks</div>
       <h2 className={h2} style={{ margin: '4px 0 0' }}>{doneTasks.length} tasks done · {blocks} focus blocks</h2>
     </div>
