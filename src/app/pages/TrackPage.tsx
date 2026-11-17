@@ -516,7 +516,7 @@ function TaskRow({ t, totals, onToggle, onTrack, epic }: { t: Task; totals: Tota
             className="font-mono text-[13px] font-bold text-cyan-300! whitespace-nowrap hover:underline">+{t.pts}</button>}
       {!t.done && !t.epicId && <button onClick={() => convertTaskToEpic(t.id)} className="rounded-lg border border-white/10 p-1.5 text-zinc-500! hover:text-cyan-300! hover:border-cyan-300/50" title="Turn into an epic (it moves to the Board; its subtasks list here under it)" aria-label="Turn into an epic"><Layers size={13} /></button>}
       {!t.done && <button onClick={() => onTrack(t)} className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-zinc-400! hover:text-cyan-300! hover:border-cyan-300/50" title="Switch the timer to this task">Track</button>}
-      <button onClick={() => removeTask(t.id)} aria-label="Delete task" className="text-zinc-500! hover:text-red-400! p-1"><X size={14} /></button>
+      <button onClick={() => { if (logged >= 60000 && !confirm(`Delete “${t.title}”? Its ${fmtDur(logged)} of tracked time stays in Stats but will no longer be listed under it.`)) return; removeTask(t.id); }} aria-label="Delete task" className="text-zinc-500! hover:text-red-400! p-1"><X size={14} /></button>
     </div>
   );
 }
