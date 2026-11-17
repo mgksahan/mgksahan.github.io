@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers, CalendarDays } from 'lucide-react';
+import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers, CalendarDays, Unlink } from 'lucide-react';
 import {
-  Cat, Card, Lane, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, migrateSubs, addSubtask, renameCard, renameTask, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
+  Cat, Card, Lane, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, migrateSubs, addSubtask, convertToEpic, convertToTask, setEpicDone, moveIntoEpic, detachSubtask, renameCard, renameTask, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Board tab: sticky-note cards in swim lanes (a small kanban). Drag a card by its grip to reorder or move
@@ -43,6 +43,16 @@ export function BoardTab({ onTrack, onToggleTask, trackingId, running }: { onTra
   const laneKey = laneIds.join(',');
   useEffect(() => { migrateSubs(); adoptTasks(laneIds); settleDoneTasks(laneIds); }, [s.tasks, s.cards, laneKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The epic card under the pointer while dragging a plain card (dropping on it makes the card a subtask)
+  const [hoverEpic, setHoverEpic] = useState<string | null>(null);
+  const epicAt = (x: number, y: number, exclude: string): string | null => {
+    for (const el of document.elementsFromPoint(x, y)) {
+      const c = (el as HTMLElement).closest?.('[data-card]');
+      if (c && c.getAttribute('data-card') !== exclude && c.getAttribute('data-epic')) return c.getAttribute('data-card');
+    }
+    return null;
+  };
+  const doneLane = laneIds.includes('done') ? 'done' : laneIds[laneIds.length - 1];
   const laneEls = useRef<Record<string, HTMLElement | null>>({});
   const [over, setOver] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -60,6 +70,9 @@ export function BoardTab({ onTrack, onToggleTask, trackingId, running }: { onTra
   };
 
   const drop = (card: Card, clientX: number, clientY: number) => {
+    const dragIsEpic = card.epic ?? epicTasksOf(card.id).length > 0;
+    const hit = dragIsEpic ? null : epicAt(clientX, clientY, card.id);
+    if (hit) { moveIntoEpic(card.id, hit); return; }
     const target = laneAt(clientX);
     const others = inLane(target).filter(c => c.id !== card.id);
     // Slot = number of cards whose middle is above the pointer
@@ -70,7 +83,14 @@ export function BoardTab({ onTrack, onToggleTask, trackingId, running }: { onTra
     }).length;
     const before = others[slot - 1]?.pos, after = others[slot]?.pos;
     const pos = before === undefined && after === undefined ? 1 : before === undefined ? after! - 1 : after === undefined ? before + 1 : (before + after) / 2;
-    if (target !== laneOf(card) || pos !== card.pos) saveCard({ ...card, lane: target, pos });
+    if (target === laneOf(card) && pos === card.pos) return;
+    const from = laneOf(card), toDone = target === doneLane && from !== doneLane, fromDone = from === doneLane && target !== doneLane;
+    const epic = card.epic ?? epicTasksOf(card.id).length > 0;
+    // Moving into Done completes the card (a task, or an epic and all its subtasks); moving out of Done reopens it
+    saveCard({ ...card, lane: target, pos, ...(epic && toDone ? { done: true } : epic && fromDone ? { done: false } : {}) });
+    if (epic && toDone) epicTasksOf(card.id).filter(x => !x.done).forEach(onToggleTask);
+    const t = card.taskId ? s.tasks[card.taskId] : undefined;
+    if (t && ((toDone && !t.done) || (fromDone && t.done))) onToggleTask(t);
   };
 
   const addCard = (lane: string, text: string, cat: Cat) => {
@@ -115,8 +135,9 @@ export function BoardTab({ onTrack, onToggleTask, trackingId, running }: { onTra
                   key={c.id} card={c} lane={l.id}
                   tasks={s.tasks} task={c.taskId ? s.tasks[c.taskId] : undefined} epicTasks={epicTasksOf(c.id)} loggedBy={loggedBy} trackingId={trackingId} onTrackTask={t => onTrack(t.cat, t.id, t.title)} onToggleTask={onToggleTask} logged={loggedOf(c)} tracking={trackingId === trackIdOf(c, s.tasks)} running={running} onTrack={() => onTrack(c.cat, trackIdOf(c, s.tasks), c.text.split('\n')[0].slice(0, 120))} onPut={() => putOnTasks(c)} onTake={() => takeOffTasks(c)}
                   onStart={() => setDragging(c.id)}
-                  onMove={x => { const t = laneAt(x); setOver(p => (p === t ? p : t)); }}
-                  onEnd={(x, y) => { setDragging(null); setOver(null); drop(c, x, y); }}
+                  onMove={(x, y) => { const t = laneAt(x); setOver(p => (p === t ? p : t)); const isEpic = c.epic ?? epicTasksOf(c.id).length > 0; const h = isEpic ? null : epicAt(x, y, c.id); setHoverEpic(p => (p === h ? p : h)); }}
+                  dropTarget={hoverEpic === c.id}
+                  onEnd={(x, y) => { setDragging(null); setOver(null); setHoverEpic(null); drop(c, x, y); }}
                 />
               ))}
             </AnimatePresence>
@@ -157,9 +178,9 @@ function Jot({ onAdd }: { onAdd: (text: string, cat: Cat) => void }) {
   );
 }
 
-function CardNote({ card, lane, task, epicTasks, loggedBy, trackingId, onTrackTask, onToggleTask, logged, tracking, running, onTrack, onPut, onTake, onStart, onMove, onEnd }: {
+function CardNote({ card, lane, task, dropTarget, epicTasks, loggedBy, trackingId, onTrackTask, onToggleTask, logged, tracking, running, onTrack, onPut, onTake, onStart, onMove, onEnd }: {
   card: Card; lane: string; task?: Task; tasks: Record<string, Task>; epicTasks: Task[]; loggedBy: Record<string, number>; trackingId: string | null; onTrackTask: (t: Task) => void; onToggleTask: (t: Task) => void; logged: number; tracking: boolean; running: boolean; onTrack: () => void; onPut: () => void; onTake: () => void;
-  onStart: () => void; onMove: (clientX: number) => void; onEnd: (clientX: number, clientY: number) => void;
+  dropTarget: boolean; onStart: () => void; onMove: (clientX: number, clientY: number) => void; onEnd: (clientX: number, clientY: number) => void;
 }) {
   const controls = useDragControls();
   const [edit, setEdit] = useState(false);
@@ -172,8 +193,8 @@ function CardNote({ card, lane, task, epicTasks, loggedBy, trackingId, onTrackTa
   const [editDue, setEditDue] = useState(false);
   const setDue = (v: string) => { if (task) saveTask({ ...task, due: v }); else saveCard({ ...card, due: v }); };
   const overdue = !!due && due < new Date().toLocaleDateString('en-CA');
-  const canDue = !task?.done;
   const epic = card.epic ?? epicTasks.length > 0;
+  const canDue = task ? !task.done : !(epic && card.done);
   const doneCount = epicTasks.filter(x => x.done).length;
   const addSub = (e: React.FormEvent) => { e.preventDefault(); addSubtask(card, subText); setSubText(''); };
   const commit = () => {
@@ -185,15 +206,15 @@ function CardNote({ card, lane, task, epicTasks, loggedBy, trackingId, onTrackTa
   return (
     <motion.div
       layout layoutId={card.id}
-      data-card={card.id} data-lane={lane}
+      data-card={card.id} data-lane={lane} data-epic={epic ? '1' : undefined}
       drag dragControls={controls} dragListener={false} dragMomentum={false} dragElastic={0.12}
       onDragStart={onStart}
-      onDrag={(_, i) => onMove(i.point.x - window.scrollX)}
+      onDrag={(_, i) => onMove(i.point.x - window.scrollX, i.point.y - window.scrollY)}
       onDragEnd={(_, i) => onEnd(i.point.x - window.scrollX, i.point.y - window.scrollY)}
       initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.15 } }}
       whileDrag={{ scale: 1.05, rotate: 2.5, zIndex: 50, boxShadow: '0 16px 32px rgba(0,0,0,0.5)', cursor: 'grabbing' }}
       transition={{ layout: spring, default: { duration: 0.18 } }}
-      className={`group relative rounded-lg border flex gap-1 ${epic ? `p-3 pl-1.5 shadow-md border-l-4 ${CATS[card.cat].note} ${CATS[card.cat].edge}` : `p-2 pl-1 border-l-2 border-white/10 bg-white/[0.035] ${CATS[card.cat].edge}`}`}
+      className={`group relative rounded-lg border flex gap-1 transition-shadow ${dropTarget ? 'ring-2 ring-cyan-300 shadow-[0_0_24px_rgba(103,232,249,0.35)]' : ''} ${epic ? `p-3 pl-1.5 shadow-md border-l-4 ${CATS[card.cat].note} ${CATS[card.cat].edge}` : `p-2 pl-1 border-l-2 border-white/10 bg-white/[0.035] ${CATS[card.cat].edge}`}`}
     >
       <button
         onPointerDown={e => { e.preventDefault(); controls.start(e); }}
@@ -201,10 +222,16 @@ function CardNote({ card, lane, task, epicTasks, loggedBy, trackingId, onTrackTa
         className="shrink-0 self-start py-0.5 text-zinc-500! hover:text-zinc-200! cursor-grab touch-none"
       ><GripVertical size={16} /></button>
       <div className="min-w-0 flex-1 flex flex-col gap-2">
+        <div className="flex items-start gap-2">
+        {epic && <button onClick={() => setEpicDone(card.id, !card.done, onToggleTask)} aria-label={card.done ? 'Mark epic open' : 'Mark epic done'} title={card.done ? 'Reopen the epic' : 'Complete the epic and all its subtasks'}
+          className={`mt-0.5 h-[18px] w-[18px] shrink-0 rounded-[6px] border-2 border-cyan-300/70 grid place-items-center ${card.done ? 'bg-cyan-300 text-black!' : ''}`}>{card.done && <Check size={12} strokeWidth={3} />}</button>}
+        <div className="min-w-0 flex-1">
         {edit
           ? <textarea autoFocus rows={3} className={`${field} !py-1.5 resize-none`} value={text} onChange={e => setText(e.target.value)} onBlur={commit}
               onKeyDown={e => { if (e.key === 'Escape') { setText(card.text); setEdit(false); } if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }} />
-          : <div onClick={() => { setText(card.text); setEdit(true); }} className={`break-words whitespace-pre-wrap cursor-text ${epic ? 'text-[15px] font-semibold' : 'text-[13px]'} ${linked && task?.done ? 'line-through text-zinc-500' : epic ? 'text-white' : 'text-zinc-300'}`}>{epic && <Layers size={13} className="inline -mt-0.5 mr-1.5 text-cyan-300" aria-hidden />}{card.text}</div>}
+          : <div onClick={() => { setText(card.text); setEdit(true); }} className={`break-words whitespace-pre-wrap cursor-text ${epic ? 'text-[15px] font-semibold' : 'text-[13px]'} ${(linked && task?.done) || (epic && card.done) ? 'line-through text-zinc-500' : epic ? 'text-white' : 'text-zinc-300'}`}>{epic && <Layers size={13} className="inline -mt-0.5 mr-1.5 text-cyan-300" aria-hidden />}{card.text}</div>}
+        </div>
+        </div>
         {canDue && editDue && (
           <div className="flex items-center gap-2 -mt-0.5">
             <input autoFocus type="date" aria-label="Due date" className={`${field} !py-1 !w-auto !text-[12px]`} value={due} onChange={e => setDue(e.target.value)} onBlur={() => setEditDue(false)} onKeyDown={e => { if (e.key === 'Escape' || e.key === 'Enter') setEditDue(false); }} />
@@ -219,11 +246,11 @@ function CardNote({ card, lane, task, epicTasks, loggedBy, trackingId, onTrackTa
         )}
         <div className={`flex items-center gap-x-2 gap-y-1 flex-wrap ${epic ? '' : 'opacity-50 group-hover:opacity-100 focus-within:opacity-100 transition-opacity'}`}>
           <button onClick={() => setActivityCat({ taskId: task ? card.taskId : card.id }, NEXT_CAT[card.cat])} title={`${CATS[card.cat].label} (click to change; also changes its time entries)`} aria-label={`Category: ${CATS[card.cat].label}`} className="p-0.5"><span className={`block h-2.5 w-2.5 rounded-full ${CATS[card.cat].dot}`} /></button>
-          {linked
+          {epic ? null : linked
             ? <button onClick={() => onTake()} title="Remove from task list (deletes the task)" className="inline-flex items-center gap-1 text-[11px] text-cyan-300!"><ListChecks size={13} />{task?.done ? 'Task done' : 'On task list'}</button>
             : <button onClick={() => onPut()} title="Add to the task list" className="inline-flex items-center gap-1 text-[11px] text-zinc-400! hover:text-cyan-300!"><ListPlus size={13} />To tasks</button>}
           {canDue && !due && !editDue && <button onClick={() => setEditDue(true)} title="Set a due date" aria-label="Set due date" className="inline-flex items-center gap-1 text-[11px] text-zinc-400! hover:text-white!"><CalendarDays size={12} />Due</button>}
-          <button onClick={() => { saveCard({ ...card, epic: !epic }); if (epic) setOpen(false); }} title={epic ? 'Turn back into a plain task card (its subtasks stay on the task list)' : 'Turn into an epic with subtasks'}
+          <button onClick={() => { if (epic) { setOpen(false); convertToTask(card.id); } else convertToEpic(card.id); }} title={epic ? 'Turn into a task (its subtasks become separate tasks)' : 'Turn into an epic (it leaves the Tasks page; its subtasks stay there under it)'}
             className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[11px] ${epic ? 'border-cyan-300/60 text-cyan-300!' : 'border-white/15 text-zinc-400! hover:text-white!'}`}><Layers size={11} />{epic ? 'Epic' : '→ Epic'}</button>
           {epic && (
             <button onClick={() => setOpen(o => !o)} aria-expanded={open} title="Subtasks" className="inline-flex items-center gap-0.5 text-[11px] text-zinc-400! hover:text-white!">
@@ -281,6 +308,7 @@ function SubRow({ x, logged, tracking, onToggle, onTrack }: { x: Task; logged: n
           {x.done && logged > 0 && <span>{fmtDur(logged)}</span>}
         </div>
       </div>
+      <button onClick={() => detachSubtask(x.id)} aria-label="Make a free task" title="Take out of the epic (becomes a free task)" className="text-zinc-600! hover:text-cyan-300! shrink-0 mt-0.5"><Unlink size={12} /></button>
       <button onClick={() => removeTask(x.id)} aria-label="Delete subtask" title="Delete (it is also a task)" className="text-zinc-600! hover:text-red-400! shrink-0 mt-0.5"><X size={12} /></button>
     </div>
   );

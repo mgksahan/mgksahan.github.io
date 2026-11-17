@@ -12,7 +12,7 @@ export interface Task { id: string; title: string; cat: Cat; pts: number; due: s
 // Board: sticky-note cards in swim lanes. A card can be linked to a task so it shows on the task list.
 // Legacy: subtasks used to live inside the card. migrateSubs() turns them into tasks and clears this.
 export interface Sub { id: string; text: string; done: boolean; taskId?: string | null }
-export interface Card { id: string; text: string; lane: string; pos: number; cat: Cat; taskId?: string | null; subs?: Sub[]; epic?: boolean; due?: string; updatedAt: number }   // due: only used while the card has no linked task (a task keeps its own due date)
+export interface Card { id: string; text: string; lane: string; pos: number; cat: Cat; taskId?: string | null; subs?: Sub[]; epic?: boolean; due?: string; done?: boolean; updatedAt: number }   // done: only for epics (a task keeps its own done)   // due: only used while the card has no linked task (a task keeps its own due date)
 export interface Lane { id: string; name: string }
 export const DEFAULT_LANES: Lane[] = [{ id: 'ideas', name: 'Ideas' }, { id: 'next', name: 'Next up' }, { id: 'doing', name: 'Doing' }, { id: 'done', name: 'Done' }];
 export interface Entry { id: string; start: number; end: number; cat: Cat; taskId?: string | null; note: string; updatedAt: number }
@@ -216,6 +216,99 @@ export function settleDoneTasks(laneIds: string[]) {
 
 // Every task gets a board card (id "c_<taskId>", so two devices make the same one). Open tasks go to
 // "Next up", done ones to "Done". Tasks that are a card's subtask, or already have a card, are skipped.
+// ---- epics and tasks ----
+// An epic is a board card with epic = true and NO task of its own: it lives on the Board and its subtasks (tasks with
+// epicId = the card) show it as their parent. Its own time and done state live on the card. Converting between the two
+// moves everything across, so no tracked time is lost.
+export const currentLaneIds = () => (state.settings.lanes?.length ? state.settings.lanes : DEFAULT_LANES).map(l => l.id);
+export const doneLaneId = (ids = currentLaneIds()) => (ids.includes('done') ? 'done' : ids[ids.length - 1]);
+export const todoLaneId = (ids = currentLaneIds()) => (ids.includes('next') ? 'next' : ids[0]);
+export const isEpic = (c: Card) => c.epic ?? Object.values(state.tasks).some(t => t.epicId === c.id);
+
+function dropTask(id: string) {       // remove the task item only (its card and time are handled by the caller)
+  const { [id]: _g, ...rest } = state.tasks;
+  const at = now();
+  state = { ...state, tasks: rest };
+  dead[sk('task', id)] = at;
+  enqueue({ kind: 'task', id, op: 'delete', updatedAt: at });
+}
+function moveTime(from: string, to: string) {       // entries and a running timer follow when the activity id changes
+  for (const e of Object.values(state.entries)) if (e.taskId === from) saveEntry({ ...e, taskId: to });
+  const seg = state.timer.timer;
+  if (seg && seg.taskId === from) saveTimer({ timer: { ...seg, taskId: to } });
+}
+const laneBottom = (lane: string) => Math.max(0, ...Object.values(state.cards).filter(x => x.lane === lane).map(x => x.pos)) + 1;
+const laneTop = (lane: string) => Math.min(1, ...Object.values(state.cards).filter(x => x.lane === lane).map(x => x.pos)) - 1;
+
+/** Task card -> epic: the task disappears from the Tasks page; its due date, category, done state and time go to the card. */
+export function convertToEpic(cardId: string) {
+  const c = state.cards[cardId];
+  if (!c) return;
+  const t = c.taskId ? state.tasks[c.taskId] : undefined;
+  if (t) { moveTime(t.id, c.id); dropTask(t.id); }
+  saveCard({ ...c, epic: true, taskId: null, cat: t?.cat ?? c.cat, due: t ? t.due : c.due, done: t ? t.done : c.done });
+}
+
+/** Epic -> task card: the card gets a task of its own again, and every subtask becomes a free (epicless) task with its own card. */
+export function convertToTask(cardId: string) {
+  const c = state.cards[cardId];
+  if (!c) return;
+  const done = !!c.done;
+  const ids = currentLaneIds();
+  Object.values(state.tasks).filter(t => t.epicId === c.id).sort((a, b) => (a.ord ?? 0) - (b.ord ?? 0)).forEach((k, i) => {
+    saveTask({ ...k, epicId: undefined, ord: undefined });
+    if (!state.cards['c_' + k.id]) saveCard({ id: 'c_' + k.id, text: k.title, lane: k.done ? doneLaneId(ids) : c.lane, pos: c.pos + (i + 1) / 1000, cat: k.cat, taskId: k.id });
+  });
+  const id = uid();
+  saveTask({ id, title: firstLine(c.text), cat: c.cat, pts: 10, due: c.due ?? '', done, doneAt: done ? now() : null });
+  moveTime(c.id, id);
+  saveCard({ ...c, epic: false, taskId: id, due: undefined, done: undefined });
+}
+
+/** Turn a task into an epic from anywhere (the Tasks page too): finds or makes its card first. */
+export function convertTaskToEpic(taskId: string) {
+  const t = state.tasks[taskId];
+  if (!t || t.epicId) return;
+  let c = Object.values(state.cards).find(x => x.taskId === taskId);
+  if (!c) { adoptTasks(currentLaneIds()); c = Object.values(state.cards).find(x => x.taskId === taskId); }
+  if (c) convertToEpic(c.id);
+}
+
+/** Drop a free task (or a plain card) into an epic: it becomes one of its subtasks and its own board card goes away. */
+export function moveIntoEpic(cardId: string, epicId: string) {
+  const c = state.cards[cardId], e = state.cards[epicId];
+  if (!c || !e || c.id === e.id) return;
+  let t = c.taskId ? state.tasks[c.taskId] : undefined;
+  if (!t) {                                   // a jotted card with no task yet: make the task now
+    const id = uid();
+    saveTask({ id, title: firstLine(c.text), cat: c.cat, pts: 10, due: c.due ?? '', done: false });
+    moveTime(c.id, id);
+    t = state.tasks[id];
+  }
+  saveTask({ ...t, epicId, ord: now() });
+  removeCard(c.id);
+}
+
+/** A subtask becomes a free task again (it gets its own board card next to the epic). */
+export function detachSubtask(taskId: string) {
+  const t = state.tasks[taskId];
+  if (!t?.epicId) return;
+  const epic = state.cards[t.epicId];
+  saveTask({ ...t, epicId: undefined, ord: undefined });
+  const ids = currentLaneIds();
+  if (!state.cards['c_' + t.id]) saveCard({ id: 'c_' + t.id, text: t.title, lane: t.done ? doneLaneId(ids) : epic?.lane ?? todoLaneId(ids), pos: (epic?.pos ?? 0) + 0.5, cat: t.cat, taskId: t.id });
+}
+
+/** Check or uncheck an epic: its subtasks follow when checking, and the card moves to Done (or back to Next up). */
+export function setEpicDone(cardId: string, done: boolean, tick: (t: Task) => void = toggleTaskDone) {
+  const c = state.cards[cardId];
+  if (!c) return;
+  if (done) Object.values(state.tasks).filter(t => t.epicId === cardId && !t.done).forEach(tick);
+  const ids = currentLaneIds(), dl = doneLaneId(ids);
+  const lane = done ? dl : c.lane === dl ? todoLaneId(ids) : c.lane;
+  saveCard({ ...c, done, lane, pos: lane === c.lane ? c.pos : done ? laneTop(lane) : laneBottom(lane) });
+}
+
 export function addSubtask(epic: Card, title: string) {
   title = title.trim().slice(0, 120);
   if (!title) return;
@@ -235,6 +328,8 @@ export function migrateSubs() {
     });
     saveCard({ ...c, subs: undefined, epic: true });
   }
+  // Older data: an epic that still has a task item of its own becomes a pure epic, like every other epic
+  for (const c of Object.values(state.cards)) if (c.taskId && state.tasks[c.taskId] && isEpic(c)) convertToEpic(c.id);
 }
 
 export function adoptTasks(laneIds: string[]) {
