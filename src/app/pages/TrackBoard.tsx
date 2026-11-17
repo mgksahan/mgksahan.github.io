@@ -52,6 +52,16 @@ export function BoardTab({ onTrack, onToggleTask, trackingId, running }: { onTra
     }
     return null;
   };
+  // Deleting a card can be undone for a while (the tombstone is replaced by saving the card again)
+  const [undo, setUndo] = useState<Card | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
+  const deleteCard = (c: Card) => {
+    removeCard(c.id);
+    setUndo(c);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setUndo(null), 12000);
+  };
   const doneLane = laneIds.includes('done') ? 'done' : laneIds[laneIds.length - 1];
   const laneEls = useRef<Record<string, HTMLElement | null>>({});
   const [over, setOver] = useState<string | null>(null);
@@ -136,7 +146,7 @@ export function BoardTab({ onTrack, onToggleTask, trackingId, running }: { onTra
                   tasks={s.tasks} task={c.taskId ? s.tasks[c.taskId] : undefined} epicTasks={epicTasksOf(c.id)} loggedBy={loggedBy} trackingId={trackingId} onTrackTask={t => onTrack(t.cat, t.id, t.title)} onToggleTask={onToggleTask} logged={loggedOf(c)} tracking={trackingId === trackIdOf(c, s.tasks)} running={running} onTrack={() => onTrack(c.cat, trackIdOf(c, s.tasks), c.text.split('\n')[0].slice(0, 120))} onPut={() => putOnTasks(c)} onTake={() => takeOffTasks(c)}
                   onStart={() => setDragging(c.id)}
                   onMove={(x, y) => { const t = laneAt(x); setOver(p => (p === t ? p : t)); const isEpic = c.epic ?? epicTasksOf(c.id).length > 0; const h = isEpic ? null : epicAt(x, y, c.id); setHoverEpic(p => (p === h ? p : h)); }}
-                  dropTarget={hoverEpic === c.id}
+                  dropTarget={hoverEpic === c.id} onDelete={() => deleteCard(c)}
                   onEnd={(x, y) => { setDragging(null); setOver(null); setHoverEpic(null); drop(c, x, y); }}
                 />
               ))}
@@ -146,6 +156,16 @@ export function BoardTab({ onTrack, onToggleTask, trackingId, running }: { onTra
           <Jot onAdd={(t, cat) => addCard(l.id, t, cat)} />
         </div>
       ))}
+      <AnimatePresence>
+        {undo && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} transition={{ duration: 0.18 }}
+            role="status" className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl border border-white/15 bg-[#1b1d22] px-4 py-2.5 text-sm text-zinc-200 shadow-2xl">
+            <span className="max-w-[260px] truncate">Deleted “{undo.text.split('\n')[0]}”</span>
+            <button onClick={() => { saveCard(undo); setUndo(null); }} className="font-semibold text-cyan-300!">Undo</button>
+            <button onClick={() => setUndo(null)} aria-label="Dismiss" className="text-zinc-500! hover:text-white!"><X size={14} /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <button onClick={addLane} className="shrink-0 self-start rounded-xl border border-dashed border-white/15 px-3 py-3 text-sm text-zinc-400! hover:text-white! hover:border-white/30 inline-flex items-center gap-1.5"><Plus size={14} />Lane</button>
     </div>
   );
@@ -178,9 +198,9 @@ function Jot({ onAdd }: { onAdd: (text: string, cat: Cat) => void }) {
   );
 }
 
-function CardNote({ card, lane, task, dropTarget, epicTasks, loggedBy, trackingId, onTrackTask, onToggleTask, logged, tracking, running, onTrack, onPut, onTake, onStart, onMove, onEnd }: {
+function CardNote({ card, lane, task, onDelete, dropTarget, epicTasks, loggedBy, trackingId, onTrackTask, onToggleTask, logged, tracking, running, onTrack, onPut, onTake, onStart, onMove, onEnd }: {
   card: Card; lane: string; task?: Task; tasks: Record<string, Task>; epicTasks: Task[]; loggedBy: Record<string, number>; trackingId: string | null; onTrackTask: (t: Task) => void; onToggleTask: (t: Task) => void; logged: number; tracking: boolean; running: boolean; onTrack: () => void; onPut: () => void; onTake: () => void;
-  dropTarget: boolean; onStart: () => void; onMove: (clientX: number, clientY: number) => void; onEnd: (clientX: number, clientY: number) => void;
+  dropTarget: boolean; onDelete: () => void; onStart: () => void; onMove: (clientX: number, clientY: number) => void; onEnd: (clientX: number, clientY: number) => void;
 }) {
   const controls = useDragControls();
   const [edit, setEdit] = useState(false);
@@ -200,7 +220,7 @@ function CardNote({ card, lane, task, dropTarget, epicTasks, loggedBy, trackingI
   const commit = () => {
     setEdit(false);
     const t = text.trim();
-    if (!t) { removeCard(card.id); return; }
+    if (!t) { setText(card.text); return; }       // an empty name is never saved (and never deletes the card): keep the old one
     renameCard(card, t);
   };
   return (
@@ -261,7 +281,7 @@ function CardNote({ card, lane, task, dropTarget, epicTasks, loggedBy, trackingI
             className={`inline-flex items-center gap-1 text-[11px] ${tracking && running ? 'text-cyan-300!' : 'text-zinc-400! hover:text-cyan-300!'}`}>
             {tracking && running ? <Pause size={12} /> : <Play size={12} />}{logged > 0 ? fmtDur(logged) : 'Track'}
           </button>
-          <button onClick={() => removeCard(card.id)} aria-label="Delete card" className="ml-auto text-zinc-500! hover:text-red-400! p-0.5"><X size={13} /></button>
+          <button onClick={onDelete} aria-label="Delete card" className="ml-auto text-zinc-500! hover:text-red-400! p-0.5"><X size={13} /></button>
         </div>
         <AnimatePresence initial={false}>
           {open && epic && (
@@ -309,7 +329,7 @@ function SubRow({ x, logged, tracking, onToggle, onTrack }: { x: Task; logged: n
         </div>
       </div>
       <button onClick={() => detachSubtask(x.id)} aria-label="Make a free task" title="Take out of the epic (becomes a free task)" className="text-zinc-600! hover:text-cyan-300! shrink-0 mt-0.5"><Unlink size={12} /></button>
-      <button onClick={() => removeTask(x.id)} aria-label="Delete subtask" title="Delete (it is also a task)" className="text-zinc-600! hover:text-red-400! shrink-0 mt-0.5"><X size={12} /></button>
+      <button onClick={() => { if (logged >= 60000 && !confirm(`Delete “${x.title}”? Its ${fmtDur(logged)} of tracked time stays in Stats but will no longer be listed under it.`)) return; removeTask(x.id); }} aria-label="Delete subtask" title="Delete (it is also a task)" className="text-zinc-600! hover:text-red-400! shrink-0 mt-0.5"><X size={12} /></button>
     </div>
   );
 }
