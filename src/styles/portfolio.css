@@ -85,6 +85,12 @@ section {
   border-top: 1px solid var(--line);
 }
 
+/* The toast container (sonner) is a <section> too: it must not get the page-section padding and rule */
+section[aria-label^="Notifications"] {
+  padding: 0;
+  border-top: 0;
+}
+
 h2 {
   font: 600 1.6rem/1.2 var(--sans);
   letter-spacing: -0.02em;
