@@ -334,13 +334,13 @@ export function Tracker() {
   );
 
   return (
-    <div className={`flex-1 w-full mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-5 items-start lg:gap-0 transition-[max-width] duration-[320ms] ease-in-out ${mini ? 'max-w-[340px]' : board ? 'max-w-[2400px]' : 'max-w-[1180px]'}`}>
+    <div className={`track-app flex-1 min-h-0 w-full mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-5 items-start lg:items-stretch lg:gap-0 max-lg:overflow-y-auto lg:overflow-hidden transition-[max-width] duration-[320ms] ease-in-out ${mini ? 'max-w-[340px]' : board ? 'max-w-[2400px]' : 'max-w-[1180px]'}`}>
       {/* Left column: collapses and slides out to the left while the card on the right grows into the space */}
       <motion.aside
         initial={false}
         animate={wide && !mini ? (board ? { width: 0, opacity: 0, x: -50, marginRight: 0 } : { width: 360, opacity: 1, x: 0, marginRight: 20 }) : undefined}
         transition={SLIDE}
-        className={`w-full shrink-0 ${mini ? '' : 'lg:sticky lg:top-4 lg:overflow-hidden'} ${board ? 'max-lg:hidden' : ''}`}>
+        className={`w-full shrink-0 lg:min-h-0 lg:overflow-x-hidden lg:overflow-y-auto app-scroll ${board ? 'max-lg:hidden' : ''}`}>
       <div className="flex flex-col gap-3.5 min-w-0 w-full lg:w-[360px]">
         <div className={`${card} flex flex-col gap-3`}>
           <div className="flex items-center justify-between gap-2">
@@ -430,9 +430,9 @@ export function Tracker() {
       </motion.aside>
 
       {!mini && (
-        <main className={`min-w-0 w-full lg:flex-1 ${card}`}>
+        <main className={`min-w-0 w-full lg:flex-1 lg:min-h-0 flex flex-col ${card}`}>
           {board && alertBox && <div className="mb-3 max-w-[520px]">{alertBox}</div>}
-          <div className="flex gap-1 mb-4 border-b border-white/10 items-center" role="tablist">
+          <div className="flex gap-1 mb-4 border-b border-white/10 items-center shrink-0" role="tablist">
             {([['tasks', 'Tasks'], ['board', 'Board'], ['cal', 'Calendar'], ['stats', 'Stats']] as const).map(([k, l]) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => goTab(k)}
                 className={`relative px-3.5 py-2 text-sm font-semibold -mb-px border-b-2 border-transparent transition-colors ${tab === k ? 'text-white!' : 'text-zinc-500! hover:text-zinc-300!'}`}>
@@ -448,7 +448,7 @@ export function Tracker() {
               </div>
             )}
           </div>
-          <motion.div key={view} initial={{ opacity: 0, y: 10 }} animate={leaving ? { opacity: 0, y: -8 } : { opacity: 1, y: 0 }}
+          <motion.div key={view} className={`lg:flex-1 lg:min-h-0 ${view === 'board' ? 'lg:flex lg:flex-col' : 'lg:overflow-y-auto lg:pr-1 app-scroll'}`} initial={{ opacity: 0, y: 10 }} animate={leaving ? { opacity: 0, y: -8 } : { opacity: 1, y: 0 }}
             transition={{ duration: leaving ? 0.14 : shifting ? 0.2 : 0.14, delay: leaving ? 0 : shifting ? 0.2 : 0, ease: 'easeOut' }}>
             {view === 'tasks' && <TasksTab tasks={tasks} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} epicOf={epicOf} />}
             {view === 'board' && <BoardTab onTrack={trackBoard} onToggleTask={toggleDone} trackingId={seg?.taskId ?? null} running={running} />}

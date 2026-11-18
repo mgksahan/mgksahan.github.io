@@ -130,7 +130,8 @@ export function BoardTab({ onTrack, onToggleTask, trackingId, running }: { onTra
   };
 
   return (
-    <div className="flex gap-3 items-stretch min-h-[calc(100vh-175px)] overflow-x-auto">
+    <motion.div layoutScroll className="app-scroll board-scroll overflow-x-auto lg:overflow-y-auto lg:flex-1 lg:min-h-0 max-lg:min-h-[calc(100dvh-175px)]">
+    <div className="flex gap-3 items-stretch min-h-full">
       {lanes.map(l => (
         <div data-lanecol
           key={l.id}
@@ -153,7 +154,9 @@ export function BoardTab({ onTrack, onToggleTask, trackingId, running }: { onTra
             </AnimatePresence>
             {!inLane(l.id).length && <div className="text-xs text-zinc-600 text-center py-2">Drop cards here</div>}
           </div>
-          <Jot onAdd={(t, cat) => addCard(l.id, t, cat)} />
+          <div className="sticky bottom-0 z-10 -mx-3 -mb-3 px-3 pb-3 pt-2 bg-[#191a1d] rounded-b-xl">
+            <Jot onAdd={(t, cat) => addCard(l.id, t, cat)} />
+          </div>
         </div>
       ))}
       <AnimatePresence>
@@ -168,6 +171,7 @@ export function BoardTab({ onTrack, onToggleTask, trackingId, running }: { onTra
       </AnimatePresence>
       <button onClick={addLane} className="shrink-0 self-start rounded-xl border border-dashed border-white/15 px-3 py-3 text-sm text-zinc-400! hover:text-white! hover:border-white/30 inline-flex items-center gap-1.5"><Plus size={14} />Lane</button>
     </div>
+    </motion.div>
   );
 }
 
