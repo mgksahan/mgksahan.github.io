@@ -29,6 +29,7 @@ Ticking a task done while the timer is on it (running or paused) stops the timer
 Stats opens on Today; presets 7/14/30 days or a custom from/to range.
 Tap a task's "+pts" badge to edit its points, even after it is done.
 Corner mode shrinks the page to just the timer.
+**Layout (app shell).** `/track` is one viewport tall (`.track-shell` in `RootLayout.tsx`: `100dvh`, safe-area padding, `html.track-route` has no page scroll and no overscroll bounce). From 1024px up, only panes scroll: the left column (`aside`, scrolls alone if taller than the window) and the tab content (Tasks / Calendar / Stats), so the timer never moves. The Board has one scroller (`.board-scroll`, a `motion.div layoutScroll`) holding all lanes; each lane's "Jot something…" is `sticky bottom-0`, so it stays at the bottom of the window however long the lane is. Lanes are deliberately not scroll containers themselves: an inner `overflow` would clip a dragged card and break the drop hit-testing (`laneAt`, `epicAt`). Below 1024px the layout is stacked and `.track-app` scrolls as one column. Native-feel CSS (thin themed scrollbars, no tap highlight, no text selection on chrome but yes on inputs and cards, `overscroll-behavior`) lives at the end of `src/styles/theme.css`. The board's horizontal scrollbar is hidden (webkit only) so no bar sits along the bottom edge.
 It installs as an app (Chrome/Edge: Install button in the card or the address bar icon): `public/track_manifest.json`, scope `/track/`, service worker `sw.js` registered from `RootLayout.tsx`.
 
 ## Data flow

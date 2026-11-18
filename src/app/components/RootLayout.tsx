@@ -130,6 +130,10 @@ export function RootLayout() {
   const isHome = location.pathname === '/';
   const isGym = location.pathname.startsWith('/gym');
   const isTrack = location.pathname.startsWith('/track');
+  useEffect(() => {
+    document.documentElement.classList.toggle('track-route', isTrack);
+    return () => document.documentElement.classList.remove('track-route');
+  }, [isTrack]);
 
   if (isHome) {
     return (
@@ -139,7 +143,18 @@ export function RootLayout() {
     );
   }
 
-  if (isGym || isTrack || isStandalone) {
+  if (isTrack) {
+    // App shell: the window is exactly one viewport tall, the page never scrolls, panes scroll inside
+    return (
+      <div className="track-shell bg-background text-foreground flex flex-col">
+        <main className="flex-1 min-h-0 flex flex-col">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
+
+  if (isGym || isStandalone) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col">
         <main className="flex-1 flex flex-col">
