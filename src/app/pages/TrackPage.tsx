@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { BoardTab } from './TrackBoard';
 import {
   Cat, NEXT_CAT, MIN_ENTRY_MS, MIN_LISTED_MS, setActivityCat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
-  saveTask, renameTask, toggleTaskDone, migrateSubs, convertTaskToEpic, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
+  saveTask, saveOuting, Outing, renameTask, toggleTaskDone, migrateSubs, convertTaskToEpic, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Time tracker at /track (owner only). Tasks with points, a calendar, and a running timer, all tagged
@@ -545,12 +545,61 @@ function TasksTab({ tasks, activityTotals, onToggle, onTrack, epicOf }: { tasks:
       </form>
       <div className="flex items-center gap-2 flex-wrap mb-4"><CatChips value={cat} onChange={setCat} /><span className={`${label} ml-1`}>points come from time tracked</span>
         <label className="ml-auto inline-flex items-center gap-1.5 text-[13px] text-zinc-400"><input type="checkbox" checked={noDue} onChange={e => setNoDue(e.target.checked)} />No due date</label></div>
+      <OutingsInbox open={open} />
       <h2 className="text-lg font-semibold text-white mb-2" style={{ margin: '0 0 8px' }}>To do · {open.length}</h2>
       {open.length ? open.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} epic={epicOf(t)} />) : <div className="text-zinc-500 py-3">Nothing open. Add a task above.</div>}
       {done.length > 0 && <>
         <h2 className="text-lg font-semibold text-white" style={{ margin: '22px 0 8px' }}>Completed</h2>
         {done.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} epic={epicOf(t)} />)}
       </>}
+    </div>
+  );
+}
+
+// Time away from home reported by the phone app: turn a stretch into time on a task, or into a new errand task
+function OutingsInbox({ open }: { open: Task[] }) {
+  const s = useTrack();
+  const list = Object.values(s.outings || {}).filter(o => o.status === 'new' && o.end - o.start >= MIN_ENTRY_MS).sort((a, b) => b.start - a.start);
+  if (!list.length) return null;
+  return (
+    <div className="rounded-xl border border-cyan-300/25 bg-cyan-300/[0.04] p-3 mb-5">
+      <h2 className="text-lg font-semibold text-white" style={{ margin: '0 0 2px' }}>Outings · {list.length}</h2>
+      <div className="text-[13px] text-zinc-400 mb-2">Time you spent away from home. Add it to a task, make it an errand, or dismiss it.</div>
+      <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto app-scroll">
+        {list.map(o => <OutingRow key={o.id} o={o} open={open} />)}
+      </div>
+    </div>
+  );
+}
+function OutingRow({ o, open }: { o: Outing; open: Task[] }) {
+  const [pick, setPick] = useState('');
+  const [name, setName] = useState('');
+  const d = new Date(o.start), e = new Date(o.end);
+  const hm = (x: Date) => `${pad(x.getHours())}:${pad(x.getMinutes())}`;
+  const when = `${d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}, ${hm(d)}–${hm(e)}`;
+  const used = () => saveOuting({ ...o, status: 'used' });
+  const addToTask = () => {
+    const t = open.find(x => x.id === pick); if (!t) return;
+    saveEntry({ id: uid(), start: o.start, end: o.end, cat: t.cat, taskId: t.id, note: '' });
+    used();
+  };
+  const makeErrand = () => {
+    const id = uid(), title = (name.trim() || 'Errand').slice(0, 120);
+    saveTask({ id, title, cat: 'life', pts: 10, due: '', done: false });
+    saveEntry({ id: uid(), start: o.start, end: o.end, cat: 'life', taskId: id, note: '' });
+    used();
+  };
+  return (
+    <div className="flex items-center gap-2 flex-wrap rounded-lg bg-white/[0.03] border border-white/10 px-3 py-2">
+      <div className="min-w-[170px]"><div className="text-sm text-white">{when}</div><div className="text-[12px] text-zinc-400">{fmtDur(o.end - o.start)} away{o.source === 'timeline' ? ' · from Timeline' : ''}</div></div>
+      <select className={`${field} !w-[190px]`} aria-label="Task" value={pick} onChange={ev => setPick(ev.target.value)}>
+        <option value="">Add to task…</option>
+        {open.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+      </select>
+      <button className={btn} disabled={!pick} onClick={addToTask}>Add</button>
+      <input className={`${field} !w-[140px]`} placeholder="Errand name" aria-label="Errand name" value={name} onChange={ev => setName(ev.target.value)} onKeyDown={ev => { if (ev.key === 'Enter') makeErrand(); }} />
+      <button className={btn} onClick={makeErrand}>Make errand</button>
+      <button aria-label="Dismiss outing" title="Dismiss" className="ml-auto text-zinc-500! hover:text-red-400!" onClick={() => saveOuting({ ...o, status: 'dismissed' })}><X size={15} /></button>
     </div>
   );
 }
