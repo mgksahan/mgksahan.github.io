@@ -25,21 +25,25 @@ export interface TimerDoc {
   updatedAt: number;
 }
 export interface SettingsDoc { focus: number; brk: number; days: Record<string, number>; lanes?: Lane[]; updatedAt: number }
+// An outing: a stretch of time away from home, reported by the phone app (geofence or Timeline import).
+// 'new' waits in the Tasks tab inbox; 'used' became time on a task; 'dismissed' was ignored.
+export interface Outing { id: string; start: number; end: number; source: string; status: 'new' | 'used' | 'dismissed'; updatedAt: number }
 export interface TrackState {
   tasks: Record<string, Task>;
+  outings: Record<string, Outing>;
   cards: Record<string, Card>;
   entries: Record<string, Entry>;
   timer: TimerDoc;
   settings: SettingsDoc;
 }
-type Kind = 'task' | 'card' | 'entry' | 'timer' | 'settings';
+type Kind = 'task' | 'card' | 'entry' | 'timer' | 'settings' | 'outing';
 interface Pending { kind: Kind; id: string; op: 'put' | 'delete'; data?: unknown; updatedAt: number }
 export interface SyncStatus { pending: number; syncing: boolean; error: string | null; lastSync: number | null }
 
 const KEY = 'track_state_v1';
 
 const emptyState = (): TrackState => ({
-  tasks: {}, cards: {}, entries: {},
+  tasks: {}, cards: {}, entries: {}, outings: {},
   timer: { timer: null, block: { acc: 0, since: null }, brk: null, updatedAt: 0 },
   settings: { focus: 25, brk: 5, days: {}, updatedAt: 0 },
 });
@@ -354,6 +358,11 @@ export function saveEntry(e: Omit<Entry, 'updatedAt'>) {
   state = { ...state, entries: { ...state.entries, [e.id]: entry } };
   enqueue({ kind: 'entry', id: e.id, op: 'put', data: entry, updatedAt: entry.updatedAt });
 }
+export function saveOuting(o: Omit<Outing, 'updatedAt'>) {
+  const outing = { ...o, updatedAt: now() };
+  state = { ...state, outings: { ...state.outings, [o.id]: outing } };
+  enqueue({ kind: 'outing', id: o.id, op: 'put', data: outing, updatedAt: outing.updatedAt });
+}
 export function removeEntry(id: string) {
   const { [id]: _gone, ...rest } = state.entries;
   const at = now();
@@ -380,6 +389,7 @@ function localStamp(kind: Kind, id: string): number | undefined {
   if (kind === 'task') return state.tasks[id]?.updatedAt;
   if (kind === 'card') return state.cards[id]?.updatedAt;
   if (kind === 'entry') return state.entries[id]?.updatedAt;
+  if (kind === 'outing') return state.outings[id]?.updatedAt;
   if (kind === 'timer') return state.timer.updatedAt || undefined;
   return state.settings.updatedAt || undefined;
 }
@@ -396,12 +406,14 @@ function applyRemote(items: Remote[]) {
       if (r.kind === 'task') { const { [r.id]: _g, ...rest } = next.tasks; next = { ...next, tasks: rest }; }
       if (r.kind === 'card') { const { [r.id]: _g, ...rest } = next.cards; next = { ...next, cards: rest }; }
       if (r.kind === 'entry') { const { [r.id]: _g, ...rest } = next.entries; next = { ...next, entries: rest }; }
+      if (r.kind === 'outing') { const { [r.id]: _g, ...rest } = next.outings; next = { ...next, outings: rest }; }
     } else if (r.data) {
       delete dead[key];
       const val = { ...r.data, updatedAt: r.updatedAt };
       if (r.kind === 'task') next = { ...next, tasks: { ...next.tasks, [r.id]: { ...val, id: r.id } } };
       if (r.kind === 'card') next = { ...next, cards: { ...next.cards, [r.id]: { ...val, id: r.id } } };
       if (r.kind === 'entry') next = { ...next, entries: { ...next.entries, [r.id]: { ...val, id: r.id } } };
+      if (r.kind === 'outing') next = { ...next, outings: { ...next.outings, [r.id]: { ...val, id: r.id } } };
       if (r.kind === 'timer') next = { ...next, timer: { ...emptyState().timer, ...val } };
       if (r.kind === 'settings') next = { ...next, settings: { ...emptyState().settings, ...val } };
     }
