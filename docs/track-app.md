@@ -27,6 +27,7 @@ Epics look rich (tint, thick edge, bold title); plain cards are quiet. Due date 
 **Subtasks are tasks.** A subtask is a normal task with `epicId` set to its epic card (and `ord` for its order). It shows on the Tasks page and Calendar like any task (with an epic chip) and inside its epic on the Board, where you can tick, rename, set category and due date, track time, or delete it. Adding a subtask on the Board creates the task. Old in-card `subs` are converted by `migrateSubs()` (same ids on every device). Subtasks do not get their own board card (`adoptTasks` skips tasks whose epic card exists).
 Time: an epic card shows its own time plus its subtasks' (each entry counted once, `Set` of ids). Stats sums entries, so nothing is double counted; subtask rows read "Epic › Subtask".
 Ticking a task done while the timer is on it (running or paused) stops the timer and saves the time to it (`toggleDone` in TrackPage; also used for subtask ticks on the Board).
+Calendar: an open epic with its own due date (`card.due`) shows on that day as a diamond in its category colour, and in the day's list as an epic row ("Epic due · 2 of 3 subtasks done") with a tick that completes the epic and its subtasks (`setEpicDone`). Finished epics are not shown. Ticking the last subtask does not complete the epic.
 Stats opens on Today; presets 7/14/30 days or a custom from/to range.
 Tap a task's "+pts" badge to edit its points, even after it is done.
 Corner mode shrinks the page to just the timer.

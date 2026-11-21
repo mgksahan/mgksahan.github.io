@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { BoardTab } from './TrackBoard';
 import {
   Cat, NEXT_CAT, MIN_ENTRY_MS, MIN_LISTED_MS, setActivityCat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
-  saveTask, saveOuting, Outing, renameTask, toggleTaskDone, migrateSubs, convertTaskToEpic, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
+  saveTask, saveOuting, Outing, Card, isEpic, setEpicDone, renameTask, toggleTaskDone, migrateSubs, convertTaskToEpic, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Time tracker at /track (owner only). Tasks with points, a calendar, and a running timer, all tagged
@@ -452,7 +452,7 @@ export function Tracker() {
             transition={{ duration: leaving ? 0.14 : shifting ? 0.2 : 0.14, delay: leaving ? 0 : shifting ? 0.2 : 0, ease: 'easeOut' }}>
             {view === 'tasks' && <TasksTab tasks={tasks} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} epicOf={epicOf} />}
             {view === 'board' && <BoardTab onTrack={trackBoard} onToggleTask={toggleDone} trackingId={seg?.taskId ?? null} running={running} />}
-            {view === 'cal' && <CalendarTab tasks={tasks} entries={entries} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} epicOf={epicOf} />}
+            {view === 'cal' && <CalendarTab tasks={tasks} cards={s.cards} entries={entries} activityTotals={activityTotals} onToggle={toggleDone} onTrack={trackTask} epicOf={epicOf} />}
             {view === 'stats' && <StatsTab s={s} tasks={tasks} entries={entries} labelOf={labelOf} />}
           </motion.div>
         </main>
@@ -605,18 +605,21 @@ function OutingRow({ o, open }: { o: Outing; open: Task[] }) {
 }
 
 // ---------- calendar ----------
-function CalendarTab({ tasks, entries, activityTotals, onToggle, onTrack, epicOf }: { tasks: Task[]; entries: Entry[]; activityTotals: TotalsFn; onToggle: (t: Task) => void; onTrack: (t: Task) => void; epicOf: (t: Task) => string | undefined }) {
+function CalendarTab({ tasks, cards, entries, activityTotals, onToggle, onTrack, epicOf }: { tasks: Task[]; cards: Record<string, Card>; entries: Entry[]; activityTotals: TotalsFn; onToggle: (t: Task) => void; onTrack: (t: Task) => void; epicOf: (t: Task) => string | undefined }) {
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selDay, setSelDay] = useState(today());
   const [title, setTitle] = useState('');
   const [cat, setCat] = useState<Cat>('work');
   const y = month.getFullYear(), mo = month.getMonth();
   const first = new Date(y, mo, 1), start = new Date(y, mo, 1 - ((first.getDay() + 6) % 7));
-  const byDay: Record<string, { t: Task[]; ms: number }> = {};
-  tasks.forEach(t => { if (t.due) (byDay[t.due] ||= { t: [], ms: 0 }).t.push(t); });
-  entries.forEach(e => { (byDay[dkey(new Date(e.start))] ||= { t: [], ms: 0 }).ms += entryMs(e); });
+  const byDay: Record<string, { t: Task[]; ep: Card[]; ms: number }> = {};
+  const slot = (k: string) => (byDay[k] ||= { t: [], ep: [], ms: 0 });
+  tasks.forEach(t => { if (t.due) slot(t.due).t.push(t); });
+  // An epic with its own due date shows on that day too (open epics only; a finished one is no longer "due")
+  Object.values(cards).forEach(c => { if (c.due && !c.done && isEpic(c)) slot(c.due).ep.push(c); });
+  entries.forEach(e => { slot(dkey(new Date(e.start))).ms += entryMs(e); });
   const cells = Array.from({ length: 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
-  const info = byDay[selDay] || { t: [], ms: 0 };
+  const info = byDay[selDay] || { t: [], ep: [], ms: 0 };
   const dayEntries = entries.filter(e => dkey(new Date(e.start)) === selDay).sort((a, b) => a.start - b.start);
   const hm = (v: number) => { const d = new Date(v); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
   const nav = (v: number) => {
@@ -640,12 +643,15 @@ function CalendarTab({ tasks, entries, activityTotals, onToggle, onTrack, epicOf
         <div className="grid grid-cols-7 gap-1 min-w-0">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => <div key={d} className="text-[11px] uppercase tracking-[0.08em] text-zinc-500 text-center py-1">{d}</div>)}
           {cells.map(d => {
-            const k = dkey(d), i = byDay[k] || { t: [], ms: 0 };
+            const k = dkey(d), i = byDay[k] || { t: [], ep: [], ms: 0 };
             return (
               <button key={k} onClick={() => setSelDay(k)} aria-pressed={k === selDay}
                 className={`min-h-[56px] md:min-h-[74px] min-w-0 rounded-lg border p-1.5 flex flex-col gap-1 text-left ${k === selDay ? 'border-cyan-300 bg-[#1b1d22]' : 'border-transparent bg-white/5'} ${d.getMonth() !== mo ? 'opacity-40' : ''}`}>
                 <span className={`text-xs font-semibold self-start ${k === today() ? 'bg-cyan-300 text-black rounded-full px-1.5' : 'text-zinc-200'}`}>{d.getDate()}</span>
-                <span className="flex gap-[3px] flex-wrap">{i.t.slice(0, 6).map(t => <span key={t.id} className={`h-[7px] w-[7px] rounded-full ${CATS[t.cat].dot} ${t.done ? 'opacity-40' : ''}`} />)}</span>
+                <span className="flex gap-[3px] flex-wrap">
+                  {i.ep.map(c => <span key={c.id} title={`Epic: ${c.text.split('\n')[0]}`} className={`h-[8px] w-[8px] rotate-45 rounded-[2px] ${CATS[c.cat].dot}`} />)}
+                  {i.t.slice(0, 6).map(t => <span key={t.id} className={`h-[7px] w-[7px] rounded-full ${CATS[t.cat].dot} ${t.done ? 'opacity-40' : ''}`} />)}
+                </span>
                 {i.ms > 0 && <span className="hidden md:block mt-auto font-mono text-[11px] text-zinc-500">{fmtDur(i.ms)}</span>}
               </button>
             );
@@ -659,7 +665,8 @@ function CalendarTab({ tasks, entries, activityTotals, onToggle, onTrack, epicOf
               </div>
             <div className="flex items-center gap-2 flex-wrap"><CatChips value={cat} onChange={setCat} /><button className={`${btnPrimary} ml-auto`}>Add</button></div>
           </form>
-          {info.t.length ? info.t.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} epic={epicOf(t)} />) : <div className="text-zinc-500 py-2">No tasks due on this day.</div>}
+          {info.ep.map(c => <EpicDueRow key={c.id} c={c} subs={tasks.filter(t => t.epicId === c.id)} onToggle={onToggle} />)}
+          {info.t.length || info.ep.length ? info.t.map(t => <TaskRow key={t.id} t={t} totals={activityTotals} onToggle={onToggle} onTrack={onTrack} epic={epicOf(t)} />) : <div className="text-zinc-500 py-2">No tasks due on this day.</div>}
           {dayEntries.length > 0 && <>
             <div className={`${label} mt-4`}>Time entries</div>
             {dayEntries.map(e => (
@@ -672,6 +679,21 @@ function CalendarTab({ tasks, entries, activityTotals, onToggle, onTrack, epicOf
             ))}
           </>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// An epic due on a calendar day: tick to finish it (and its subtasks), same as on the Board
+function EpicDueRow({ c, subs, onToggle }: { c: Card; subs: Task[]; onToggle: (t: Task) => void }) {
+  const done = subs.filter(t => t.done).length;
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-white/[0.07]">
+      <button onClick={() => setEpicDone(c.id, true, onToggle)} aria-label="Complete the epic and all its subtasks" title="Complete the epic and all its subtasks"
+        className="h-[22px] w-[22px] shrink-0 rounded-[7px] border-2 border-cyan-300/70" />
+      <div className="min-w-0 flex-1">
+        <div className="text-[15px] font-semibold text-white break-words"><Layers size={14} className="inline -mt-0.5 mr-1.5 text-cyan-300" aria-hidden />{c.text.split('\n')[0]}</div>
+        <div className="text-[12px] text-zinc-400 flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${CATS[c.cat].dot}`} />Epic due{subs.length ? ` · ${done} of ${subs.length} subtasks done` : ''}</div>
       </div>
     </div>
   );
