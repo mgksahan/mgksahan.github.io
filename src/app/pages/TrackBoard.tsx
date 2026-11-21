@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers, CalendarDays, Unlink } from 'lucide-react';
 import {
-  Cat, Card, Lane, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, migrateSubs, addSubtask, convertToEpic, convertToTask, setEpicDone, moveIntoEpic, detachSubtask, renameCard, renameTask, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
+  Cat, Card, Lane, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, completeDoneNotes, migrateSubs, addSubtask, convertToEpic, convertToTask, setEpicDone, moveIntoEpic, detachSubtask, renameCard, renameTask, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Board tab: sticky-note cards in swim lanes (a small kanban). Drag a card by its grip to reorder or move
@@ -41,7 +41,7 @@ export function BoardTab({ onTrack, onToggleTask, trackingId, running }: { onTra
 
   // Put every task on the board (once), and keep new tasks coming in
   const laneKey = laneIds.join(',');
-  useEffect(() => { migrateSubs(); adoptTasks(laneIds); settleDoneTasks(laneIds); }, [s.tasks, s.cards, laneKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { migrateSubs(); adoptTasks(laneIds); settleDoneTasks(laneIds); completeDoneNotes(laneIds); }, [s.tasks, s.cards, laneKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The epic card under the pointer while dragging a plain card (dropping on it makes the card a subtask)
   const [hoverEpic, setHoverEpic] = useState<string | null>(null);

@@ -218,6 +218,22 @@ export function settleDoneTasks(laneIds: string[]) {
   }
 }
 
+// A plain note (no task, not an epic) sitting in Done counts as finished work: give it a completed task so it is struck
+// through on the Board and listed under Completed in Tasks. The id is derived from the card, so two devices make the same one.
+// Also repairs a note whose task was deleted. Dragging it back out of Done reopens that task as usual.
+export function completeDoneNotes(laneIds: string[]) {
+  if (!laneIds.length) return;
+  const doneLane = laneIds.includes('done') ? 'done' : laneIds[laneIds.length - 1];
+  for (const c of Object.values(state.cards)) {
+    if (c.lane !== doneLane || isEpic(c)) continue;
+    if (c.taskId && state.tasks[c.taskId]) continue;
+    const id = ('d_' + c.id).slice(0, 40);
+    if (dead[sk('task', id)]) continue;
+    saveTask({ id, title: firstLine(c.text), cat: c.cat, pts: 10, due: c.due ?? '', done: true, doneAt: c.updatedAt || Date.now() });
+    saveCard({ ...c, taskId: id, due: undefined });
+  }
+}
+
 // Every task gets a board card (id "c_<taskId>", so two devices make the same one). Open tasks go to
 // "Next up", done ones to "Done". Tasks that are a card's subtask, or already have a card, are skipped.
 // ---- epics and tasks ----
