@@ -82,6 +82,20 @@ interface AlertInfo { title: string; body: string; kind: 'block' | 'break' | 'st
 const NAG_STEP = 60000, NAG_STOP = 180000;
 interface Sel { cat: Cat; taskId: string | null; note: string }
 
+// Pomodoro ring: the part of the focus block still left. Empty ring = block over.
+function Ring({ left, total, size = 64, color = '#67e8f9', track = 'rgba(255,255,255,0.12)', text = '#fff' }: { left: number; total: number; size?: number; color?: string; track?: string; text?: string }) {
+  const r = size / 2 - 4, c = 2 * Math.PI * r, f = total ? Math.max(0, Math.min(1, left / total)) : 0;
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flex: 'none' }} role="img" aria-label={`${fmtMS(Math.max(0, left))} left in this block`}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={track} strokeWidth={5} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - f)} style={{ transition: 'stroke-dashoffset 0.5s linear' }} />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontFamily: 'ui-monospace, monospace', fontSize: size * 0.2, color: text, fontVariantNumeric: 'tabular-nums' }}>{fmtMS(Math.max(0, left))}</div>
+    </div>
+  );
+}
+
 export function TrackPage() {
   const { isAdmin, isLoading } = useAuth();
   useEffect(() => { if (isAdmin) return startSync(); }, [isAdmin]);
@@ -327,7 +341,7 @@ export function Tracker() {
   const openPip = async (auto: boolean) => {
     if (!pipApi || pipRef.current) return;
     try {
-      const w = await pipApi.requestWindow({ width: 320, height: 120 });
+      const w = await pipApi.requestWindow({ width: 380, height: 120 });
       if (pipRef.current) { w.close(); return; }
       for (const sh of Array.from(document.styleSheets)) {
         try { const st = w.document.createElement('style'); st.textContent = Array.from(sh.cssRules).map(r => r.cssText).join('\n'); w.document.head.appendChild(st); } catch { /* cross-origin sheet */ }
@@ -382,6 +396,7 @@ export function Tracker() {
             <div className="font-mono tabular-nums" style={{ fontSize: 34, lineHeight: 1.1, color: running ? '#67e8f9' : '#fff' }}>{fmtHMS(ms)}</div>
             <div style={{ fontSize: 11, color: '#71717a' }}>{brk ? stateText : running ? 'Tracking' : seg ? 'Paused' : 'Ready'}</div>
           </div>
+          {fm > 0 && <Ring left={fm - bm} total={fm} size={64} />}
           <button onClick={startPause} aria-label={running ? 'Pause' : seg ? 'Resume' : 'Start'} style={{ background: '#67e8f9', color: '#000', border: 0, borderRadius: 10, padding: 12, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>{running ? <Pause size={20} /> : <Play size={20} />}</button>
         </div>, pip.document.body)}
       {/* Left column: collapses and slides out to the left while the card on the right grows into the space */}
@@ -421,9 +436,12 @@ export function Tracker() {
           </div>
 
           {fm > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <div className="h-2 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-cyan-300 rounded-full transition-[width] duration-500" style={{ width: `${Math.min(100, bm / fm * 100)}%` }} /></div>
-              <div className="flex justify-between text-[13px] text-zinc-400"><span>Block {fmtMS(bm)} / {fmtMS(fm)}</span><span>{blocksToday} blocks today</span></div>
+            <div className="flex items-center gap-3.5">
+              <Ring left={fm - bm} total={fm} size={72} />
+              <div className="flex flex-col text-[13px] text-zinc-400">
+                <b className="text-zinc-100 font-semibold">{fmtMS(Math.max(0, fm - bm))} left in this block</b>
+                <span>{blocksToday} blocks today · {s.settings.focus} min each</span>
+              </div>
             </div>
           )}
 
