@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router';
+import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { Play, Pause, Square, X, Check, Minimize2, Maximize2, Timer, CloudOff, RefreshCw, Download, Layers } from 'lucide-react';
+import { Play, Pause, Square, X, Check, Minimize2, Maximize2, Timer, CloudOff, RefreshCw, Download, Layers, Repeat2, PictureInPicture2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BoardTab } from './TrackBoard';
 import {
   Cat, NEXT_CAT, MIN_ENTRY_MS, MIN_LISTED_MS, setActivityCat, Task, Entry, Segment, TrackState, useTrack, useTrackSync, startSync, syncNow,
-  saveTask, saveOuting, Outing, Card, isEpic, setEpicDone, renameTask, toggleTaskDone, migrateSubs, convertTaskToEpic, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
+  saveTask, REPEATS, Repeat, saveOuting, Outing, Card, isEpic, setEpicDone, renameTask, toggleTaskDone, migrateSubs, convertTaskToEpic, removeTask, saveEntry, removeEntry, saveTimer, saveSettings, uid,
 } from '../lib/trackStore';
 
 // Time tracker at /track (owner only). Tasks with points, a calendar, and a running timer, all tagged
@@ -315,6 +316,45 @@ export function Tracker() {
   const epicOf = (t: Task) => (t.epicId ? s.cards[t.epicId]?.text.split('\n')[0] : undefined);
   useEffect(() => { migrateSubs(); }, []);       // old in-card subtasks become real tasks
 
+  // ---- floating timer (Document Picture-in-Picture, Chrome/Edge) ----
+  // Always-on-top mini window with the running activity. "Float" button opens it; with auto on, it also opens by itself when
+  // you switch away from this tab (browser permitting) and closes when you come back.
+  const [pip, setPip] = useState<Window | null>(null);
+  const pipRef = useRef<Window | null>(null);
+  const pipAuto = useRef(false);
+  const [floatOn, setFloatOn] = useState(() => { try { return localStorage.getItem('track_float') === '1'; } catch { return false; } });
+  const pipApi = (window as any).documentPictureInPicture as { requestWindow: (o: object) => Promise<Window> } | undefined;
+  const openPip = async (auto: boolean) => {
+    if (!pipApi || pipRef.current) return;
+    try {
+      const w = await pipApi.requestWindow({ width: 320, height: 120 });
+      if (pipRef.current) { w.close(); return; }
+      for (const sh of Array.from(document.styleSheets)) {
+        try { const st = w.document.createElement('style'); st.textContent = Array.from(sh.cssRules).map(r => r.cssText).join('\n'); w.document.head.appendChild(st); } catch { /* cross-origin sheet */ }
+      }
+      w.document.body.style.cssText = 'margin:0;background:#141518;color:#fff;font-family:system-ui,sans-serif';
+      pipAuto.current = auto; pipRef.current = w; setPip(w);
+      w.addEventListener('pagehide', () => { pipRef.current = null; setPip(null); });
+    } catch { /* needs a click or a tab switch the browser accepts */ }
+  };
+  const closePip = () => { pipRef.current?.close(); pipRef.current = null; setPip(null); };
+  const seenRunning = useRef(false);
+  seenRunning.current = !!seg;
+  useEffect(() => {
+    if (!pipApi || !floatOn) return;
+    const away = () => { if (document.visibilityState === 'hidden' && seenRunning.current) void openPip(true); else if (document.visibilityState === 'visible' && pipAuto.current) closePip(); };
+    document.addEventListener('visibilitychange', away);
+    try { (navigator as any).mediaSession?.setActionHandler('enterpictureinpicture', () => { if (seenRunning.current) void openPip(true); }); } catch { /* unsupported action */ }
+    return () => { document.removeEventListener('visibilitychange', away); try { (navigator as any).mediaSession?.setActionHandler('enterpictureinpicture', null); } catch { /* ignore */ } };
+  }, [floatOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { pipRef.current?.close(); }, []);
+  const toggleFloat = () => {
+    if (pip) { closePip(); return; }
+    if (!floatOn) { setFloatOn(true); try { localStorage.setItem('track_float', '1'); } catch { /* ignore */ } }
+    void openPip(false);
+  };
+  const stopFloating = () => { closePip(); setFloatOn(false); try { localStorage.setItem('track_float', '0'); } catch { /* ignore */ } };
+
   const board = view === 'board' && !mini;
   const alertBox = alert && (
       <div role="alert" className={`rounded-lg border p-3 flex flex-col gap-2 text-sm ${alert.level === 3 ? 'border-red-400 bg-red-400/15' : alert.level === 2 ? 'border-amber-400 bg-amber-400/10' : 'border-cyan-300/60 bg-cyan-300/10'}`}>
@@ -335,6 +375,15 @@ export function Tracker() {
 
   return (
     <div className={`track-app flex-1 min-h-0 w-full mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-5 items-start lg:items-stretch lg:gap-0 max-lg:overflow-y-auto lg:overflow-hidden transition-[max-width] duration-[320ms] ease-in-out ${mini ? 'max-w-[340px] !p-4' : board ? 'max-w-[2400px]' : 'max-w-[1180px]'}`}>
+      {pip && createPortal(
+        <div style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, color: '#a1a1aa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{hasActivity ? labelOf(cur.taskId, seg ? cur.note : noteText) : 'Nothing tracking'}</div>
+            <div className="font-mono tabular-nums" style={{ fontSize: 34, lineHeight: 1.1, color: running ? '#67e8f9' : '#fff' }}>{fmtHMS(ms)}</div>
+            <div style={{ fontSize: 11, color: '#71717a' }}>{brk ? stateText : running ? 'Tracking' : seg ? 'Paused' : 'Ready'}</div>
+          </div>
+          <button onClick={startPause} aria-label={running ? 'Pause' : seg ? 'Resume' : 'Start'} style={{ background: '#67e8f9', color: '#000', border: 0, borderRadius: 10, padding: 12, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>{running ? <Pause size={20} /> : <Play size={20} />}</button>
+        </div>, pip.document.body)}
       {/* Left column: collapses and slides out to the left while the card on the right grows into the space */}
       <motion.aside
         initial={false}
@@ -352,6 +401,7 @@ export function Tracker() {
                   <Download size={13} />{!mini && 'Install'}
                 </button>
               )}
+              {pipApi && <button onClick={toggleFloat} onContextMenu={e => { e.preventDefault(); stopFloating(); }} className={`rounded-lg border p-1.5 hover:text-white! ${pip || floatOn ? 'border-cyan-300/50 text-cyan-300!' : 'border-white/10 text-zinc-400!'}`} title={pip ? 'Close floating timer' : floatOn ? 'Floating timer is on (opens when you leave this tab). Click to open now, right-click to turn off.' : 'Float the timer above other windows'} aria-label="Floating timer"><PictureInPicture2 size={14} /></button>}
               <button onClick={toggleMini} className="rounded-lg border border-white/10 p-1.5 text-zinc-400! hover:text-white!" title={mini ? 'Full view' : 'Corner mode'} aria-label={mini ? 'Full view' : 'Corner mode'}>
                 {mini ? <Maximize2 size={14} /> : <Minimize2 size={14} />}
               </button>
@@ -499,6 +549,8 @@ function TaskRow({ t, totals, onToggle, onTrack, epic }: { t: Task; totals: Tota
           <button onClick={() => setActivityCat({ taskId: t.id }, NEXT_CAT[t.cat])} title="Change category (also changes its time entries)" className="inline-flex items-center gap-1.5 text-xs text-zinc-500! hover:text-white!"><span className={`h-2 w-2 rounded-full ${CATS[t.cat].dot}`} />{CATS[t.cat].label}</button>
           {epic && <span className="inline-flex items-center gap-1 text-cyan-300/80" title="This is a subtask of an epic"><Layers size={11} />{epic}</span>}
           {due && <span>{due}</span>}
+          {!t.done && <button onClick={() => { const k = Object.keys(REPEATS) as Repeat[]; const i = t.repeat ? k.indexOf(t.repeat) : -1; saveTask({ ...t, repeat: i + 1 < k.length ? k[i + 1] : undefined }); }} title="Repeat: click to cycle. Ticking it done creates the next one." className={`inline-flex items-center gap-1 text-xs hover:text-white! ${t.repeat ? 'text-cyan-300/80!' : 'text-zinc-500!'}`}><Repeat2 size={11} />{t.repeat ? REPEATS[t.repeat] : 'Repeat'}</button>}
+          {t.done && t.repeat && <span className="inline-flex items-center gap-1 text-cyan-300/80"><Repeat2 size={11} />{REPEATS[t.repeat]}</span>}
           {logged > 0 && <span>{fmtDur(logged)} logged</span>}
         </div>
       </div>
@@ -528,13 +580,14 @@ function TasksTab({ tasks, activityTotals, onToggle, onTrack, epicOf }: { tasks:
   const [due, setDue] = useState(today());
   const [noDue, setNoDue] = useState(false);
   const [cat, setCat] = useState<Cat>('work');
+  const [repeat, setRepeat] = useState<Repeat | ''>('');
   const open = tasks.filter(t => !t.done).sort((a, b) => ((a.due || '9') < (b.due || '9') ? -1 : 1));
   const done = tasks.filter(t => t.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)).slice(0, 8);
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    saveTask({ id: uid(), title: title.trim(), cat, pts: 10, due: noDue ? '' : due, done: false });
-    setTitle('');
+    saveTask({ id: uid(), title: title.trim(), cat, pts: 10, due: noDue ? '' : due, done: false, repeat: repeat || undefined });
+    setTitle(''); setRepeat('');
   };
   return (
     <div>
@@ -543,7 +596,7 @@ function TasksTab({ tasks, activityTotals, onToggle, onTrack, epicOf }: { tasks:
         <input className={`${field} ${noDue ? 'opacity-40' : ''}`} type="date" aria-label="Due date" disabled={noDue} value={due} onChange={e => setDue(e.target.value)} />
         <button className={btnPrimary}>Add</button>
       </form>
-      <div className="flex items-center gap-2 flex-wrap mb-4"><CatChips value={cat} onChange={setCat} /><span className={`${label} ml-1`}>points come from time tracked</span>
+      <div className="flex items-center gap-2 flex-wrap mb-4"><CatChips value={cat} onChange={setCat} /><select className={`${field} !w-auto !py-1 !text-[13px]`} aria-label="Repeat" value={repeat} onChange={e => setRepeat(e.target.value as Repeat | '')}><option value="">No repeat</option>{(Object.keys(REPEATS) as Repeat[]).map(k => <option key={k} value={k}>{REPEATS[k]}</option>)}</select>
         <label className="ml-auto inline-flex items-center gap-1.5 text-[13px] text-zinc-400"><input type="checkbox" checked={noDue} onChange={e => setNoDue(e.target.checked)} />No due date</label></div>
       <OutingsInbox open={open} />
       <h2 className="text-lg font-semibold text-white mb-2" style={{ margin: '0 0 8px' }}>To do · {open.length}</h2>
