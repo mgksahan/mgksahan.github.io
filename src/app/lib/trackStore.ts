@@ -8,7 +8,10 @@ import { apiService } from '../../apiService';
 
 export type Cat = 'work' | 'learn' | 'life';
 // A subtask is a normal task with epicId set to its epic card (it shows on the Tasks page and Calendar like any task, grouped under the epic on the Board). ord keeps their order inside the epic.
-export interface Task { id: string; title: string; cat: Cat; pts: number; due: string; done: boolean; doneAt?: number | null; epicId?: string; ord?: number; updatedAt: number }   // points come from tracked time (1 per 10 min), pts is unused
+// Recurring task: ticking it done creates the next one (same title, category and epic) with the due date moved on
+export type Repeat = 'daily' | 'weekdays' | 'weekly' | 'monthly';
+export const REPEATS: Record<Repeat, string> = { daily: 'Every day', weekdays: 'Weekdays', weekly: 'Every week', monthly: 'Every month' };
+export interface Task { id: string; title: string; cat: Cat; pts: number; due: string; done: boolean; doneAt?: number | null; epicId?: string; ord?: number; repeat?: Repeat; updatedAt: number }   // points come from tracked time (1 per 10 min), pts is unused
 // Board: sticky-note cards in swim lanes. A card can be linked to a task so it shows on the task list.
 // Legacy: subtasks used to live inside the card. migrateSubs() turns them into tasks and clears this.
 export interface Sub { id: string; text: string; done: boolean; taskId?: string | null }
@@ -152,9 +155,32 @@ export function setActivityCat(ref: { taskId?: string | null; note?: string }, c
 }
 
 // Tick a task off (or reopen it) and move its board card to match: done -> top of the Done lane, reopened -> Next up
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// The next due date after today (and after the current one), keeping the rhythm: a weekly task stays on its weekday
+export function nextDue(due: string, repeat: Repeat): string {
+  const [y, m, d] = (due || ymd(new Date())).split('-').map(Number);
+  const todayKey = ymd(new Date());
+  let cur = new Date(y, m - 1, d), i = 0;
+  do {
+    i++;
+    if (repeat === 'monthly') cur = new Date(y, m - 1 + i, Math.min(d, new Date(y, m + i, 0).getDate()));
+    else cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + (repeat === 'weekly' ? 7 : 1));
+  } while ((ymd(cur) <= todayKey || (repeat === 'weekdays' && [0, 6].includes(cur.getDay()))) && i < 400);
+  return ymd(cur);
+}
+// The id comes from the series and the date, so two devices ticking the same task make the same next one
+function spawnNext(t: Task) {
+  if (!t.repeat) return;
+  const due = nextDue(t.due, t.repeat);
+  const id = `r_${due}_${t.id.replace(/^r_\d{4}-\d{2}-\d{2}_/, '')}`;
+  if (state.tasks[id] || dead[sk('task', id)]) return;
+  saveTask({ id, title: t.title, cat: t.cat, pts: t.pts, due, done: false, epicId: t.epicId, ord: t.epicId ? now() : undefined, repeat: t.repeat });
+}
+
 export function toggleTaskDone(t: Task) {
   const done = !t.done;
   saveTask({ ...t, done, doneAt: done ? now() : null });
+  if (done) spawnNext(t);
   const laneIds = (state.settings.lanes?.length ? state.settings.lanes : DEFAULT_LANES).map(l => l.id);
   const doneLane = laneIds.includes('done') ? 'done' : laneIds[laneIds.length - 1];
   const todoLane = laneIds.includes('next') ? 'next' : laneIds[0];
