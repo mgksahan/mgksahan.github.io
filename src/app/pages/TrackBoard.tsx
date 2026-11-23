@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers, CalendarDays, Unlink } from 'lucide-react';
+import { GripVertical, X, ListPlus, ListChecks, Plus, ChevronDown, Check, Play, Pause, Layers, CalendarDays, Unlink, Repeat2 } from 'lucide-react';
 import {
-  Cat, Card, Lane, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, completeDoneNotes, migrateSubs, addSubtask, convertToEpic, convertToTask, setEpicDone, moveIntoEpic, detachSubtask, renameCard, renameTask, saveCard, removeCard, saveTask, removeTask, saveSettings, uid,
+  Cat, Card, Lane, Task, DEFAULT_LANES, NEXT_CAT, setActivityCat, useTrack, adoptTasks, settleDoneTasks, completeDoneNotes, migrateSubs, addSubtask, convertToEpic, convertToTask, setEpicDone, moveIntoEpic, detachSubtask, renameCard, renameTask, saveCard, removeCard, saveTask, removeTask, saveSettings, uid, REPEATS, Repeat,
 } from '../lib/trackStore';
 
 // Board tab: sticky-note cards in swim lanes (a small kanban). Drag a card by its grip to reorder or move
@@ -274,6 +274,7 @@ function CardNote({ card, lane, task, onDelete, dropTarget, epicTasks, loggedBy,
             ? <button onClick={() => onTake()} title="Remove from task list (deletes the task)" className="inline-flex items-center gap-1 text-[11px] text-cyan-300!"><ListChecks size={13} />{task?.done ? 'Task done' : 'On task list'}</button>
             : <button onClick={() => onPut()} title="Add to the task list" className="inline-flex items-center gap-1 text-[11px] text-zinc-400! hover:text-cyan-300!"><ListPlus size={13} />To tasks</button>}
           {canDue && !due && !editDue && <button onClick={() => setEditDue(true)} title="Set a due date" aria-label="Set due date" className="inline-flex items-center gap-1 text-[11px] text-zinc-400! hover:text-white!"><CalendarDays size={12} />Due</button>}
+          {task && !task.done && !task.epicId && <button onClick={() => { const k = Object.keys(REPEATS) as Repeat[]; const i = task.repeat ? k.indexOf(task.repeat) : -1; saveTask({ ...task, repeat: i + 1 < k.length ? k[i + 1] : undefined }); }} title="Repeat: click to cycle. Ticking it done puts the next one in Next up." className={`inline-flex items-center gap-1 text-[11px] hover:text-white! ${task.repeat ? 'text-cyan-300!' : 'text-zinc-400!'}`}><Repeat2 size={12} />{task.repeat ? REPEATS[task.repeat] : 'Repeat'}</button>}
           <button onClick={() => { if (epic) { setOpen(false); convertToTask(card.id); } else convertToEpic(card.id); }} title={epic ? 'Turn into a task (its subtasks become separate tasks)' : 'Turn into an epic (it leaves the Tasks page; its subtasks stay there under it)'}
             className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[11px] ${epic ? 'border-cyan-300/60 text-cyan-300!' : 'border-white/15 text-zinc-400! hover:text-white!'}`}><Layers size={11} />{epic ? 'Epic' : '→ Epic'}</button>
           {epic && (
